@@ -18,6 +18,8 @@ class TaskController {
     
     public function kanban() {
         $tasks = $this->task->getKanbanTasks();
+        $userModel = new User($this->db);
+        $users = $userModel->getAll();
         require_once __DIR__ . '/../../views/tasks/kanban.php';
     }
     

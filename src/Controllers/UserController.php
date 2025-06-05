@@ -19,28 +19,159 @@ class UserController {
         $this->task = new Task($db);
     }
     
-    public function profile() {
-        $userId = $_SESSION['user_id'];
-        
-        // Получаем полную информацию о пользователе
-        $user = $this->user->findById($userId);
-        
-        if (!$user) {
-            header('Location: /logout');
-            exit;
-        }
-        
-        // Получаем статистику пользователя
-        $stats = $this->user->getTaskStatistics($userId);
-        
-        // Получаем последние задачи
-        $recentTasks = $this->task->getUserRecentTasks($userId, 10);
-        
-        // Получаем активные задачи
-        $activeTasks = $this->task->getActiveTasksForUser($userId);
-        
-        require_once __DIR__ . '/../../views/profile/index.php';
+public function profile() {
+    $userId = $_SESSION['user_id'];
+    
+    // Получаем полную информацию о пользователе
+    $user = $this->user->findById($userId);
+    
+    if (!$user) {
+        header('Location: /logout');
+        exit;
     }
+    $taskStatusStats = $this->getTaskStatusStatistics($userId);
+    // Получаем статистику пользователя
+    $stats = $this->user->getTaskStatistics($userId);
+    
+    // Получаем последние задачи
+    $recentTasks = $this->task->getUserRecentTasks($userId, 10);
+    
+    // Получаем активные задачи
+    $activeTasks = $this->task->getActiveTasksForUser($userId);
+    
+    // Получаем данные активности за последнюю неделю
+    $activityData = $this->getWeeklyActivityData($userId);
+    
+    require_once __DIR__ . '/../../views/profile/index.php';
+}
+
+
+private function getTaskStatusStatistics($userId) {
+    $sql = "SELECT 
+            t.status,
+            COUNT(*) as count
+            FROM tasks t
+            JOIN task_assignees ta ON t.id = ta.task_id
+            WHERE ta.user_id = :user_id
+            GROUP BY t.status";
+    
+    $stmt = $this->db->prepare($sql);
+    $stmt->execute([':user_id' => $userId]);
+    $results = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    
+    $statistics = [
+        'backlog' => 0,
+        'todo' => 0,
+        'in_progress' => 0,
+        'review' => 0,
+        'done' => 0
+    ];
+    
+    foreach ($results as $row) {
+        if (isset($statistics[$row['status']])) {
+            $statistics[$row['status']] = (int)$row['count'];
+        }
+    }
+    
+    return $statistics;
+}
+
+// Новый метод для получения данных активности за неделю
+private function getWeeklyActivityData($userId) {
+    $sql = "SELECT 
+            DATE(t.updated_at) as date,
+            COUNT(*) as completed_count
+            FROM tasks t
+            JOIN task_assignees ta ON t.id = ta.task_id
+            WHERE ta.user_id = :user_id 
+            AND t.status = 'done'
+            AND t.updated_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+            GROUP BY DATE(t.updated_at)
+            ORDER BY date ASC";
+    
+    $stmt = $this->db->prepare($sql);
+    $stmt->execute([':user_id' => $userId]);
+    $results = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    
+    // Создаем массив с данными за последние 7 дней
+    $activityData = [];
+    for ($i = 6; $i >= 0; $i--) {
+        $date = date('Y-m-d', strtotime("-$i days"));
+        $activityData[$date] = 0;
+    }
+    
+    // Заполняем реальными данными
+    foreach ($results as $row) {
+        if (isset($activityData[$row['date']])) {
+            $activityData[$row['date']] = (int)$row['completed_count'];
+        }
+    }
+    
+    // Также получаем данные о созданных задачах
+    $sql = "SELECT 
+            DATE(created_at) as date,
+            COUNT(*) as created_count
+            FROM tasks
+            WHERE creator_id = :user_id 
+            AND created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+            GROUP BY DATE(created_at)
+            ORDER BY date ASC";
+    
+    $stmt = $this->db->prepare($sql);
+    $stmt->execute([':user_id' => $userId]);
+    $createdResults = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    
+    $createdData = [];
+    for ($i = 6; $i >= 0; $i--) {
+        $date = date('Y-m-d', strtotime("-$i days"));
+        $createdData[$date] = 0;
+    }
+    
+    foreach ($createdResults as $row) {
+        if (isset($createdData[$row['date']])) {
+            $createdData[$row['date']] = (int)$row['created_count'];
+        }
+    }
+    
+    // Получаем комментарии
+    $sql = "SELECT 
+            DATE(created_at) as date,
+            COUNT(*) as comment_count
+            FROM task_comments
+            WHERE user_id = :user_id 
+            AND created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+            GROUP BY DATE(created_at)
+            ORDER BY date ASC";
+    
+    $stmt = $this->db->prepare($sql);
+    $stmt->execute([':user_id' => $userId]);
+    $commentResults = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    
+    $commentData = [];
+    for ($i = 6; $i >= 0; $i--) {
+        $date = date('Y-m-d', strtotime("-$i days"));
+        $commentData[$date] = 0;
+    }
+    
+    foreach ($commentResults as $row) {
+        if (isset($commentData[$row['date']])) {
+            $commentData[$row['date']] = (int)$row['comment_count'];
+        }
+    }
+    
+    return [
+        'completed' => array_values($activityData),
+        'created' => array_values($createdData),
+        'comments' => array_values($commentData),
+        'dates' => array_keys($activityData),
+        'labels' => array_map(function($date) {
+            $timestamp = strtotime($date);
+            $dayOfWeek = date('w', $timestamp);
+            $days = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+            return $days[$dayOfWeek];
+        }, array_keys($activityData))
+    ];
+}
     
     public function settings() {
         $userId = $_SESSION['user_id'];

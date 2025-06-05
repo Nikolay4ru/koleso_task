@@ -187,4 +187,39 @@ public function getActiveCount($days = 30) {
         
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
+
+    public function updateByAdmin($userId, $data) {
+    $sql = "UPDATE users SET 
+            name = :name,
+            email = :email,
+            department_id = :department_id,
+            is_admin = :is_admin,
+            is_active = :is_active,
+            phone = :phone,
+            bio = :bio,
+            updated_at = CURRENT_TIMESTAMP
+            WHERE id = :id";
+    
+    $departmentId = (!empty($data['department_id'])) ? $data['department_id'] : null;
+    
+    $stmt = $this->db->prepare($sql);
+    return $stmt->execute([
+        ':id' => $userId,
+        ':name' => $data['name'],
+        ':email' => $data['email'],
+        ':department_id' => $departmentId,
+        ':is_admin' => $data['is_admin'],
+        ':is_active' => $data['is_active'],
+        ':phone' => $data['phone'],
+        ':bio' => $data['bio']
+    ]);
+}
+
+public function updateLastLogin($userId) {
+    $sql = "UPDATE users SET last_login = NOW() WHERE id = :id";
+    $stmt = $this->db->prepare($sql);
+    return $stmt->execute([':id' => $userId]);
+}
+
+
 }
