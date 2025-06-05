@@ -9,6 +9,7 @@ require_once __DIR__ . '/../config/mail.php';
 require_once __DIR__ . '/../config/telegram.php';
 
 use App\Controllers\AuthController;
+use App\Controllers\AdminController;
 use App\Controllers\DashboardController;
 use App\Controllers\TaskController;
 use App\Controllers\UserController;
@@ -44,6 +45,24 @@ switch ($uri) {
     case '/':
         if (isset($_SESSION['user_id'])) {
             header('Location: /dashboard');
+        } elseif (preg_match('/^\/admin\/users\/edit\/(\d+)$/', $uri, $matches)) {
+            $controller = new AdminController($db, $emailService);
+            $controller->editUser($matches[1]);
+        } elseif (preg_match('/^\/admin\/users\/delete\/(\d+)$/', $uri, $matches)) {
+            $controller = new AdminController($db, $emailService);
+            $controller->deleteUser($matches[1]);
+        } elseif (preg_match('/^\/admin\/invitations\/resend\/(\d+)$/', $uri, $matches)) {
+            $controller = new AdminController($db, $emailService);
+            $controller->resendInvitation($matches[1]);
+        } elseif (preg_match('/^\/admin\/invitations\/cancel\/(\d+)$/', $uri, $matches)) {
+            $controller = new AdminController($db, $emailService);
+            $controller->cancelInvitation($matches[1]);
+        } elseif (preg_match('/^\/admin\/departments\/edit\/(\d+)$/', $uri, $matches)) {
+            $controller = new AdminController($db, $emailService);
+            $controller->editDepartment($matches[1]);
+        } elseif (preg_match('/^\/admin\/departments\/delete\/(\d+)$/', $uri, $matches)) {
+            $controller = new AdminController($db, $emailService);
+            $controller->deleteDepartment($matches[1]);
         } else {
             header('Location: /login');
         }
@@ -119,6 +138,46 @@ switch ($uri) {
         $controller->update();
         break;
         
+    case '/admin/dashboard':
+        $controller = new AdminController($db, $emailService);
+        $controller->dashboard();
+        break;
+        
+    case '/admin/users':
+        $controller = new AdminController($db, $emailService);
+        $controller->users();
+        break;
+        
+    case '/admin/tasks':
+        $controller = new AdminController($db, $emailService);
+        $controller->tasks();
+        break;
+        
+    case '/admin/invitations':
+        $controller = new AdminController($db, $emailService);
+        $controller->invitations();
+        break;
+        
+    case '/admin/invitations/send':
+        $controller = new AdminController($db, $emailService);
+        $controller->sendInvitation();
+        break;
+        
+    case '/admin/departments':
+        $controller = new AdminController($db, $emailService);
+        $controller->departments();
+        break;
+        
+    case '/admin/departments/create':
+        $controller = new AdminController($db, $emailService);
+        $controller->createDepartment();
+        break;
+        
+    case '/admin/reports':
+        $controller = new AdminController($db, $emailService);
+        $controller->reports();
+        break;
+        
     case '/profile/test-notification':
         $controller = new UserController($db);
         $controller->testNotification();
@@ -167,6 +226,24 @@ switch ($uri) {
         } elseif (preg_match('/^\/tasks\/(\d+)\/comment$/', $uri, $matches)) {
             $controller = new TaskController($db, $notificationService);
             $controller->addComment($matches[1]);
+        } elseif (preg_match('/^\/admin\/users\/edit\/(\d+)$/', $uri, $matches)) {
+            $controller = new AdminController($db, $emailService);
+            $controller->editUser($matches[1]);
+        } elseif (preg_match('/^\/admin\/users\/delete\/(\d+)$/', $uri, $matches)) {
+            $controller = new AdminController($db, $emailService);
+            $controller->deleteUser($matches[1]);
+        } elseif (preg_match('/^\/admin\/invitations\/resend\/(\d+)$/', $uri, $matches)) {
+            $controller = new AdminController($db, $emailService);
+            $controller->resendInvitation($matches[1]);
+        } elseif (preg_match('/^\/admin\/invitations\/cancel\/(\d+)$/', $uri, $matches)) {
+            $controller = new AdminController($db, $emailService);
+            $controller->cancelInvitation($matches[1]);
+        } elseif (preg_match('/^\/admin\/departments\/edit\/(\d+)$/', $uri, $matches)) {
+            $controller = new AdminController($db, $emailService);
+            $controller->editDepartment($matches[1]);
+        } elseif (preg_match('/^\/admin\/departments\/delete\/(\d+)$/', $uri, $matches)) {
+            $controller = new AdminController($db, $emailService);
+            $controller->deleteDepartment($matches[1]);
         } else {
             http_response_code(404);
             include __DIR__ . '/../views/errors/404.php';

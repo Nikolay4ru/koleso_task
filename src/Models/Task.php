@@ -437,5 +437,77 @@ public function getTasksForUser($userId, $filters = []) {
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
+public function getAllTasksForAdmin() {
+    $sql = "SELECT 
+            t.*,
+            u.name as creator_name,
+            d.name as creator_department,
+            GROUP_CONCAT(DISTINCT au.name SEPARATOR ', ') as assignee_names,
+            COUNT(DISTINCT tc.id) as comment_count,
+            CASE 
+                WHEN t.deadline < NOW() AND t.status != 'done' THEN 1
+                ELSE 0
+            END as is_overdue
+        FROM tasks t
+        LEFT JOIN users u ON t.creator_id = u.id
+        LEFT JOIN departments d ON u.department_id = d.id
+        LEFT JOIN task_assignees ta ON t.id = ta.task_id
+        LEFT JOIN users au ON ta.user_id = au.id
+        LEFT JOIN task_comments tc ON t.id = tc.task_id
+        GROUP BY t.id
+        ORDER BY t.created_at DESC";
+    
+    $stmt = $this->db->query($sql);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+public function getCount() {
+    $sql = "SELECT COUNT(*) as count FROM tasks";
+    $stmt = $this->db->query($sql);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $result['count'];
+}
+
+public function getCompletedCount() {
+    $sql = "SELECT COUNT(*) as count FROM tasks WHERE status = 'done'";
+    $stmt = $this->db->query($sql);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $result['count'];
+}
+
+public function getOverdueCount() {
+    $sql = "SELECT COUNT(*) as count FROM tasks 
+            WHERE deadline < NOW() AND status != 'done'";
+    $stmt = $this->db->query($sql);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $result['count'];
+}
+
+public function getStatsByStatus() {
+    $sql = "SELECT status, COUNT(*) as count 
+            FROM tasks 
+            GROUP BY status";
+    $stmt = $this->db->query($sql);
+    
+    $stats = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $stats[$row['status']] = $row['count'];
+    }
+    return $stats;
+}
+
+public function getStatsByPriority() {
+    $sql = "SELECT priority, COUNT(*) as count 
+            FROM tasks 
+            GROUP BY priority";
+    $stmt = $this->db->query($sql);
+    
+    $stats = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $stats[$row['priority']] = $row['count'];
+    }
+    return $stats;
+}
+
 
 }

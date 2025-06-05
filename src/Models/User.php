@@ -11,8 +11,8 @@ class User {
     }
     
     public function create($data) {
-        $sql = "INSERT INTO users (email, password, name, department_id) 
-                VALUES (:email, :password, :name, :department_id)";
+        $sql = "INSERT INTO users (email, password, name, department_id, is_admin, is_active) 
+                VALUES (:email, :password, :name, :department_id, :is_admin, :is_active)";
         
         $stmt = $this->db->prepare($sql);
         
@@ -23,11 +23,43 @@ class User {
             ':email' => $data['email'],
             ':password' => password_hash($data['password'], PASSWORD_DEFAULT),
             ':name' => $data['name'],
-            ':department_id' => $departmentId
+            ':department_id' => $departmentId,
+            ':is_admin' => $data['is_admin'] ?? 0,
+            ':is_active' => 1
         ]);
         
         return $this->db->lastInsertId();
     }
+
+    public function getAllWithStats() {
+    $sql = "SELECT u.*, 
+            d.name as department_name,
+            (SELECT COUNT(*) FROM tasks WHERE creator_id = u.id) as created_tasks,
+            (SELECT COUNT(*) FROM task_assignees WHERE user_id = u.id) as assigned_tasks
+            FROM users u
+            LEFT JOIN departments d ON u.department_id = d.id
+            ORDER BY u.created_at DESC";
+    
+    $stmt = $this->db->query($sql);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+
+public function getCount() {
+    $sql = "SELECT COUNT(*) as count FROM users";
+    $stmt = $this->db->query($sql);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $result['count'];
+}
+
+public function getActiveCount($days = 30) {
+    $sql = "SELECT COUNT(*) as count FROM users 
+            WHERE last_login >= DATE_SUB(NOW(), INTERVAL :days DAY)";
+    $stmt = $this->db->prepare($sql);
+    $stmt->execute([':days' => $days]);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $result['count'];
+}
     
     public function findByEmail($email) {
         $sql = "SELECT * FROM users WHERE email = :email";
@@ -74,6 +106,7 @@ class User {
     }
     
     public function updateSettings($userId, $data) {
+        
         $sql = "UPDATE users SET 
                 telegram_chat_id = :telegram_chat_id,
                 email_notifications = :email_notifications,
@@ -84,8 +117,8 @@ class User {
         return $stmt->execute([
             ':id' => $userId,
             ':telegram_chat_id' => $data['telegram_chat_id'] ?? null,
-            ':email_notifications' => isset($data['email_notifications']) ? 1 : 0,
-            ':telegram_notifications' => isset($data['telegram_notifications']) ? 1 : 0
+            ':email_notifications' => $data['email_notifications'],
+            ':telegram_notifications' => $data['telegram_notifications']
         ]);
     }
     

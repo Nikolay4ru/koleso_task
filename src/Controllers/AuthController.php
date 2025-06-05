@@ -25,8 +25,8 @@ class AuthController {
                 $_SESSION['user_id'] = $user['id'];
                 $_SESSION['user_name'] = $user['name'];
                 $_SESSION['user_email'] = $user['email'];
-                
-                header('Location: /dashboard');
+                $_SESSION['is_admin'] = $user['is_admin'];
+                header('Location: /tasks/kanban');
                 exit;
             } else {
                 $error = 'Неверный email или пароль';
@@ -37,6 +37,17 @@ class AuthController {
     }
     
     public function register() {
+        // Проверяем токен приглашения
+        $invitation = null;
+        if (isset($_GET['token'])) {
+            $invitationModel = new \App\Models\Invitation($this->db);
+            $invitation = $invitationModel->findByToken($_GET['token']);
+            
+            if (!$invitation) {
+                $error = 'Недействительная или истекшая ссылка приглашения';
+            }
+        }
+        
         // Получаем список отделов для формы
         $departmentModel = new Department($this->db);
         $departments = $departmentModel->getAll();
@@ -93,7 +104,7 @@ class AuthController {
                     $_SESSION['user_name'] = $name;
                     $_SESSION['user_email'] = $email;
                     
-                    header('Location: /dashboard');
+                    header('Location: /tasks/kanban');
                     exit;
                 } catch (\Exception $e) {
                     $error = 'Ошибка при создании пользователя. Попробуйте еще раз.';

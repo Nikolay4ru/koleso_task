@@ -115,4 +115,26 @@ class Department {
         
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
+    public function getCount() {
+    $sql = "SELECT COUNT(*) as count FROM departments";
+    $stmt = $this->db->query($sql);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $result['count'];
+}
+
+public function getAllWithStats() {
+    $sql = "SELECT d.*, 
+            COUNT(DISTINCT u.id) as user_count,
+            COUNT(DISTINCT t.id) as task_count,
+            COUNT(DISTINCT CASE WHEN t.status = 'done' THEN t.id END) as completed_tasks
+            FROM departments d
+            LEFT JOIN users u ON d.id = u.department_id
+            LEFT JOIN task_assignees ta ON u.id = ta.user_id
+            LEFT JOIN tasks t ON ta.task_id = t.id
+            GROUP BY d.id
+            ORDER BY d.name ASC";
+    
+    $stmt = $this->db->query($sql);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
 }

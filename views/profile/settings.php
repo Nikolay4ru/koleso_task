@@ -7,192 +7,251 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
     <style>
+        /* iOS-inspired design overrides and general improvements */
         body {
-            background-color: #f8f9fa;
+            background: #f4f5f7;
+            font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+            color: #222;
         }
         .settings-container {
             max-width: 1000px;
             margin: 2rem auto;
+            padding: 0 1rem;
         }
         .settings-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 2rem;
-            border-radius: 10px 10px 0 0;
+            background: linear-gradient(135deg, #f7f8fa 0%, #e1e7ef 100%);
+            color: #222;
+            padding: 2rem 1.5rem;
+            border-radius: 28px 28px 0 0;
             margin-bottom: -1px;
+            box-shadow: 0 6px 24px 0 rgba(0,0,0,0.04);
+        }
+        .settings-header h2 {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
         }
         .settings-nav {
-            background: white;
-            border: 1px solid #dee2e6;
-            border-radius: 0 0 10px 10px;
+            background: #fff;
+            border: 0;
+            border-radius: 0 0 28px 28px;
             padding: 0;
             overflow: hidden;
+            box-shadow: 0 4px 24px 0 rgba(0,0,0,0.03);
+            margin-bottom: 2rem;
         }
         .nav-pills .nav-link {
-            color: #495057;
+            color: #555;
+            font-size: 1.1rem;
+            font-weight: 500;
             border-radius: 0;
             padding: 1rem 1.5rem;
-            border-right: 1px solid #dee2e6;
-            transition: all 0.3s;
+            border-right: 1px solid #f1f1f1;
+            background: none;
+            transition: background 0.2s, color 0.2s;
         }
-        .nav-pills .nav-link:hover {
-            background: #f8f9fa;
-            color: #667eea;
+        .nav-pills .nav-link:last-child { border-right: none; }
+        .nav-pills .nav-link:hover,
+        .nav-pills .nav-link:focus {
+            background: #f4f5f7;
+            color: #007aff;
         }
         .nav-pills .nav-link.active {
-            background: #667eea;
-            color: white;
+            background: #e3e8f1;
+            color: #007aff;
+            box-shadow: 0 2px 8px 0 rgba(0,122,255,.07);
         }
         .nav-pills .nav-link i {
             margin-right: 0.5rem;
         }
         .settings-card {
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-            padding: 2rem;
+            background: #fff;
+            border-radius: 22px;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+            padding: 2rem 1.5rem;
             margin-bottom: 1.5rem;
+            border: none;
         }
         .settings-section {
             margin-bottom: 2rem;
         }
-        .settings-section h5 {
-            color: #2c3e50;
+        .settings-section h5,
+        .settings-section h6 {
+            color: #111;
+            font-weight: 600;
             margin-bottom: 1.5rem;
             padding-bottom: 0.75rem;
-            border-bottom: 2px solid #e9ecef;
+            border-bottom: 1.5px solid #f1f4fa;
+            font-size: 1.2rem;
+            letter-spacing: -0.01em;
         }
         .form-label {
-            font-weight: 600;
-            color: #495057;
+            font-weight: 500;
+            color: #222;
             margin-bottom: 0.5rem;
         }
         .form-control, .form-select {
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            padding: 0.75rem 1rem;
+            border: 2px solid #e7eaf1;
+            border-radius: 14px;
+            padding: 0.85rem 1rem;
+            font-size: 1rem;
+            background: #f9fafb;
             transition: all 0.3s;
         }
         .form-control:focus, .form-select:focus {
-            border-color: #667eea;
-            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+            border-color: #007aff;
+            box-shadow: 0 0 0 0.18rem rgba(0,122,255,0.13);
         }
+        
         .form-check-input {
-            width: 1.25rem;
-            height: 1.25rem;
+            width: 1.35rem;
+            height: 1.35rem;
             margin-top: 0.125rem;
-            border: 2px solid #dee2e6;
+            border: 2px solid #e7eaf1;
+            border-radius: 8px;
+            background: #f4f6fa;
         }
         .form-check-input:checked {
-            background-color: #667eea;
-            border-color: #667eea;
+            background-color: #007aff;
+            border-color: #007aff;
         }
         .btn-save {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(90deg, #007aff 0%, #00c6fb 100%);
             border: none;
             color: white;
-            padding: 0.75rem 2rem;
+            padding: 0.75rem 2.2rem;
             font-weight: 600;
-            border-radius: 8px;
-            transition: all 0.3s;
+            border-radius: 14px;
+            font-size: 1.1rem;
+            transition: all 0.24s;
+            box-shadow: 0 4px 18px 0 rgba(0,122,255,0.09);
         }
         .btn-save:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+            transform: translateY(-2px) scale(1.025);
+            box-shadow: 0 5px 20px rgba(0,122,255, 0.18);
             color: white;
         }
         .notification-preview {
-            background: #f8f9fa;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
+            background: #f4f6fa;
+            border: 2px solid #e7eaf1;
+            border-radius: 10px;
             padding: 1rem;
             margin-top: 1rem;
         }
         .telegram-bot-info {
-            background: #e3f2fd;
-            border: 1px solid #90caf9;
-            border-radius: 8px;
+            background: #e6f0fd;
+            border: 1px solid #b4d7fa;
+            border-radius: 11px;
             padding: 1rem;
             margin-bottom: 1rem;
         }
         .telegram-bot-info code {
-            background: #1976d2;
+            background: #007aff;
             color: white;
             padding: 0.2rem 0.5rem;
             border-radius: 4px;
         }
         .password-requirements {
-            font-size: 0.875rem;
-            color: #6c757d;
+            font-size: 0.9rem;
+            color: #7c8592;
             margin-top: 0.5rem;
         }
         .password-requirements li {
             margin-bottom: 0.25rem;
         }
         .alert-custom {
-            border-radius: 8px;
+            border-radius: 12px;
             border: none;
             padding: 1rem 1.5rem;
+            font-size: 1rem;
         }
         .user-avatar-upload {
             position: relative;
             width: 120px;
             height: 120px;
-            margin: 0 auto 1.5rem;
+            margin: 0 auto 2rem;
         }
         .user-avatar {
             width: 120px;
             height: 120px;
             border-radius: 50%;
-            background: #667eea;
+            background: linear-gradient(135deg,#007aff,#00c6fb);
             color: white;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 3rem;
+            font-size: 3.2rem;
             font-weight: 600;
             position: relative;
             overflow: hidden;
+            box-shadow: 0 2px 16px 0 rgba(0,122,255,0.08);
         }
         .avatar-upload-btn {
             position: absolute;
             bottom: 0;
             right: 0;
-            background: #2c3e50;
-            color: white;
-            border: 3px solid white;
+            background: #fff;
+            color: #007aff;
+            border: 2.5px solid #fff;
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
+            width: 44px;
+            height: 44px;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
+            box-shadow: 0 2px 8px 0 rgba(0,122,255,0.08);
             transition: all 0.3s;
         }
         .avatar-upload-btn:hover {
-            background: #34495e;
-            transform: scale(1.1);
+            background: #f4f6fb;
+            transform: scale(1.08);
         }
         .danger-zone {
             border: 2px solid #dc3545;
-            border-radius: 8px;
+            border-radius: 12px;
             padding: 1.5rem;
             background: #fff5f5;
         }
         .tab-pane {
             padding-top: 2rem;
         }
+        .list-group-item {
+            border-radius: 12px !important;
+            margin-bottom: 0.5rem;
+            border: 1.2px solid #e7eaf1;
+            background: #f9fafb;
+        }
+        .modal-content {
+            border-radius: 16px;
+        }
+        /* Responsive: iOS-like paddings and stacking */
         @media (max-width: 768px) {
+            .settings-header, .settings-card {
+                padding: 1.3rem 0.8rem;
+            }
             .nav-pills .nav-link {
                 border-right: none;
-                border-bottom: 1px solid #dee2e6;
+                border-bottom: 1px solid #f1f1f1;
+                padding: 0.9rem 0.8rem;
+                font-size: 1rem;
             }
             .settings-header {
-                padding: 1.5rem;
+                padding: 1.2rem 0.8rem;
+            }
+            .settings-container {
+                padding: 0 0.2rem;
+            }
+        }
+        @media (max-width: 475px) {
+            .settings-header {
+                border-radius: 0;
+            }
+            .settings-nav {
+                border-radius: 0 0 18px 18px;
             }
             .settings-card {
-                padding: 1.5rem;
+                border-radius: 10px;
             }
         }
     </style>
@@ -209,7 +268,7 @@
                     <p class="mb-0 opacity-75">Управляйте вашими персональными настройками и предпочтениями</p>
                 </div>
                 <div class="col-md-4 text-md-end mt-3 mt-md-0">
-                    <a href="/profile" class="btn btn-light">
+                    <a href="/profile" class="btn btn-light border-0 px-3 py-2 rounded-12 shadow-sm">
                         <i class="bi bi-person-circle me-2"></i>
                         Мой профиль
                     </a>
@@ -236,12 +295,6 @@
                     <button class="nav-link" id="security-tab" data-bs-toggle="tab" data-bs-target="#security" type="button">
                         <i class="bi bi-shield-lock"></i>
                         Безопасность
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="advanced-tab" data-bs-toggle="tab" data-bs-target="#advanced" type="button">
-                        <i class="bi bi-sliders"></i>
-                        Дополнительно
                     </button>
                 </li>
             </ul>
@@ -284,7 +337,7 @@
                             <div class="user-avatar">
                                 <?= mb_strtoupper($initials) ?>
                             </div>
-                            <label for="avatar" class="avatar-upload-btn">
+                            <label for="avatar" class="avatar-upload-btn" title="Загрузить фото">
                                 <i class="bi bi-camera"></i>
                                 <input type="file" id="avatar" name="avatar" accept="image/*" style="display: none;">
                             </label>
@@ -425,7 +478,7 @@
                                         <i class="bi bi-check-circle text-success me-1"></i>
                                         Telegram подключен
                                     <?php else: ?>
-                                        Получите Chat ID у бота @TaskManagementBot
+                                        Получите Chat ID у бота @task_koleso_bot
                                     <?php endif; ?>
                                 </small>
                             </div>
@@ -442,56 +495,8 @@
                             </div>
                         </div>
                         
-                        <!-- Типы уведомлений -->
-                        <div class="settings-section">
-                            <h6 class="mb-3">Типы уведомлений</h6>
-                            
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" id="notify_task_assigned" name="notify_task_assigned" checked>
-                                        <label class="form-check-label" for="notify_task_assigned">
-                                            Назначение на задачу
-                                        </label>
-                                    </div>
-                                    <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" id="notify_task_completed" name="notify_task_completed" checked>
-                                        <label class="form-check-label" for="notify_task_completed">
-                                            Завершение задачи
-                                        </label>
-                                    </div>
-                                    <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" id="notify_comment" name="notify_comment" checked>
-                                        <label class="form-check-label" for="notify_comment">
-                                            Новые комментарии
-                                        </label>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" id="notify_status_change" name="notify_status_change" checked>
-                                        <label class="form-check-label" for="notify_status_change">
-                                            Изменение статуса задачи
-                                        </label>
-                                    </div>
-                                    <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" id="notify_deadline" name="notify_deadline" checked>
-                                        <label class="form-check-label" for="notify_deadline">
-                                            Напоминания о дедлайнах
-                                        </label>
-                                    </div>
-                                    <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" id="notify_mentions" name="notify_mentions" checked>
-                                        <label class="form-check-label" for="notify_mentions">
-                                            Упоминания в комментариях
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="d-flex justify-content-between">
-                            <button type="button" class="btn btn-outline-primary" id="testNotification">
+                        <div class="d-flex justify-content-between flex-column flex-md-row gap-2">
+                            <button type="button" class="btn btn-outline-primary rounded-12 px-4" id="testNotification">
                                 <i class="bi bi-send me-2"></i>
                                 Тестовое уведомление
                             </button>
@@ -578,49 +583,19 @@
                                         </p>
                                         <small class="text-muted">IP: <?= $_SERVER['REMOTE_ADDR'] ?></small>
                                     </div>
-                                    <span class="badge bg-success">Активна</span>
+                                    <span class="badge bg-success px-3 py-1 rounded-pill" style="font-size:0.95em;">Активна</span>
                                 </div>
                             </div>
                         </div>
                         
                         <div class="mt-3">
-                            <button type="button" class="btn btn-outline-danger">
+                            <button type="button" class="btn btn-outline-danger rounded-12 px-4">
                                 <i class="bi bi-box-arrow-right me-2"></i>
                                 Завершить все другие сессии
                             </button>
                         </div>
                     </div>
                 </form>
-            </div>
-            
-            <!-- Дополнительные настройки -->
-            <div class="tab-pane fade" id="advanced" role="tabpanel">
-                <div class="settings-card">
-                    <h5>Экспорт данных</h5>
-                    <p class="text-muted mb-4">Скачайте копию всех ваших данных из системы</p>
-                    
-                    <button type="button" class="btn btn-outline-primary">
-                        <i class="bi bi-download me-2"></i>
-                        Экспортировать мои данные
-                    </button>
-                </div>
-                
-                <div class="settings-card">
-                    <h5>Удаление аккаунта</h5>
-                    
-                    <div class="danger-zone">
-                        <h6 class="text-danger mb-3">Опасная зона</h6>
-                        <p class="mb-3">
-                            После удаления аккаунта восстановление будет невозможно. 
-                            Все ваши данные, включая задачи и комментарии, будут удалены навсегда.
-                        </p>
-                        
-                        <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteAccountModal">
-                            <i class="bi bi-trash me-2"></i>
-                            Удалить мой аккаунт
-                        </button>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
@@ -648,8 +623,8 @@
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                    <button type="submit" form="deleteAccountForm" class="btn btn-danger">
+                    <button type="button" class="btn btn-secondary rounded-12" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" form="deleteAccountForm" class="btn btn-danger rounded-12">
                         <i class="bi bi-trash me-2"></i>
                         Удалить навсегда
                     </button>
@@ -745,7 +720,7 @@
             }
             
             // Заглавная буква
-            if (/[A-Z]/.test(password)) {
+            if (/[A-ZА-ЯЁ]/.test(password)) {
                 items[1].classList.add('text-success');
                 items[1].innerHTML = '<i class="bi bi-check-circle me-1"></i>' + items[1].textContent;
             } else {
