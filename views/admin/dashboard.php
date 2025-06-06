@@ -11,6 +11,7 @@
         body {
             background-color: #f8f9fa;
         }
+        
         .admin-header {
             background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
             color: white;
@@ -126,6 +127,9 @@
             font-size: 2.5rem;
             margin-bottom: 1rem;
         }
+         #activityChart {
+        max-height: 400px; /* Установите фиксированную максимальную высоту */
+    }
     </style>
 </head>
 <body>
