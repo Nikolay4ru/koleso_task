@@ -139,27 +139,6 @@
             color: #721c24;
         }
         
-        .activity-log {
-            font-size: 0.875rem;
-        }
-        .activity-item {
-            padding: 0.5rem 0;
-            border-left: 2px solid #e9ecef;
-            padding-left: 1rem;
-            margin-left: 0.5rem;
-            position: relative;
-        }
-        .activity-item::before {
-            content: '';
-            position: absolute;
-            left: -5px;
-            top: 0.75rem;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #667eea;
-        }
-        
         #commentForm textarea {
             border: 2px solid #e9ecef;
             border-radius: 8px;
@@ -181,7 +160,7 @@
         
         .files-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
             gap: 1rem;
             margin-top: 1rem;
         }
@@ -194,6 +173,7 @@
             text-align: center;
             cursor: pointer;
             transition: all 0.2s;
+            position: relative;
         }
         
         .file-card:hover {
@@ -210,23 +190,24 @@
         
         .file-thumbnail {
             width: 100%;
-            height: 80px;
+            height: 100px;
             object-fit: cover;
             border-radius: 4px;
             margin-bottom: 0.5rem;
         }
         
         .file-name {
-            font-size: 0.75rem;
+            font-size: 0.875rem;
             color: #495057;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
             margin-bottom: 0.25rem;
+            font-weight: 500;
         }
         
         .file-info {
-            font-size: 0.7rem;
+            font-size: 0.75rem;
             color: #6c757d;
         }
         
@@ -258,10 +239,11 @@
             text-decoration: none;
         }
         
+        /* Компонент загрузки файлов для комментариев */
         .file-uploader {
             border: 2px dashed #dee2e6;
             border-radius: 8px;
-            padding: 1.5rem;
+            padding: 1rem;
             text-align: center;
             background: #f8f9fa;
             transition: all 0.3s;
@@ -277,6 +259,7 @@
         .file-uploader.drag-over {
             border-color: #667eea;
             background: #e8f0ff;
+            transform: scale(1.02);
         }
         
         .file-preview {
@@ -294,6 +277,18 @@
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
+            position: relative;
+        }
+        
+        .file-preview-item.uploading {
+            opacity: 0.6;
+        }
+        
+        .file-preview-item .file-name {
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         
         .file-preview-item .remove-file {
@@ -303,10 +298,25 @@
             cursor: pointer;
             padding: 0;
             margin-left: 0.5rem;
+            display: flex;
+            align-items: center;
         }
         
         .file-preview-item .remove-file:hover {
             color: #dc3545;
+        }
+        
+        /* Индикатор загрузки */
+        .upload-progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #667eea;
+            transform-origin: left;
+            transform: scaleX(0);
+            transition: transform 0.3s;
         }
     </style>
 </head>
@@ -398,7 +408,7 @@
                                     'download_url' => '/file/download/' . $file['id']
                                 ])) ?>)">
                                     <?php if ($file['is_image'] && $file['thumbnail_path']): ?>
-                                        <img src="<?= $fileModel->getThumbnailUrl($file) ?>" class="file-thumbnail">
+                                        <img src="<?= $fileModel->getThumbnailUrl($file) ?>" class="file-thumbnail" alt="<?= htmlspecialchars($file['original_name']) ?>">
                                     <?php else: ?>
                                         <i class="file-icon bi <?= $fileModel->getFileIcon($file['mime_type']) ?>"></i>
                                     <?php endif; ?>
@@ -435,9 +445,9 @@
                         
                         <!-- Загрузка файлов для комментария -->
                         <div class="file-uploader" id="commentFileUploader">
-                            <input type="file" class="d-none" id="commentFileInput" multiple>
+                            <input type="file" class="d-none" id="commentFileInput" multiple accept="*/*">
                             <i class="bi bi-paperclip" style="font-size: 1.5rem; color: #6c757d;"></i>
-                            <p class="mb-0 mt-1 small">Прикрепить файлы</p>
+                            <p class="mb-0 mt-1 small">Прикрепить файлы (макс. 10 MB)</p>
                         </div>
                         
                         <div class="file-preview" id="commentFilePreview"></div>
@@ -449,7 +459,7 @@
                     </form>
                     
                     <!-- Список комментариев -->
-                    <div class="comments-list">
+                    <div class="comments-list mt-4">
                         <?php if (empty($comments)): ?>
                             <p class="text-center text-muted py-4">Пока нет комментариев</p>
                         <?php else: ?>
@@ -475,7 +485,7 @@
                                     <div class="comment-text">
                                         <?= nl2br(htmlspecialchars($comment['comment'])) ?>
                                     </div>
-                                    
+                                    <?php var_dump($comment['id']) ?>
                                     <?php if (!empty($comment['files'])): ?>
                                     <div class="comment-files">
                                         <?php foreach ($comment['files'] as $file): ?>
@@ -718,6 +728,9 @@
         
         // Загрузка файлов для комментариев
         let commentUploadedFiles = [];
+        const commentFileUploader = document.getElementById('commentFileUploader');
+        const commentFileInput = document.getElementById('commentFileInput');
+        const commentFilePreview = document.getElementById('commentFilePreview');
         const commentUploadedFilesInput = document.getElementById('commentUploadedFiles');
         
         commentFileUploader.addEventListener('click', () => commentFileInput.click());
@@ -752,12 +765,13 @@
         }
         
         function uploadCommentFile(file) {
+            const tempId = 'temp_' + Date.now() + '_' + Math.random();
+            const previewItem = createFilePreviewItem(file.name, tempId);
+            commentFilePreview.appendChild(previewItem);
+            
             const formData = new FormData();
             formData.append('files[]', file);
             formData.append('type', 'comment');
-            
-            const previewItem = createFilePreviewItem(file.name);
-            commentFilePreview.appendChild(previewItem);
             
             fetch('/file/upload', {
                 method: 'POST',
@@ -770,6 +784,8 @@
                     commentUploadedFiles.push(uploadedFile.id);
                     commentUploadedFilesInput.value = JSON.stringify(commentUploadedFiles);
                     
+                    // Обновляем элемент предпросмотра
+                    previewItem.classList.remove('uploading');
                     previewItem.dataset.fileId = uploadedFile.id;
                     const removeBtn = previewItem.querySelector('.remove-file');
                     removeBtn.onclick = () => removeCommentFile(uploadedFile.id, previewItem);
@@ -785,15 +801,17 @@
             });
         }
         
-        function createFilePreviewItem(fileName) {
+        function createFilePreviewItem(fileName, tempId) {
             const div = document.createElement('div');
-            div.className = 'file-preview-item';
+            div.className = 'file-preview-item uploading';
+            div.id = `file-preview-${tempId}`;
             div.innerHTML = `
                 <i class="bi bi-file-earmark"></i>
-                <span>${fileName}</span>
+                <span class="file-name">${fileName}</span>
                 <button type="button" class="remove-file">
                     <i class="bi bi-x"></i>
                 </button>
+                <div class="upload-progress"></div>
             `;
             return div;
         }
@@ -847,7 +865,7 @@
             if (mimeType.startsWith('audio/')) return 'bi-file-earmark-music';
             if (mimeType.includes('zip') || mimeType.includes('rar') || mimeType.includes('7z')) return 'bi-file-earmark-zip';
             return 'bi-file-earmark';
-        }FileUploader = document.getElementById('commentFileUploader');
-        const commentFileInput = document.getElementById('commentFileInput');
-        const commentFilePreview = document.getElementById('commentFilePreview');
-        const comment
+        }
+    </script>
+</body>
+</html>

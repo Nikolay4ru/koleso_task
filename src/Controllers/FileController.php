@@ -265,6 +265,18 @@ class FileController {
         $result = $stmt->fetch(\PDO::FETCH_ASSOC);
         return $result['count'] > 0;
     }
+
+     /**
+     * Прикрепить файл к комментарию
+     */
+    public function attachToComment($fileId, $commentId) {
+        $sql = "INSERT INTO comment_files (comment_id, file_id) VALUES (:comment_id, :file_id)";
+        $stmt = $this->db->prepare($sql);
+        return $stmt->execute([
+            ':comment_id' => $commentId,
+            ':file_id' => $fileId
+        ]);
+    }
     
     /**
      * Преобразовать массив $_FILES для множественной загрузки

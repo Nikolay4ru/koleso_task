@@ -3,6 +3,7 @@ namespace App\Controllers;
 
 use App\Models\Task;
 use App\Models\User;
+use App\Models\File;
 use App\Services\NotificationService;
 
 class TaskController {
@@ -53,6 +54,16 @@ class TaskController {
                 
                 try {
                     $taskId = $this->task->create($data);
+
+
+                     // Обрабатываем загруженные файлы
+                    if (!empty($_POST['uploaded_files'])) {
+                        $fileModel = new File($this->db);
+                        $fileIds = json_decode($_POST['uploaded_files'], true);
+                        foreach ($fileIds as $fileId) {
+                            $fileModel->attachToTask($fileId, $taskId);
+                        }
+                    }
                     
                     // Отправляем уведомления
                     $this->notificationService->notifyTaskCreated($taskId, $_SESSION['user_id']);
@@ -102,6 +113,17 @@ class TaskController {
         
         // Получаем комментарии к задаче
         $comments = $this->task->getTaskComments($taskId);
+
+
+         // Получаем файлы задачи
+        $fileModel = new File($this->db);
+        $taskFiles = $fileModel->getTaskFiles($taskId);
+
+
+         // Получаем файлы для каждого комментария
+        foreach ($comments as &$comment) {
+            $comment['files'] = $fileModel->getCommentFiles($comment['id']);
+        }
         
         // Проверяем права доступа
         $isAssignee = in_array($_SESSION['user_id'], array_column($task['assignees'], 'id'));
@@ -133,6 +155,11 @@ class TaskController {
         // Получаем список пользователей
         $userModel = new User($this->db);
         $users = $userModel->getAll();
+
+
+         // Получаем файлы задачи
+        $fileModel = new File($this->db);
+        $taskFiles = $fileModel->getTaskFiles($taskId);
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $data = [
@@ -147,6 +174,15 @@ class TaskController {
             
             try {
                 $this->task->update($taskId, $data);
+
+
+                // Обрабатываем новые загруженные файлы
+                if (!empty($_POST['uploaded_files'])) {
+                    $fileIds = json_decode($_POST['uploaded_files'], true);
+                    foreach ($fileIds as $fileId) {
+                        $fileModel->attachToTask($fileId, $taskId);
+                    }
+                }
                 
                 // Отправляем уведомления об изменении
                 $this->notificationService->notifyTaskUpdated($taskId, $_SESSION['user_id']);
@@ -208,7 +244,17 @@ class TaskController {
         }
         
         try {
-            $this->task->addComment($taskId, $_SESSION['user_id'], $comment);
+             $commentId = $this->task->addComment($taskId, $_SESSION['user_id'], $comment);
+             
+            
+            // Обрабатываем загруженные файлы
+            if (!empty($_POST['uploaded_files'])) {
+                $fileModel = new File($this->db);
+                $fileIds = json_decode($_POST['uploaded_files'], true);
+                foreach ($fileIds as $fileId) {
+                    $fileModel->attachToComment($fileId, $commentId['id']);
+                }
+            }
             
             // Отправляем уведомления о новом комментарии
             $this->notificationService->notifyNewComment($taskId, $_SESSION['user_id'], $comment);

@@ -311,7 +311,7 @@ public function getTaskComments($taskId) {
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-public function addComment($taskId, $userId, $comment) {
+public function addComment3($taskId, $userId, $comment) {
     $sql = "INSERT INTO task_comments (task_id, user_id, comment) 
             VALUES (:task_id, :user_id, :comment)";
     
@@ -321,6 +321,22 @@ public function addComment($taskId, $userId, $comment) {
         ':user_id' => $userId,
         ':comment' => $comment
     ]);
+}
+
+
+public function addComment($taskId, $userId, $comment) {
+    $sql = "INSERT INTO task_comments (task_id, user_id, comment) 
+            VALUES (:task_id, :user_id, :comment)";
+    
+    $stmt = $this->db->prepare($sql);
+    $stmt->execute([
+        ':task_id' => $taskId,
+        ':user_id' => $userId,
+        ':comment' => $comment
+    ]);
+
+    // Возвращаем ID только что добавленного комментария
+    return $this->db->lastInsertId();
 }
 
 public function getActiveTasksForUser($userId) {
