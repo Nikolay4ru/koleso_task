@@ -119,13 +119,28 @@
                         </div>
 
                         <div class="col-md-4 mb-3">
-                            <label for="status" class="form-label">Статус</label>
-                            <select class="form-select" id="status" name="status">
-                                <option value="backlog" <?= ($task['status'] == 'backlog') ? 'selected' : '' ?>>📋 Очередь задач</option>
-                                <option value="todo" <?= ($task['status'] == 'todo') ? 'selected' : '' ?>>📝 К выполнению</option>
-                                <option value="in_progress" <?= ($task['status'] == 'in_progress') ? 'selected' : '' ?>>🔄 В работе</option>
-                            </select>
-                        </div>
+    <label for="status" class="form-label">Статус</label>
+    <select class="form-select" id="status" name="status">
+        <option value="backlog" <?= (isset($_POST['status']) && $_POST['status'] == 'backlog') ? 'selected' : '' ?>>
+            📋 Бэклог
+        </option>
+        <option value="todo" <?= (isset($_POST['status']) && $_POST['status'] == 'todo') ? 'selected' : '' ?>>
+            📝 К выполнению
+        </option>
+        <option value="in_progress" <?= (isset($_POST['status']) && $_POST['status'] == 'in_progress') ? 'selected' : '' ?>>
+            🔄 В работе
+        </option>
+        <option value="review" <?= (isset($_POST['status']) && $_POST['status'] == 'review') ? 'selected' : '' ?>>
+            👁️ На проверке
+        </option>
+        <option value="waiting_approval" <?= (isset($_POST['status']) && $_POST['status'] == 'waiting_approval') ? 'selected' : '' ?>>
+            ⏳ Ожидает проверки
+        </option>
+        <option value="done" <?= (isset($_POST['status']) && $_POST['status'] == 'done') ? 'selected' : '' ?>>
+            ✅ Выполнено
+        </option>
+    </select>
+</div>
 
                         <div class="col-12 mb-3">
                             <label for="description" class="form-label">Описание</label>

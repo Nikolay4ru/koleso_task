@@ -84,7 +84,7 @@ class NotificationService {
         }
     }
     
-    public function notifyStatusChanged($taskId, $oldStatus, $newStatus, $changedBy) {
+public function notifyStatusChanged($taskId, $oldStatus, $newStatus, $changedBy) {
         $task = $this->getTaskInfo($taskId);
         $recipients = $this->getTaskRecipients($taskId);
         
@@ -93,6 +93,7 @@ class NotificationService {
             'todo' => 'К выполнению',
             'in_progress' => 'В работе',
             'review' => 'На проверке',
+            'waiting_approval' => 'Ожидает проверки',
             'done' => 'Выполнено'
         ];
         
@@ -142,6 +143,216 @@ class NotificationService {
                         'new_status' => $newStatus
                     ],
                     'priority' => 5
+                ];
+            }
+        }
+        
+        if ($this->useQueue && !empty($notifications)) {
+            $this->queue->addBatch($notifications);
+        } else {
+            $this->sendImmediately($notifications);
+        }
+    }
+
+
+     /**
+     * Уведомление о том, что задача готова к проверке
+     */
+    public function notifyTaskReadyForApproval($taskId, $completedBy) {
+        $task = $this->getTaskInfo($taskId);
+        $creator = $this->getUserInfo($task['creator_id']);
+        $completer = $this->getUserInfo($completedBy);
+        
+        if (!$creator || !$completer || $creator['id'] == $completedBy) {
+            return;
+        }
+        
+        $title = "Задача готова к проверке: {$task['title']}";
+        $message = "{$completer['name']} выполнил задачу '{$task['title']}' и ждет вашей проверки";
+        
+        // Создаем уведомление в БД
+        $this->notification->create([
+            'user_id' => $creator['id'],
+            'type' => 'task_ready_approval',
+            'title' => $title,
+            'message' => $message,
+            'task_id' => $taskId
+        ]);
+        
+        $notifications = [];
+        
+        // Email уведомление
+        if ($creator['email_notifications']) {
+            $emailMessage = "{$completer['name']} выполнил задачу '{$task['title']}' и ожидает вашей проверки.\n\n" .
+                           "Описание задачи: {$task['description']}\n\n" .
+                           "Перейти к задаче: https://task.koleso.app/tasks/view/{$taskId}";
+            
+            $notifications[] = [
+                'user_id' => $creator['id'],
+                'type' => 'task_ready_approval',
+                'channel' => 'email',
+                'recipient' => $creator['email'],
+                'subject' => $title,
+                'message' => $emailMessage,
+                'data' => ['task_id' => $taskId],
+                'priority' => 3 // Высокий приоритет
+            ];
+        }
+        
+        // Telegram уведомление
+        if ($creator['telegram_notifications'] && $creator['telegram_chat_id']) {
+            $telegramMessage = " <b>Задача готова к проверке</b>\n\n" .
+                              "Задача: {$task['title']}\n" .
+                              "Исполнитель: {$completer['name']}\n\n" .
+                              "<i>Задача выполнена и ожидает вашего подтверждения</i>";
+            
+            $notifications[] = [
+                'user_id' => $creator['id'],
+                'type' => 'task_ready_approval',
+                'channel' => 'telegram',
+                'recipient' => $creator['telegram_chat_id'],
+                'message' => $telegramMessage,
+                'data' => ['task_id' => $taskId],
+                'priority' => 3
+            ];
+        }
+        
+        if ($this->useQueue && !empty($notifications)) {
+            $this->queue->addBatch($notifications);
+        } else {
+            $this->sendImmediately($notifications);
+        }
+    }
+
+
+    /**
+     * Уведомление о том, что задача окончательно выполнена
+     */
+    public function notifyTaskCompleted($taskId, $approvedBy) {
+        $task = $this->getTaskInfo($taskId);
+        $recipients = $this->getTaskRecipients($taskId);
+        $approver = $this->getUserInfo($approvedBy);
+        
+        $notifications = [];
+        
+        foreach ($recipients as $recipient) {
+            if ($recipient['id'] == $approvedBy) continue;
+            
+            $title = "Задача завершена: {$task['title']}";
+            $message = "Задача '{$task['title']}' была завершена";
+            
+            if ($approver && $approvedBy == $task['creator_id']) {
+                $message = "Задача '{$task['title']}' была принята и закрыта";
+            }
+            
+            $this->notification->create([
+                'user_id' => $recipient['id'],
+                'type' => 'task_completed',
+                'title' => $title,
+                'message' => $message,
+                'task_id' => $taskId
+            ]);
+            
+            if ($recipient['email_notifications']) {
+                $notifications[] = [
+                    'user_id' => $recipient['id'],
+                    'type' => 'task_completed',
+                    'channel' => 'email',
+                    'recipient' => $recipient['email'],
+                    'subject' => $title,
+                    'message' => $message,
+                    'data' => ['task_id' => $taskId],
+                    'priority' => 6
+                ];
+            }
+            
+            if ($recipient['telegram_notifications'] && $recipient['telegram_chat_id']) {
+                $telegramMessage = " <b>Задача завершена</b>\n\n" .
+                                  "Задача: {$task['title']}\n\n" .
+                                  "<i>Задача успешно выполнена и закрыта</i>";
+                
+                $notifications[] = [
+                    'user_id' => $recipient['id'],
+                    'type' => 'task_completed',
+                    'channel' => 'telegram',
+                    'recipient' => $recipient['telegram_chat_id'],
+                    'message' => $telegramMessage,
+                    'data' => ['task_id' => $taskId],
+                    'priority' => 6
+                ];
+            }
+        }
+        
+        if ($this->useQueue && !empty($notifications)) {
+            $this->queue->addBatch($notifications);
+        } else {
+            $this->sendImmediately($notifications);
+        }
+    }
+    
+    /**
+     * Уведомление об отклонении задачи
+     */
+    public function notifyTaskRejected($taskId, $rejectedBy, $reason = '') {
+        $task = $this->getTaskInfo($taskId);
+        $assignees = $this->getTaskAssignees($taskId);
+        $rejector = $this->getUserInfo($rejectedBy);
+        
+        $notifications = [];
+        
+        foreach ($assignees as $assignee) {
+            if ($assignee['id'] == $rejectedBy) continue;
+            
+            $title = "Задача возвращена на доработку: {$task['title']}";
+            $message = "Задача '{$task['title']}' требует доработки";
+            
+            if ($reason) {
+                $message .= "\n\nПричина: {$reason}";
+            }
+            
+            $this->notification->create([
+                'user_id' => $assignee['id'],
+                'type' => 'task_rejected',
+                'title' => $title,
+                'message' => $message,
+                'task_id' => $taskId
+            ]);
+            
+            if ($assignee['email_notifications']) {
+                $emailMessage = "Задача '{$task['title']}' была возвращена на доработку.\n\n";
+                if ($reason) {
+                    $emailMessage .= "Причина: {$reason}\n\n";
+                }
+                $emailMessage .= "Перейти к задаче: https://task.koleso.app/tasks/view/{$taskId}";
+                
+                $notifications[] = [
+                    'user_id' => $assignee['id'],
+                    'type' => 'task_rejected',
+                    'channel' => 'email',
+                    'recipient' => $assignee['email'],
+                    'subject' => $title,
+                    'message' => $emailMessage,
+                    'data' => ['task_id' => $taskId, 'reason' => $reason],
+                    'priority' => 4
+                ];
+            }
+            
+            if ($assignee['telegram_notifications'] && $assignee['telegram_chat_id']) {
+                $telegramMessage = " <b>Задача возвращена на доработку</b>\n\n" .
+                                  "Задача: {$task['title']}\n";
+                if ($reason) {
+                    $telegramMessage .= "Причина: <i>" . htmlspecialchars($reason) . "</i>\n";
+                }
+                $telegramMessage .= "\n <i>Необходимо внести исправления</i>";
+                
+                $notifications[] = [
+                    'user_id' => $assignee['id'],
+                    'type' => 'task_rejected',
+                    'channel' => 'telegram',
+                    'recipient' => $assignee['telegram_chat_id'],
+                    'message' => $telegramMessage,
+                    'data' => ['task_id' => $taskId, 'reason' => $reason],
+                    'priority' => 4
                 ];
             }
         }

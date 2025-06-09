@@ -53,6 +53,7 @@
             font-weight: 600;
             font-size: 0.875rem;
         }
+       
         .priority-low { background: #d4edda; color: #155724; }
         .priority-medium { background: #d1ecf1; color: #0c5460; }
         .priority-high { background: #fff3cd; color: #856404; }
@@ -318,6 +319,109 @@
             transform: scaleX(0);
             transition: transform 0.3s;
         }
+        /* Быстрые кнопки смены статуса */
+        .status-actions {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .status-action-btn {
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            border: 2px solid transparent;
+            background: white;
+            color: #495057;
+            font-weight: 500;
+            transition: all 0.3s;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .status-action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .status-action-btn.btn-start {
+            border-color: #0d6efd;
+            color: #0d6efd;
+        }
+        .status-action-btn.btn-start:hover {
+            background: #0d6efd;
+            color: white;
+        }
+        
+        .status-action-btn.btn-complete {
+            border-color: #6f42c1;
+            color: #6f42c1;
+        }
+        .status-action-btn.btn-complete:hover {
+            background: #6f42c1;
+            color: white;
+        }
+        
+        .status-action-btn.btn-approve {
+            border-color: #198754;
+            color: #198754;
+        }
+        .status-action-btn.btn-approve:hover {
+            background: #198754;
+            color: white;
+        }
+        
+        .status-action-btn.btn-reject {
+            border-color: #dc3545;
+            color: #dc3545;
+        }
+        .status-action-btn.btn-reject:hover {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .status-action-btn.btn-review {
+            border-color: #fd7e14;
+            color: #fd7e14;
+        }
+        .status-action-btn.btn-review:hover {
+            background: #fd7e14;
+            color: white;
+        }
+        
+        .status-action-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        /* Уведомление о смене статуса */
+        .status-change-notification {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: #28a745;
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transform: translateX(400px);
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 1050;
+        }
+        
+        .status-change-notification.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        
+        .status-change-notification.error {
+            background: #dc3545;
+        }
     </style>
 </head>
 <body>
@@ -376,6 +480,80 @@
         <div class="row">
             <!-- Основной контент -->
             <div class="col-lg-8">
+                <!-- Быстрые действия со статусом -->
+                <?php if ($canEdit || $isCreator): ?>
+                <div class="status-actions">
+                    <h6 class="mb-3">
+                        <i class="bi bi-lightning me-2"></i>
+                        Быстрые действия
+                    </h6>
+                    
+                    <div class="status-buttons">
+                        <?php
+                        $currentStatus = $task['status'];
+                        $userId = $_SESSION['user_id'];
+                        
+                        // Определяем доступные действия в зависимости от статуса и роли
+                        if ($isAssignee || $canEdit): ?>
+                        
+                            <?php if (in_array($currentStatus, ['backlog', 'todo'])): ?>
+                                <button class="status-action-btn btn-start" onclick="changeStatus('in_progress')">
+                                    <i class="bi bi-play-fill"></i>
+                                    Начать работу
+                                </button>
+                            <?php endif; ?>
+                            
+                            <?php if ($currentStatus === 'in_progress'): ?>
+                                <button class="status-action-btn btn-complete" onclick="changeStatus('waiting_approval')">
+                                    <i class="bi bi-check-circle"></i>
+                                    Выполнено (на проверку)
+                                </button>
+                                <button class="status-action-btn btn-review" onclick="changeStatus('review')">
+                                    <i class="bi bi-eye"></i>
+                                    На внутреннюю проверку
+                                </button>
+                            <?php endif; ?>
+                            
+                            <?php if ($currentStatus === 'review'): ?>
+                                <button class="status-action-btn btn-complete" onclick="changeStatus('waiting_approval')">
+                                    <i class="bi bi-check-circle"></i>
+                                    Выполнено (на проверку)
+                                </button>
+                            <?php endif; ?>
+                            
+                        <?php endif; ?>
+                        
+                        <?php if ($isCreator): ?>
+                        
+                            <?php if ($currentStatus === 'waiting_approval'): ?>
+                                <button class="status-action-btn btn-approve" onclick="changeStatus('done')">
+                                    <i class="bi bi-check-all"></i>
+                                    Принять и закрыть
+                                </button>
+                                <button class="status-action-btn btn-reject" onclick="changeStatus('in_progress', 'Требуется доработка')">
+                                    <i class="bi bi-arrow-left-circle"></i>
+                                    Вернуть на доработку
+                                </button>
+                            <?php endif; ?>
+                            
+                            <?php if (in_array($currentStatus, ['backlog', 'todo', 'in_progress', 'review'])): ?>
+                                <button class="status-action-btn btn-approve" onclick="changeStatus('done')">
+                                    <i class="bi bi-check-all"></i>
+                                    Закрыть как выполненную
+                                </button>
+                            <?php endif; ?>
+                            
+                        <?php endif; ?>
+                        
+                        <?php if ($currentStatus === 'done' && ($isCreator || $isAssignee)): ?>
+                            <button class="status-action-btn btn-reject" onclick="changeStatus('in_progress')">
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                                Переоткрыть задачу
+                            </button>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
                 <!-- Описание -->
                 <div class="content-card">
                     <h5 class="mb-3">Описание</h5>
@@ -687,6 +865,12 @@
             </div>
         </div>
     </div>
+
+     <!-- Уведомление о смене статуса -->
+    <div class="status-change-notification" id="statusNotification">
+        <i class="bi bi-check-circle me-2"></i>
+        <span id="statusNotificationText">Статус задачи изменен</span>
+    </div>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
@@ -866,6 +1050,169 @@
             if (mimeType.includes('zip') || mimeType.includes('rar') || mimeType.includes('7z')) return 'bi-file-earmark-zip';
             return 'bi-file-earmark';
         }
+    </script>
+
+
+
+<script>
+        
+        
+        // Переменные для работы с модальным окном отклонения
+        let rejectModal = null;
+        let pendingRejectComment = '';
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            rejectModal = new bootstrap.Modal(document.getElementById('rejectModal'));
+            
+            // Обработчик подтверждения отклонения
+            document.getElementById('confirmReject').addEventListener('click', function() {
+                const comment = document.getElementById('rejectComment').value;
+                rejectModal.hide();
+                
+                // Выполняем отклонение с комментарием
+                performStatusChange('in_progress', comment);
+            });
+        });
+        
+        // Функция смены статуса
+        function changeStatus(newStatus, comment = '') {
+            // Если это отклонение и нет комментария, показываем модальное окно
+            if (newStatus === 'in_progress' && comment === 'Требуется доработка') {
+                rejectModal.show();
+                return;
+            }
+            
+            performStatusChange(newStatus, comment);
+        }
+        
+        function performStatusChange(newStatus, comment = '') {
+            // Отключаем все кнопки статуса
+            const statusButtons = document.querySelectorAll('.status-action-btn');
+            statusButtons.forEach(btn => {
+                btn.disabled = true;
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Обновление...';
+                btn.dataset.originalText = originalText;
+            });
+            
+            const formData = new FormData();
+            formData.append('task_id', <?= $task['id'] ?>);
+            formData.append('old_status', '<?= $task['status'] ?>');
+            formData.append('new_status', newStatus);
+            if (comment) {
+                formData.append('comment', comment);
+            }
+            
+            fetch('/tasks/update-status', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Обновляем статус на странице
+                    updateStatusDisplay(newStatus);
+                    
+                    // Если есть комментарий, добавляем его
+                    if (comment) {
+                        addStatusChangeComment(comment);
+                    }
+                    
+                    showStatusNotification('Статус задачи успешно изменен', 'success');
+                    
+                    // Перезагружаем страницу через 2 секунды для обновления кнопок
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    showStatusNotification('Ошибка при изменении статуса', 'error');
+                    restoreStatusButtons();
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showStatusNotification('Произошла ошибка при изменении статуса', 'error');
+                restoreStatusButtons();
+            });
+        }
+        
+        function updateStatusDisplay(newStatus) {
+            const statusLabels = {
+                'backlog': 'Бэклог',
+                'todo': 'К выполнению', 
+                'in_progress': 'В работе',
+                'review': 'На проверке',
+                'waiting_approval': 'Ожидает проверки',
+                'done': 'Выполнено'
+            };
+            
+            const statusElement = document.getElementById('currentStatus');
+            statusElement.className = `status-badge status-${newStatus}`;
+            statusElement.textContent = statusLabels[newStatus] || newStatus;
+        }
+        
+        function addStatusChangeComment(comment) {
+            // Добавляем системный комментарий об изменении статуса
+            const commentsContainer = document.querySelector('.comments-list');
+            const newComment = document.createElement('div');
+            newComment.className = 'comment-item';
+            newComment.innerHTML = `
+                <div class="comment-header">
+                    <div class="d-flex align-items-center">
+                        <div class="user-avatar" style="background: #6c757d;">
+                            <i class="bi bi-gear"></i>
+                        </div>
+                        <span class="comment-author">Система</span>
+                    </div>
+                    <span class="comment-time">
+                        ${new Date().toLocaleDateString('ru-RU')} ${new Date().toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'})}
+                    </span>
+                </div>
+                <div class="comment-text">
+                    <strong>Статус изменен</strong><br>
+                    ${comment}
+                </div>
+            `;
+            
+            if (commentsContainer.querySelector('.text-muted')) {
+                commentsContainer.innerHTML = '';
+            }
+            commentsContainer.insertBefore(newComment, commentsContainer.firstChild);
+        }
+        
+        function restoreStatusButtons() {
+            const statusButtons = document.querySelectorAll('.status-action-btn');
+            statusButtons.forEach(btn => {
+                btn.disabled = false;
+                if (btn.dataset.originalText) {
+                    btn.innerHTML = btn.dataset.originalText;
+                    delete btn.dataset.originalText;
+                }
+            });
+        }
+        
+        function showStatusNotification(message, type = 'success') {
+            const notification = document.getElementById('statusNotification');
+            const text = document.getElementById('statusNotificationText');
+            const icon = notification.querySelector('i');
+            
+            text.textContent = message;
+            
+            if (type === 'error') {
+                notification.classList.add('error');
+                icon.className = 'bi bi-exclamation-circle me-2';
+            } else {
+                notification.classList.remove('error');
+                icon.className = 'bi bi-check-circle me-2';
+            }
+            
+            notification.classList.add('show');
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 4000);
+        }
+    
     </script>
 </body>
 </html>

@@ -80,26 +80,120 @@ class TaskController {
         require_once __DIR__ . '/../../views/tasks/create.php';
     }
     
-    public function updateStatus() {
+        public function updateStatus() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $taskId = $_POST['task_id'];
-            $oldStatus = $_POST['old_status'];
+            $oldStatus = $_POST['old_status'] ?? '';
             $newStatus = $_POST['new_status'];
+            $comment = $_POST['comment'] ?? '';
+            $userId = $_SESSION['user_id'];
             
-            $this->task->updateStatus($taskId, $newStatus);
+            // Получаем информацию о задаче для проверки прав
+            $task = $this->task->getTaskDetails($taskId);
             
-            // Отправляем уведомления
-            $this->notificationService->notifyStatusChanged(
-                $taskId, 
-                $oldStatus, 
-                $newStatus, 
-                $_SESSION['user_id']
-            );
+            if (!$task) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'error' => 'Задача не найдена']);
+                exit;
+            }
             
-            header('Content-Type: application/json');
-            echo json_encode(['success' => true]);
+            // Проверяем права на изменение статуса
+            $isCreator = $task['creator_id'] == $userId;
+            $isAssignee = in_array($userId, array_column($task['assignees'], 'id'));
+            
+            if (!$this->canChangeStatus($oldStatus, $newStatus, $isCreator, $isAssignee)) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'error' => 'Недостаточно прав для изменения статуса']);
+                exit;
+            }
+            
+            try {
+                // Обновляем статус задачи
+                $this->task->updateStatus($taskId, $newStatus);
+                
+                // Добавляем комментарий о смене статуса если есть
+                if (!empty($comment)) {
+                    $statusChangeComment = $this->getStatusChangeMessage($oldStatus, $newStatus) . "\n\n" . $comment;
+                    $this->task->addComment($taskId, $userId, $statusChangeComment);
+                } else {
+                    // Добавляем системный комментарий о смене статуса
+                    $statusChangeComment = $this->getStatusChangeMessage($oldStatus, $newStatus);
+                    $this->task->addSystemComment($taskId, $statusChangeComment);
+                }
+                
+                // Отправляем уведомления
+                $this->notificationService->notifyStatusChanged(
+                    $taskId, 
+                    $oldStatus, 
+                    $newStatus, 
+                    $userId
+                );
+                
+                // Дополнительные уведомления для специальных случаев
+                if ($newStatus === 'waiting_approval') {
+                    $this->notificationService->notifyTaskReadyForApproval($taskId, $userId);
+                } elseif ($newStatus === 'done') {
+                    $this->notificationService->notifyTaskCompleted($taskId, $userId);
+                } elseif ($oldStatus === 'waiting_approval' && $newStatus === 'in_progress') {
+                    $this->notificationService->notifyTaskRejected($taskId, $userId, $comment);
+                }
+                
+                header('Content-Type: application/json');
+                echo json_encode(['success' => true]);
+            } catch (\Exception $e) {
+                error_log('Status update error: ' . $e->getMessage());
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'error' => 'Ошибка при обновлении статуса']);
+            }
             exit;
         }
+    }
+
+
+     /**
+     * Проверяет, может ли пользователь изменить статус задачи
+     */
+    private function canChangeStatus($oldStatus, $newStatus, $isCreator, $isAssignee) {
+        // Создатель может всегда изменить статус
+        if ($isCreator) {
+            return true;
+        }
+        
+        // Исполнители могут изменять статусы в рамках своей работы
+        if ($isAssignee) {
+            $allowedTransitions = [
+                'backlog' => ['todo', 'in_progress'],
+                'todo' => ['in_progress', 'backlog'],
+                'in_progress' => ['review', 'waiting_approval', 'todo'],
+                'review' => ['in_progress', 'waiting_approval'],
+                'waiting_approval' => [], // Только создатель может изменять этот статус
+                'done' => ['in_progress'] // Переоткрытие задачи
+            ];
+            
+            return isset($allowedTransitions[$oldStatus]) && 
+                   in_array($newStatus, $allowedTransitions[$oldStatus]);
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Возвращает сообщение о смене статуса
+     */
+    private function getStatusChangeMessage($oldStatus, $newStatus) {
+        $statusLabels = [
+            'backlog' => 'Бэклог',
+            'todo' => 'К выполнению',
+            'in_progress' => 'В работе',
+            'review' => 'На проверке',
+            'waiting_approval' => 'Ожидает проверки',
+            'done' => 'Выполнено'
+        ];
+        
+        $oldLabel = $statusLabels[$oldStatus] ?? $oldStatus;
+        $newLabel = $statusLabels[$newStatus] ?? $newStatus;
+        
+        return "Статус изменен с '{$oldLabel}' на '{$newLabel}'";
     }
     
     public function view($taskId) {

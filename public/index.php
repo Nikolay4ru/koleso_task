@@ -15,6 +15,7 @@ use App\Controllers\TaskController;
 use App\Controllers\UserController;
 use App\Controllers\DepartmentController;
 use App\Controllers\NotificationController;
+use App\Controllers\FileController;
 use App\Services\EmailService;
 use App\Services\TelegramService;
 use App\Services\NotificationService;
@@ -203,6 +204,11 @@ switch ($uri) {
         $controller->markAllAsRead();
         break;
         
+    case '/file/upload':
+        $controller = new FileController($db);
+        $controller->upload();
+        break;
+        
     default:
         // Обработка динамических роутов
         if (preg_match('/^\/notifications\/mark-read\/(\d+)$/', $uri, $matches)) {
@@ -226,6 +232,15 @@ switch ($uri) {
         } elseif (preg_match('/^\/tasks\/(\d+)\/comment$/', $uri, $matches)) {
             $controller = new TaskController($db, $notificationService);
             $controller->addComment($matches[1]);
+        } elseif (preg_match('/^\/file\/download\/(\d+)$/', $uri, $matches)) {
+            $controller = new FileController($db);
+            $controller->download($matches[1]);
+        } elseif (preg_match('/^\/file\/preview\/(\d+)$/', $uri, $matches)) {
+            $controller = new FileController($db);
+            $controller->preview($matches[1]);
+        } elseif (preg_match('/^\/file\/delete\/(\d+)$/', $uri, $matches)) {
+            $controller = new FileController($db);
+            $controller->delete($matches[1]);
         } elseif (preg_match('/^\/admin\/users\/edit\/(\d+)$/', $uri, $matches)) {
             $controller = new AdminController($db, $emailService);
             $controller->editUser($matches[1]);
@@ -244,6 +259,25 @@ switch ($uri) {
         } elseif (preg_match('/^\/admin\/departments\/delete\/(\d+)$/', $uri, $matches)) {
             $controller = new AdminController($db, $emailService);
             $controller->deleteDepartment($matches[1]);
+        } elseif (preg_match('/^\/uploads\/(.+)$/', $uri, $matches)) {
+            // Обработка статических файлов из папки uploads
+            $filePath = __DIR__ . '/../uploads/' . $matches[1];
+            if (file_exists($filePath) && is_file($filePath)) {
+                // Определяем MIME-тип
+                $mimeType = mime_content_type($filePath);
+                
+                // Отправляем заголовки
+                header('Content-Type: ' . $mimeType);
+                header('Content-Length: ' . filesize($filePath));
+                header('Cache-Control: public, max-age=86400');
+                
+                // Отправляем файл
+                readfile($filePath);
+                exit;
+            } else {
+                http_response_code(404);
+                include __DIR__ . '/../views/errors/404.php';
+            }
         } else {
             http_response_code(404);
             include __DIR__ . '/../views/errors/404.php';

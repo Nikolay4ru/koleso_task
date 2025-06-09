@@ -26,6 +26,12 @@
             color: #2c3e50;
             margin-bottom: 0.5rem;
         }
+        .task-status-waiting_approval {
+    background: rgba(90, 55, 184, 0.1);
+    color: #5a37b8;
+    border: 1px solid rgba(90, 55, 184, 0.2);
+}
+
         .filters-card {
             background: white;
             border-radius: 10px;

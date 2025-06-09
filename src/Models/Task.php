@@ -73,7 +73,7 @@ class Task {
         }
     }
     
-    public function getKanbanTasks() {
+public function getKanbanTasks() {
         $sql = "SELECT t.*, u.name as creator_name,
                 GROUP_CONCAT(DISTINCT au.name) as assignee_names
                 FROM tasks t
@@ -86,24 +86,27 @@ class Task {
         $stmt = $this->db->query($sql);
         $tasks = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        // Группируем по статусам
+        // Группируем по статусам (включая новые)
         $kanban = [
             'backlog' => [],
             'todo' => [],
             'in_progress' => [],
             'review' => [],
+            'waiting_approval' => [],
             'done' => []
         ];
         
         foreach ($tasks as $task) {
-            $kanban[$task['status']][] = $task;
+            if (isset($kanban[$task['status']])) {
+                $kanban[$task['status']][] = $task;
+            }
         }
         
         return $kanban;
     }
     
-    public function updateStatus($taskId, $status) {
-        $sql = "UPDATE tasks SET status = :status WHERE id = :id";
+public function updateStatus($taskId, $status) {
+        $sql = "UPDATE tasks SET status = :status, updated_at = CURRENT_TIMESTAMP WHERE id = :id";
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([
             ':id' => $taskId,
@@ -150,97 +153,97 @@ public function getUpcomingDeadlines($userId, $days = 7) {
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-public function getTasksByStatusForUser($userId) {
-    $sql = "SELECT 
-            t.status,
-            COUNT(*) as count
-            FROM tasks t
-            JOIN task_assignees ta ON t.id = ta.task_id
-            WHERE ta.user_id = :user_id
-            GROUP BY t.status";
-    
-    $stmt = $this->db->prepare($sql);
-    $stmt->execute([':user_id' => $userId]);
-    
-    $result = [];
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $result[$row['status']] = $row['count'];
+ public function getTasksByStatusForUser($userId) {
+        $sql = "SELECT 
+                t.status,
+                COUNT(*) as count
+                FROM tasks t
+                JOIN task_assignees ta ON t.id = ta.task_id
+                WHERE ta.user_id = :user_id
+                GROUP BY t.status";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':user_id' => $userId]);
+        
+        $result = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $result[$row['status']] = $row['count'];
+        }
+        
+        return $result;
     }
-    
-    return $result;
-}
 
 public function getOverdueTasksCount($userId) {
-    $sql = "SELECT COUNT(*) as count
-            FROM tasks t
-            JOIN task_assignees ta ON t.id = ta.task_id
-            WHERE ta.user_id = :user_id
-                AND t.deadline < NOW()
-                AND t.status != 'done'";
-    
-    $stmt = $this->db->prepare($sql);
-    $stmt->execute([':user_id' => $userId]);
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    return $result['count'];
-}
-
-public function getTasksDueTodayCount($userId) {
-    $sql = "SELECT COUNT(*) as count
-            FROM tasks t
-            JOIN task_assignees ta ON t.id = ta.task_id
-            WHERE ta.user_id = :user_id
-                AND DATE(t.deadline) = CURDATE()
-                AND t.status != 'done'";
-    
-    $stmt = $this->db->prepare($sql);
-    $stmt->execute([':user_id' => $userId]);
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    return $result['count'];
-}
-
-public function getTaskDetails($taskId) {
-    // Получаем основную информацию о задаче
-    $sql = "SELECT t.*, 
-            u.name as creator_name,
-            u.email as creator_email
-            FROM tasks t
-            JOIN users u ON t.creator_id = u.id
-            WHERE t.id = :task_id";
-    
-    $stmt = $this->db->prepare($sql);
-    $stmt->execute([':task_id' => $taskId]);
-    $task = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    if (!$task) {
-        return null;
+        $sql = "SELECT COUNT(*) as count
+                FROM tasks t
+                JOIN task_assignees ta ON t.id = ta.task_id
+                WHERE ta.user_id = :user_id
+                    AND t.deadline < NOW()
+                    AND t.status NOT IN ('done')";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':user_id' => $userId]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        return $result['count'];
     }
-    
-    // Получаем исполнителей
-    $sql = "SELECT u.id, u.name, u.email, d.name as department_name
-            FROM task_assignees ta
-            JOIN users u ON ta.user_id = u.id
-            LEFT JOIN departments d ON u.department_id = d.id
-            WHERE ta.task_id = :task_id";
-    
-    $stmt = $this->db->prepare($sql);
-    $stmt->execute([':task_id' => $taskId]);
-    $task['assignees'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Получаем наблюдателей
-    $sql = "SELECT u.id, u.name, u.email, d.name as department_name
-            FROM task_watchers tw
-            JOIN users u ON tw.user_id = u.id
-            LEFT JOIN departments d ON u.department_id = d.id
-            WHERE tw.task_id = :task_id";
-    
-    $stmt = $this->db->prepare($sql);
-    $stmt->execute([':task_id' => $taskId]);
-    $task['watchers'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    return $task;
-}
+
+ public function getTasksDueTodayCount($userId) {
+        $sql = "SELECT COUNT(*) as count
+                FROM tasks t
+                JOIN task_assignees ta ON t.id = ta.task_id
+                WHERE ta.user_id = :user_id
+                    AND DATE(t.deadline) = CURDATE()
+                    AND t.status NOT IN ('done')";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':user_id' => $userId]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        return $result['count'];
+    }
+
+ public function getTaskDetails($taskId) {
+        // Получаем основную информацию о задаче
+        $sql = "SELECT t.*, 
+                u.name as creator_name,
+                u.email as creator_email
+                FROM tasks t
+                JOIN users u ON t.creator_id = u.id
+                WHERE t.id = :task_id";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':task_id' => $taskId]);
+        $task = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$task) {
+            return null;
+        }
+        
+        // Получаем исполнителей
+        $sql = "SELECT u.id, u.name, u.email, d.name as department_name
+                FROM task_assignees ta
+                JOIN users u ON ta.user_id = u.id
+                LEFT JOIN departments d ON u.department_id = d.id
+                WHERE ta.task_id = :task_id";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':task_id' => $taskId]);
+        $task['assignees'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Получаем наблюдателей
+        $sql = "SELECT u.id, u.name, u.email, d.name as department_name
+                FROM task_watchers tw
+                JOIN users u ON tw.user_id = u.id
+                LEFT JOIN departments d ON u.department_id = d.id
+                WHERE tw.task_id = :task_id";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':task_id' => $taskId]);
+        $task['watchers'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        return $task;
+    }
 
 public function update($taskId, $data) {
     $this->db->beginTransaction();
@@ -324,6 +327,21 @@ public function addComment3($taskId, $userId, $comment) {
 }
 
 
+/**
+     * Добавляет системный комментарий (без привязки к пользователю)
+     */
+    public function addSystemComment($taskId, $comment) {
+        $sql = "INSERT INTO task_comments (task_id, user_id, comment) 
+                VALUES (:task_id, NULL, :comment)";
+        
+        $stmt = $this->db->prepare($sql);
+        return $stmt->execute([
+            ':task_id' => $taskId,
+            ':comment' => $comment
+        ]);
+    }
+
+
 public function addComment($taskId, $userId, $comment) {
     $sql = "INSERT INTO task_comments (task_id, user_id, comment) 
             VALUES (:task_id, :user_id, :comment)";
@@ -340,142 +358,142 @@ public function addComment($taskId, $userId, $comment) {
 }
 
 public function getActiveTasksForUser($userId) {
-    $sql = "SELECT t.*, 
-            GROUP_CONCAT(DISTINCT u.name) as assignee_names
-            FROM tasks t
-            LEFT JOIN task_assignees ta ON t.id = ta.task_id
-            LEFT JOIN users u ON ta.user_id = u.id
-            WHERE (ta.user_id = :user_id OR t.creator_id = :user_id2)
-                AND t.status IN ('todo', 'in_progress', 'review')
-            GROUP BY t.id
-            ORDER BY 
-                CASE t.priority 
-                    WHEN 'urgent' THEN 1 
-                    WHEN 'high' THEN 2 
-                    WHEN 'medium' THEN 3 
-                    WHEN 'low' THEN 4 
-                END,
-                t.deadline ASC";
-    
-    $stmt = $this->db->prepare($sql);
-    $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
-    $stmt->bindValue(':user_id2', $userId, PDO::PARAM_INT);
-    $stmt->execute();
-    
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
-}
+        $sql = "SELECT t.*, 
+                GROUP_CONCAT(DISTINCT u.name) as assignee_names
+                FROM tasks t
+                LEFT JOIN task_assignees ta ON t.id = ta.task_id
+                LEFT JOIN users u ON ta.user_id = u.id
+                WHERE (ta.user_id = :user_id OR t.creator_id = :user_id2)
+                    AND t.status IN ('todo', 'in_progress', 'review', 'waiting_approval')
+                GROUP BY t.id
+                ORDER BY 
+                    CASE t.priority 
+                        WHEN 'urgent' THEN 1 
+                        WHEN 'high' THEN 2 
+                        WHEN 'medium' THEN 3 
+                        WHEN 'low' THEN 4 
+                    END,
+                    t.deadline ASC";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+        $stmt->bindValue(':user_id2', $userId, PDO::PARAM_INT);
+        $stmt->execute();
+        
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 
 
 public function getAllTasksWithDetails() {
-    $sql = "SELECT 
-            t.*,
-            u.name as creator_name,
-            GROUP_CONCAT(DISTINCT CONCAT(au.id, ':', au.name) SEPARATOR '|') as assignees_data,
-            GROUP_CONCAT(DISTINCT wu.name SEPARATOR ', ') as watcher_names,
-            COUNT(DISTINCT ta.user_id) as assignee_count,
-            COUNT(DISTINCT tw.user_id) as watcher_count,
-            COUNT(DISTINCT tc.id) as comment_count
-        FROM tasks t
-        LEFT JOIN users u ON t.creator_id = u.id
-        LEFT JOIN task_assignees ta ON t.id = ta.task_id
-        LEFT JOIN users au ON ta.user_id = au.id
-        LEFT JOIN task_watchers tw ON t.id = tw.task_id
-        LEFT JOIN users wu ON tw.user_id = wu.id
-        LEFT JOIN task_comments tc ON t.id = tc.task_id
-        GROUP BY t.id
-        ORDER BY t.created_at DESC";
-    
-    $stmt = $this->db->query($sql);
-    $tasks = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Обработка данных исполнителей
-    foreach ($tasks as &$task) {
-        $task['assignees'] = [];
-        if (!empty($task['assignees_data'])) {
-            $assigneePairs = explode('|', $task['assignees_data']);
-            foreach ($assigneePairs as $pair) {
-                list($id, $name) = explode(':', $pair);
-                $task['assignees'][] = ['id' => $id, 'name' => $name];
+        $sql = "SELECT 
+                t.*,
+                u.name as creator_name,
+                GROUP_CONCAT(DISTINCT CONCAT(au.id, ':', au.name) SEPARATOR '|') as assignees_data,
+                GROUP_CONCAT(DISTINCT wu.name SEPARATOR ', ') as watcher_names,
+                COUNT(DISTINCT ta.user_id) as assignee_count,
+                COUNT(DISTINCT tw.user_id) as watcher_count,
+                COUNT(DISTINCT tc.id) as comment_count
+            FROM tasks t
+            LEFT JOIN users u ON t.creator_id = u.id
+            LEFT JOIN task_assignees ta ON t.id = ta.task_id
+            LEFT JOIN users au ON ta.user_id = au.id
+            LEFT JOIN task_watchers tw ON t.id = tw.task_id
+            LEFT JOIN users wu ON tw.user_id = wu.id
+            LEFT JOIN task_comments tc ON t.id = tc.task_id
+            GROUP BY t.id
+            ORDER BY t.created_at DESC";
+        
+        $stmt = $this->db->query($sql);
+        $tasks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Обработка данных исполнителей
+        foreach ($tasks as &$task) {
+            $task['assignees'] = [];
+            if (!empty($task['assignees_data'])) {
+                $assigneePairs = explode('|', $task['assignees_data']);
+                foreach ($assigneePairs as $pair) {
+                    list($id, $name) = explode(':', $pair);
+                    $task['assignees'][] = ['id' => $id, 'name' => $name];
+                }
             }
         }
+        
+        return $tasks;
     }
-    
-    return $tasks;
-}
 
-public function getTasksForUser($userId, $filters = []) {
-    $sql = "SELECT 
-            t.*,
-            u.name as creator_name,
-            GROUP_CONCAT(DISTINCT au.name SEPARATOR ', ') as assignee_names
-        FROM tasks t
-        LEFT JOIN users u ON t.creator_id = u.id
-        LEFT JOIN task_assignees ta ON t.id = ta.task_id
-        LEFT JOIN users au ON ta.user_id = au.id
-        WHERE (ta.user_id = :user_id OR t.creator_id = :user_id2)";
-    
-    $params = [
-        ':user_id' => $userId,
-        ':user_id2' => $userId
-    ];
-    
-    // Применяем фильтры
-    if (!empty($filters['status'])) {
-        $sql .= " AND t.status IN (" . implode(',', array_fill(0, count($filters['status']), '?')) . ")";
-    }
-    
-    if (!empty($filters['priority'])) {
-        $sql .= " AND t.priority IN (" . implode(',', array_fill(0, count($filters['priority']), '?')) . ")";
-    }
-    
-    if (!empty($filters['period'])) {
-        switch ($filters['period']) {
-            case 'today':
-                $sql .= " AND DATE(t.created_at) = CURDATE()";
-                break;
-            case 'week':
-                $sql .= " AND t.created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)";
-                break;
-            case 'month':
-                $sql .= " AND t.created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)";
-                break;
-            case 'overdue':
-                $sql .= " AND t.deadline < NOW() AND t.status != 'done'";
-                break;
+ public function getTasksForUser($userId, $filters = []) {
+        $sql = "SELECT 
+                t.*,
+                u.name as creator_name,
+                GROUP_CONCAT(DISTINCT au.name SEPARATOR ', ') as assignee_names
+            FROM tasks t
+            LEFT JOIN users u ON t.creator_id = u.id
+            LEFT JOIN task_assignees ta ON t.id = ta.task_id
+            LEFT JOIN users au ON ta.user_id = au.id
+            WHERE (ta.user_id = :user_id OR t.creator_id = :user_id2)";
+        
+        $params = [
+            ':user_id' => $userId,
+            ':user_id2' => $userId
+        ];
+        
+        // Применяем фильтры
+        if (!empty($filters['status'])) {
+            $sql .= " AND t.status IN (" . implode(',', array_fill(0, count($filters['status']), '?')) . ")";
         }
+        
+        if (!empty($filters['priority'])) {
+            $sql .= " AND t.priority IN (" . implode(',', array_fill(0, count($filters['priority']), '?')) . ")";
+        }
+        
+        if (!empty($filters['period'])) {
+            switch ($filters['period']) {
+                case 'today':
+                    $sql .= " AND DATE(t.created_at) = CURDATE()";
+                    break;
+                case 'week':
+                    $sql .= " AND t.created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)";
+                    break;
+                case 'month':
+                    $sql .= " AND t.created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)";
+                    break;
+                case 'overdue':
+                    $sql .= " AND t.deadline < NOW() AND t.status NOT IN ('done')";
+                    break;
+            }
+        }
+        
+        $sql .= " GROUP BY t.id ORDER BY t.created_at DESC";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-    
-    $sql .= " GROUP BY t.id ORDER BY t.created_at DESC";
-    
-    $stmt = $this->db->prepare($sql);
-    $stmt->execute($params);
-    
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
-}
 
-public function getAllTasksForAdmin() {
-    $sql = "SELECT 
-            t.*,
-            u.name as creator_name,
-            d.name as creator_department,
-            GROUP_CONCAT(DISTINCT au.name SEPARATOR ', ') as assignee_names,
-            COUNT(DISTINCT tc.id) as comment_count,
-            CASE 
-                WHEN t.deadline < NOW() AND t.status != 'done' THEN 1
-                ELSE 0
-            END as is_overdue
-        FROM tasks t
-        LEFT JOIN users u ON t.creator_id = u.id
-        LEFT JOIN departments d ON u.department_id = d.id
-        LEFT JOIN task_assignees ta ON t.id = ta.task_id
-        LEFT JOIN users au ON ta.user_id = au.id
-        LEFT JOIN task_comments tc ON t.id = tc.task_id
-        GROUP BY t.id
-        ORDER BY t.created_at DESC";
-    
-    $stmt = $this->db->query($sql);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
-}
+ public function getAllTasksForAdmin() {
+        $sql = "SELECT 
+                t.*,
+                u.name as creator_name,
+                d.name as creator_department,
+                GROUP_CONCAT(DISTINCT au.name SEPARATOR ', ') as assignee_names,
+                COUNT(DISTINCT tc.id) as comment_count,
+                CASE 
+                    WHEN t.deadline < NOW() AND t.status NOT IN ('done') THEN 1
+                    ELSE 0
+                END as is_overdue
+            FROM tasks t
+            LEFT JOIN users u ON t.creator_id = u.id
+            LEFT JOIN departments d ON u.department_id = d.id
+            LEFT JOIN task_assignees ta ON t.id = ta.task_id
+            LEFT JOIN users au ON ta.user_id = au.id
+            LEFT JOIN task_comments tc ON t.id = tc.task_id
+            GROUP BY t.id
+            ORDER BY t.created_at DESC";
+        
+        $stmt = $this->db->query($sql);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 
 public function getCount() {
     $sql = "SELECT COUNT(*) as count FROM tasks";
@@ -484,46 +502,80 @@ public function getCount() {
     return $result['count'];
 }
 
-public function getCompletedCount() {
-    $sql = "SELECT COUNT(*) as count FROM tasks WHERE status = 'done'";
-    $stmt = $this->db->query($sql);
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    return $result['count'];
-}
-
-public function getOverdueCount() {
-    $sql = "SELECT COUNT(*) as count FROM tasks 
-            WHERE deadline < NOW() AND status != 'done'";
-    $stmt = $this->db->query($sql);
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    return $result['count'];
-}
-
-public function getStatsByStatus() {
-    $sql = "SELECT status, COUNT(*) as count 
-            FROM tasks 
-            GROUP BY status";
-    $stmt = $this->db->query($sql);
-    
-    $stats = [];
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $stats[$row['status']] = $row['count'];
+ public function getCompletedCount() {
+        $sql = "SELECT COUNT(*) as count FROM tasks WHERE status = 'done'";
+        $stmt = $this->db->query($sql);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result['count'];
     }
-    return $stats;
-}
 
-public function getStatsByPriority() {
-    $sql = "SELECT priority, COUNT(*) as count 
-            FROM tasks 
-            GROUP BY priority";
-    $stmt = $this->db->query($sql);
-    
-    $stats = [];
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $stats[$row['priority']] = $row['count'];
+ public function getOverdueCount() {
+        $sql = "SELECT COUNT(*) as count FROM tasks 
+                WHERE deadline < NOW() AND status NOT IN ('done')";
+        $stmt = $this->db->query($sql);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result['count'];
     }
-    return $stats;
-}
+
+    public function getStatsByStatus() {
+        $sql = "SELECT status, COUNT(*) as count 
+                FROM tasks 
+                GROUP BY status";
+        $stmt = $this->db->query($sql);
+        
+        $stats = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $stats[$row['status']] = $row['count'];
+        }
+        return $stats;
+    }
+
+ public function getStatsByPriority() {
+        $sql = "SELECT priority, COUNT(*) as count 
+                FROM tasks 
+                GROUP BY priority";
+        $stmt = $this->db->query($sql);
+        
+        $stats = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $stats[$row['priority']] = $row['count'];
+        }
+        return $stats;
+    }
+    
+    /**
+     * Получает задачи, ожидающие проверки от конкретного пользователя
+     */
+    public function getTasksAwaitingApproval($creatorId) {
+        $sql = "SELECT t.*, u.name as creator_name,
+                GROUP_CONCAT(DISTINCT au.name SEPARATOR ', ') as assignee_names
+                FROM tasks t
+                JOIN users u ON t.creator_id = u.id
+                LEFT JOIN task_assignees ta ON t.id = ta.task_id
+                LEFT JOIN users au ON ta.user_id = au.id
+                WHERE t.creator_id = :creator_id AND t.status = 'waiting_approval'
+                GROUP BY t.id
+                ORDER BY t.updated_at DESC";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':creator_id' => $creatorId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    
+    /**
+     * Получает статистику для дашборда с учетом новых статусов
+     */
+    public function getStatusStatistics() {
+        $sql = "SELECT 
+                status,
+                COUNT(*) as count,
+                COUNT(CASE WHEN deadline < NOW() AND status NOT IN ('done') THEN 1 END) as overdue_count
+                FROM tasks 
+                GROUP BY status";
+        
+        $stmt = $this->db->query($sql);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 
 
 }

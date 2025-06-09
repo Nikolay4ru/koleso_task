@@ -46,6 +46,27 @@
             font-size: 1.1rem;
             opacity: 0.85;
         }
+        /* Обновления для дашборда */
+.dashboard-stat.waiting_approval {
+    border-left: 4px solid #6f42c1;
+}
+
+.dashboard-stat.waiting_approval .stat-icon {
+    background: rgba(111, 66, 193, 0.1);
+    color: #6f42c1;
+}
+
+/* Фильтры в списке задач */
+.filter-chip[data-status="waiting_approval"] {
+    background: rgba(111, 66, 193, 0.1);
+    color: #6f42c1;
+    border: 1px solid rgba(111, 66, 193, 0.2);
+}
+
+.filter-chip[data-status="waiting_approval"].active {
+    background: #6f42c1;
+    color: white;
+}
         .btn-ios {
             border-radius: 14px;
             font-weight: 500;
