@@ -45,6 +45,13 @@ class User {
 }
 
 
+public function getById($userId) {
+    $stmt = $this->db->prepare("SELECT * FROM users WHERE id = :id");
+    $stmt->execute([':id' => $userId]);
+    return $stmt->fetch(\PDO::FETCH_ASSOC);
+}
+
+
 public function getCount() {
     $sql = "SELECT COUNT(*) as count FROM users";
     $stmt = $this->db->query($sql);

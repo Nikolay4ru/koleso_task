@@ -3,9 +3,8 @@ namespace App\Controllers;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\File;
+use App\Models\Department;
 use App\Services\NotificationService;
-
-
 
 class TaskController {
     private $db;
@@ -19,21 +18,25 @@ class TaskController {
     }
     
     public function kanban() {
-        $tasks = $this->task->getKanbanTasks();
+        // Получаем id пользователя и его отдела
+        $userId = $_SESSION['user_id'];
+        // Получаем department_id из users
         $userModel = new User($this->db);
+        $user = $userModel->getById($userId);
+        $departmentId = $user['department_id'];
+
+        // Получаем только задачи своего отдела или свои собственные
+        $tasks = $this->task->getKanbanTasks($userId, $departmentId);
         $users = $userModel->getAll();
         require_once __DIR__ . '/../../views/tasks/kanban.php';
     }
     
     public function create() {
-        // Получаем список пользователей для формы
         $userModel = new User($this->db);
         $users = $userModel->getAll();
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            // Валидация данных
             $errors = [];
-            
             $title = trim($_POST['title'] ?? '');
             if (empty($title)) {
                 $errors[] = 'Название задачи обязательно для заполнения';
@@ -56,8 +59,6 @@ class TaskController {
                 try {
                     $taskId = $this->task->create($data);
 
-
-                     // Обрабатываем загруженные файлы
                     if (!empty($_POST['uploaded_files'])) {
                         $fileModel = new File($this->db);
                         $fileIds = json_decode($_POST['uploaded_files'], true);
@@ -66,9 +67,7 @@ class TaskController {
                         }
                     }
                     
-                    // Отправляем уведомления
                     $this->notificationService->notifyTaskCreated($taskId, $_SESSION['user_id']);
-                    
                     header('Location: /tasks/kanban');
                     exit;
                 } catch (\Exception $e) {
@@ -81,163 +80,134 @@ class TaskController {
         require_once __DIR__ . '/../../views/tasks/create.php';
     }
     
-        public function updateStatus() {
-    // Проверяем метод запроса
-    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        header('Content-Type: application/json');
-        echo json_encode(['success' => false, 'error' => 'Метод не поддерживается']);
-        exit;
-    }
-    
-    // Получаем и валидируем данные
-    $taskId = $_POST['task_id'] ?? null;
-    $oldStatus = $_POST['old_status'] ?? '';
-    $newStatus = $_POST['new_status'] ?? null;
-    $comment = $_POST['comment'] ?? '';
-    $userId = $_SESSION['user_id'] ?? null;
-    
-    // Базовая валидация
-    if (!$taskId || !$newStatus || !$userId) {
-        header('Content-Type: application/json');
-        echo json_encode(['success' => false, 'error' => 'Недостаточно данных']);
-        exit;
-    }
-    
-    try {
-        // Получаем информацию о задаче для проверки прав
-        $task = $this->task->getTaskDetails($taskId);
-        
-        if (!$task) {
+    public function updateStatus() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             header('Content-Type: application/json');
-            echo json_encode(['success' => false, 'error' => 'Задача не найдена']);
+            echo json_encode(['success' => false, 'error' => 'Метод не поддерживается']);
             exit;
         }
         
-        // Проверяем права на изменение статуса
-        $isCreator = $task['creator_id'] == $userId;
-        $isAssignee = in_array($userId, array_column($task['assignees'] ?? [], 'id'));
+        $taskId = $_POST['task_id'] ?? null;
+        $oldStatus = $_POST['old_status'] ?? '';
+        $newStatus = $_POST['new_status'] ?? null;
+        $comment = $_POST['comment'] ?? '';
+        $userId = $_SESSION['user_id'] ?? null;
         
-        if (!$this->canChangeStatus($oldStatus, $newStatus, $isCreator, $isAssignee)) {
+        if (!$taskId || !$newStatus || !$userId) {
             header('Content-Type: application/json');
-            echo json_encode(['success' => false, 'error' => 'Недостаточно прав для изменения статуса']);
+            echo json_encode(['success' => false, 'error' => 'Недостаточно данных']);
             exit;
         }
         
-        // Обновляем статус задачи
-        $statusUpdated = $this->task->updateStatus($taskId, $newStatus);
-        
-        if (!$statusUpdated) {
-            throw new Exception('Не удалось обновить статус в базе данных');
+        try {
+            $task = $this->task->getTaskDetails($taskId);
+            if (!$task) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'error' => 'Задача не найдена']);
+                exit;
+            }
+            
+            $isCreator = $task['creator_id'] == $userId;
+            $isAssignee = in_array($userId, array_column($task['assignees'] ?? [], 'id'));
+            
+            if (!$this->canChangeStatus($oldStatus, $newStatus, $isCreator, $isAssignee)) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'error' => 'Недостаточно прав для изменения статуса']);
+                exit;
+            }
+            
+            $statusUpdated = $this->task->updateStatus($taskId, $newStatus);
+            
+            if (!$statusUpdated) {
+                throw new \Exception('Не удалось обновить статус в базе данных');
+            }
+            
+            if (!empty($comment)) {
+                $statusChangeComment = $this->getStatusChangeMessage($oldStatus, $newStatus) . "\n\n" . $comment;
+                $this->task->addComment($taskId, $userId, $statusChangeComment);
+            } else {
+                $statusChangeComment = $this->getStatusChangeMessage($oldStatus, $newStatus);
+                $this->task->addSystemComment($taskId, $statusChangeComment);
+            }
+            
+            $this->notificationService->notifyStatusChanged(
+                $taskId, $oldStatus, $newStatus, $userId
+            );
+            
+            if ($newStatus === 'waiting_approval') {
+                $this->notificationService->notifyTaskReadyForApproval($taskId, $userId);
+            } elseif ($newStatus === 'done') {
+                $this->notificationService->notifyTaskCompleted($taskId, $userId);
+            } elseif ($oldStatus === 'waiting_approval' && $newStatus === 'in_progress') {
+                $this->notificationService->notifyTaskRejected($taskId, $userId, $comment);
+            }
+            
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => true,
+                'message' => 'Статус успешно обновлен',
+                'new_status' => $newStatus
+            ]);
+            
+        } catch (\Exception $e) {
+            error_log('Status update error: ' . $e->getMessage());
+            error_log('Error details: ' . print_r([
+                'task_id' => $taskId,
+                'old_status' => $oldStatus,
+                'new_status' => $newStatus,
+                'user_id' => $userId
+            ], true));
+            
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => false, 
+                'error' => 'Ошибка при обновлении статуса: ' . $e->getMessage()
+            ]);
         }
         
-        // Добавляем комментарий о смене статуса если есть
-        if (!empty($comment)) {
-            $statusChangeComment = $this->getStatusChangeMessage($oldStatus, $newStatus) . "\n\n" . $comment;
-            $this->task->addComment($taskId, $userId, $statusChangeComment);
-        } else {
-            // Добавляем системный комментарий о смене статуса
-            $statusChangeComment = $this->getStatusChangeMessage($oldStatus, $newStatus);
-            $this->task->addSystemComment($taskId, $statusChangeComment);
-        }
-        
-        // Отправляем уведомления
-        $this->notificationService->notifyStatusChanged(
-            $taskId, 
-            $oldStatus, 
-            $newStatus, 
-            $userId
-        );
-        
-        // Дополнительные уведомления для специальных случаев
-        if ($newStatus === 'waiting_approval') {
-            $this->notificationService->notifyTaskReadyForApproval($taskId, $userId);
-        } elseif ($newStatus === 'done') {
-            $this->notificationService->notifyTaskCompleted($taskId, $userId);
-        } elseif ($oldStatus === 'waiting_approval' && $newStatus === 'in_progress') {
-            $this->notificationService->notifyTaskRejected($taskId, $userId, $comment);
-        }
-        
-        header('Content-Type: application/json');
-        echo json_encode([
-            'success' => true,
-            'message' => 'Статус успешно обновлен',
-            'new_status' => $newStatus
-        ]);
-        
-    } catch (Exception $e) {
-        error_log('Status update error: ' . $e->getMessage());
-        error_log('Error details: ' . print_r([
-            'task_id' => $taskId,
-            'old_status' => $oldStatus,
-            'new_status' => $newStatus,
-            'user_id' => $userId
-        ], true));
-        
-        header('Content-Type: application/json');
-        echo json_encode([
-            'success' => false, 
-            'error' => 'Ошибка при обновлении статуса: ' . $e->getMessage()
-        ]);
+        exit;
     }
-    
-    exit;
-}
 
-
-     /**
- * Проверяет, может ли пользователь изменить статус задачи
- */
-private function canChangeStatus($oldStatus, $newStatus, $isCreator, $isAssignee) {
-    // Создатель может изменять только определенные статусы
-    if ($isCreator) {
-        // Создатель может принять выполненную задачу или вернуть на доработку
-        if ($oldStatus === 'waiting_approval' && in_array($newStatus, ['done', 'in_progress'])) {
-            return true;
+    private function canChangeStatus($oldStatus, $newStatus, $isCreator, $isAssignee) {
+        if ($isCreator) {
+            if ($oldStatus === 'waiting_approval' && in_array($newStatus, ['done', 'in_progress'])) {
+                return true;
+            }
+            if ($newStatus === 'done' && $oldStatus !== 'waiting_approval') {
+                return true;
+            }
         }
-        // Создатель может закрыть задачу как выполненную из любого статуса кроме waiting_approval
-        if ($newStatus === 'done' && $oldStatus !== 'waiting_approval') {
-            return true;
+        if ($isAssignee) {
+            $allowedTransitions = [
+                'backlog' => ['in_progress'],
+                'todo' => ['in_progress'],
+                'in_progress' => ['waiting_approval'],
+                'waiting_approval' => [],
+                'done' => []
+            ];
+            return isset($allowedTransitions[$oldStatus]) &&
+                in_array($newStatus, $allowedTransitions[$oldStatus]);
         }
+        return false;
     }
-    
-    // Исполнители могут изменять статусы в рамках своей работы
-    if ($isAssignee) {
-        $allowedTransitions = [
-            'backlog' => ['in_progress'],
-            'todo' => ['in_progress'],
-            'in_progress' => ['waiting_approval'],
-            'waiting_approval' => [], // Исполнитель не может изменять этот статус
-            'done' => [] // Исполнитель не может переоткрыть задачу
+
+    private function getStatusChangeMessage($oldStatus, $newStatus) {
+        $statusLabels = [
+            'backlog' => 'Очередь задач',
+            'todo' => 'К выполнению',
+            'in_progress' => 'В работе',
+            'waiting_approval' => 'Ожидает проверки',
+            'done' => 'Выполнено'
         ];
-        
-        return isset($allowedTransitions[$oldStatus]) && 
-               in_array($newStatus, $allowedTransitions[$oldStatus]);
+        $oldLabel = $statusLabels[$oldStatus] ?? $oldStatus;
+        $newLabel = $statusLabels[$newStatus] ?? $newStatus;
+        return "Статус изменен с '{$oldLabel}' на '{$newLabel}'";
     }
     
-    return false;
-}
-
-/**
- * Возвращает сообщение о смене статуса
- */
-private function getStatusChangeMessage($oldStatus, $newStatus) {
-    $statusLabels = [
-        'backlog' => 'Очередь задач',
-        'todo' => 'К выполнению',
-        'in_progress' => 'В работе',
-        'waiting_approval' => 'Ожидает проверки',
-        'done' => 'Выполнено'
-    ];
-    
-    $oldLabel = $statusLabels[$oldStatus] ?? $oldStatus;
-    $newLabel = $statusLabels[$newStatus] ?? $newStatus;
-    
-    return "Статус изменен с '{$oldLabel}' на '{$newLabel}'";
-}
-    
-    public function view($taskId) {
+   public function view($taskId) {
+    try {
+        // Получаем данные задачи
         $task = $this->task->getTaskDetails($taskId);
-        
         if (!$task) {
             http_response_code(404);
             require_once __DIR__ . '/../../views/errors/404.php';
@@ -246,54 +216,51 @@ private function getStatusChangeMessage($oldStatus, $newStatus) {
         
         // Получаем комментарии к задаче
         $comments = $this->task->getTaskComments($taskId);
-
-
-         // Получаем файлы задачи
+        
+        // Создаем единственный экземпляр File модели
         $fileModel = new File($this->db);
+        
+        // Получаем файлы задачи
         $taskFiles = $fileModel->getTaskFiles($taskId);
-
-
-         // Получаем файлы для каждого комментария
+        
+        // Добавляем файлы к каждому комментарию используя передачу по ссылке
         foreach ($comments as &$comment) {
             $comment['files'] = $fileModel->getCommentFiles($comment['id']);
         }
         
-
-       // Проверяем права доступа
-$isAssignee = in_array($_SESSION['user_id'], array_column($task['assignees'], 'id'));
-$isWatcher = in_array($_SESSION['user_id'], array_column($task['watchers'], 'id'));
-$isCreator = $task['creator_id'] == $_SESSION['user_id'];
-$canEdit = $isCreator; // Только создатель может редактировать
+        // Проверяем права пользователя
+        $userId = $_SESSION['user_id'] ?? null;
+        $isAssignee = $userId && in_array($userId, array_column($task['assignees'] ?? [], 'id'));
+        $isWatcher = $userId && in_array($userId, array_column($task['watchers'] ?? [], 'id'));
+        $isCreator = $userId && $task['creator_id'] == $userId;
+        $canEdit = $isCreator;
         
+        // Передаем данные в представление
+        // $fileModel, $taskFiles, $comments уже доступны в представлении
         require_once __DIR__ . '/../../views/tasks/view.php';
+    } catch (Exception $e) {
+        error_log('Task view error: ' . $e->getMessage());
+        http_response_code(500);
+        require_once __DIR__ . '/../../views/errors/500.php';
     }
+}
     
     public function edit($taskId) {
         $task = $this->task->getTaskDetails($taskId);
-        
         if (!$task) {
             http_response_code(404);
             require_once __DIR__ . '/../../views/errors/404.php';
             return;
         }
-        
-        // Проверяем права на редактирование
         $isCreator = $task['creator_id'] == $_SESSION['user_id'];
-
-if (!$isCreator) {
-    header('Location: /tasks/view/' . $taskId);
-    exit;
-}
-        
-        // Получаем список пользователей
+        if (!$isCreator) {
+            header('Location: /tasks/view/' . $taskId);
+            exit;
+        }
         $userModel = new User($this->db);
         $users = $userModel->getAll();
-
-
-         // Получаем файлы задачи
         $fileModel = new File($this->db);
         $taskFiles = $fileModel->getTaskFiles($taskId);
-        
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $data = [
                 'title' => trim($_POST['title'] ?? ''),
@@ -304,22 +271,15 @@ if (!$isCreator) {
                 'assignees' => $_POST['assignees'] ?? [],
                 'watchers' => $_POST['watchers'] ?? []
             ];
-            
             try {
                 $this->task->update($taskId, $data);
-
-
-                // Обрабатываем новые загруженные файлы
                 if (!empty($_POST['uploaded_files'])) {
                     $fileIds = json_decode($_POST['uploaded_files'], true);
                     foreach ($fileIds as $fileId) {
                         $fileModel->attachToTask($fileId, $taskId);
                     }
                 }
-                
-                // Отправляем уведомления об изменении
                 $this->notificationService->notifyTaskUpdated($taskId, $_SESSION['user_id']);
-                
                 header('Location: /tasks/view/' . $taskId);
                 exit;
             } catch (\Exception $e) {
@@ -327,7 +287,6 @@ if (!$isCreator) {
                 error_log('Task update error: ' . $e->getMessage());
             }
         }
-        
         require_once __DIR__ . '/../../views/tasks/edit.php';
     }
     
@@ -336,25 +295,19 @@ if (!$isCreator) {
             header('Location: /tasks/kanban');
             exit;
         }
-        
         $task = $this->task->getTaskDetails($taskId);
-        
         if (!$task) {
             http_response_code(404);
             echo json_encode(['success' => false, 'error' => 'Задача не найдена']);
             exit;
         }
-        
-        // Проверяем права на удаление (только создатель)
         if ($task['creator_id'] != $_SESSION['user_id']) {
             http_response_code(403);
             echo json_encode(['success' => false, 'error' => 'Недостаточно прав']);
             exit;
         }
-        
         try {
             $this->task->delete($taskId);
-            
             header('Content-Type: application/json');
             echo json_encode(['success' => true]);
         } catch (\Exception $e) {
@@ -368,30 +321,24 @@ if (!$isCreator) {
             header('Location: /tasks/view/' . $taskId);
             exit;
         }
-        
         $comment = trim($_POST['comment'] ?? '');
-        
-        if (empty($comment)) {
+        $uploadedFiles = [];
+        if (!empty($_POST['uploaded_files'])) {
+            $uploadedFiles = json_decode($_POST['uploaded_files'], true);
+        }
+        if (empty($comment) && empty($uploadedFiles)) {
             header('Location: /tasks/view/' . $taskId);
             exit;
         }
-        
         try {
-             $commentId = $this->task->addComment($taskId, $_SESSION['user_id'], $comment);
-             
-            
-            // Обрабатываем загруженные файлы
-            if (!empty($_POST['uploaded_files'])) {
+            $commentId = $this->task->addComment($taskId, $_SESSION['user_id'], $comment);
+            if (!empty($uploadedFiles)) {
                 $fileModel = new File($this->db);
-                $fileIds = json_decode($_POST['uploaded_files'], true);
-                foreach ($fileIds as $fileId) {
-                    $fileModel->attachToComment($fileId, $commentId['id']);
+                foreach ($uploadedFiles as $fileId) {
+                    $fileModel->attachToComment($fileId, $commentId);
                 }
             }
-            
-            // Отправляем уведомления о новом комментарии
             $this->notificationService->notifyNewComment($taskId, $_SESSION['user_id'], $comment);
-            
             header('Location: /tasks/view/' . $taskId . '#comments');
         } catch (\Exception $e) {
             error_log('Add comment error: ' . $e->getMessage());
@@ -399,73 +346,53 @@ if (!$isCreator) {
         }
     }
 
-
-public function list() {
-    // Получаем все задачи с дополнительной информацией
-    $tasks = $this->task->getAllTasksWithDetails();
-    
-    // Получаем списки для фильтров
-    $userModel = new User($this->db);
-    $users = $userModel->getAll();
-    
-    $departmentModel = new \App\Models\Department($this->db);
-    $departments = $departmentModel->getAll();
-    
-    require_once __DIR__ . '/../../views/tasks/list.php';
-}
-
-public function duplicate($taskId) {
-    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        header('Content-Type: application/json');
-        echo json_encode(['success' => false, 'error' => 'Method not allowed']);
-        exit;
+    public function list() {
+        $tasks = $this->task->getAllTasksWithDetails();
+        $userModel = new User($this->db);
+        $users = $userModel->getAll();
+        $departmentModel = new Department($this->db);
+        $departments = $departmentModel->getAll();
+        require_once __DIR__ . '/../../views/tasks/list.php';
     }
-    
-    // Получаем информацию о задаче
-    $task = $this->task->getTaskDetails($taskId);
-    
-    if (!$task) {
-        header('Content-Type: application/json');
-        echo json_encode(['success' => false, 'error' => 'Task not found']);
-        exit;
+
+    public function duplicate($taskId) {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'error' => 'Method not allowed']);
+            exit;
+        }
+        $task = $this->task->getTaskDetails($taskId);
+        if (!$task) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'error' => 'Task not found']);
+            exit;
+        }
+        $newTaskData = [
+            'title' => $task['title'] . ' (копия)',
+            'description' => $task['description'],
+            'status' => 'backlog',
+            'priority' => $task['priority'],
+            'creator_id' => $_SESSION['user_id'],
+            'deadline' => $task['deadline'],
+            'assignees' => array_column($task['assignees'], 'id'),
+            'watchers' => array_column($task['watchers'], 'id')
+        ];
+        try {
+            $newTaskId = $this->task->create($newTaskData);
+            header('Content-Type: application/json');
+            echo json_encode(['success' => true, 'newTaskId' => $newTaskId]);
+        } catch (\Exception $e) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'error' => 'Failed to duplicate task']);
+        }
     }
-    
-    // Создаем копию
-    $newTaskData = [
-        'title' => $task['title'] . ' (копия)',
-        'description' => $task['description'],
-        'status' => 'backlog', // Новая задача всегда в бэклоге
-        'priority' => $task['priority'],
-        'creator_id' => $_SESSION['user_id'],
-        'deadline' => $task['deadline'],
-        'assignees' => array_column($task['assignees'], 'id'),
-        'watchers' => array_column($task['watchers'], 'id')
-    ];
-    
-    try {
-        $newTaskId = $this->task->create($newTaskData);
-        
-        header('Content-Type: application/json');
-        echo json_encode(['success' => true, 'newTaskId' => $newTaskId]);
-    } catch (\Exception $e) {
-        header('Content-Type: application/json');
-        echo json_encode(['success' => false, 'error' => 'Failed to duplicate task']);
+
+    public function grid() {
+        $tasks = $this->task->getAllTasksWithDetails();
+        $userModel = new User($this->db);
+        $users = $userModel->getAll();
+        $departmentModel = new Department($this->db);
+        $departments = $departmentModel->getAll();
+        require_once __DIR__ . '/../../views/tasks/grid.php';
     }
-}
-
-public function grid() {
-    // Получаем все задачи для grid view
-    $tasks = $this->task->getAllTasksWithDetails();
-    
-    // Получаем списки для фильтров
-    $userModel = new User($this->db);
-    $users = $userModel->getAll();
-    
-    $departmentModel = new \App\Models\Department($this->db);
-    $departments = $departmentModel->getAll();
-    
-    require_once __DIR__ . '/../../views/tasks/grid.php';
-}
-
-
 }

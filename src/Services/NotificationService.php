@@ -307,6 +307,15 @@ public function notifyStatusChanged($taskId, $oldStatus, $newStatus, $changedBy)
             $this->sendImmediately($notifications);
         }
     }
+
+    public function getTaskAssignees($taskId) {
+    $sql = "SELECT u.* FROM task_assignees ta
+            JOIN users u ON ta.user_id = u.id
+            WHERE ta.task_id = :task_id";
+    $stmt = $this->db->prepare($sql);
+    $stmt->execute([':task_id' => $taskId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
     
     /**
      * Уведомление об отклонении задачи

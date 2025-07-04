@@ -76,7 +76,7 @@ class Task {
 /**
  * Обновляет задачи для канбан доски с поддержкой новых статусов
  */
-public function getKanbanTasks() {
+ public function getKanbanTasks($userId, $departmentId) {
     try {
         $sql = "SELECT t.*, u.name as creator_name,
                 GROUP_CONCAT(DISTINCT au.name) as assignee_names
@@ -84,10 +84,20 @@ public function getKanbanTasks() {
                 JOIN users u ON t.creator_id = u.id
                 LEFT JOIN task_assignees ta ON t.id = ta.task_id
                 LEFT JOIN users au ON ta.user_id = au.id
+                LEFT JOIN users au_dept ON ta.user_id = au_dept.id
+                LEFT JOIN task_watchers tw ON t.id = tw.task_id AND tw.user_id = :user_id
+                WHERE t.creator_id = :user_id
+                OR (au_dept.department_id = :department_id AND ta.task_id IS NOT NULL)
+                OR tw.user_id = :user_id
                 GROUP BY t.id
                 ORDER BY t.priority DESC, t.created_at DESC";
         
-        $stmt = $this->db->query($sql);
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([
+            ':user_id' => $userId,
+            ':department_id' => $departmentId
+        ]);
+        
         $tasks = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         // Группируем по статусам (включая новые)
@@ -107,8 +117,7 @@ public function getKanbanTasks() {
         }
         
         return $kanban;
-        
-    } catch (Exception $e) {
+    } catch (\Exception $e) {
         error_log('Task getKanbanTasks error: ' . $e->getMessage());
         throw $e;
     }
@@ -344,24 +353,52 @@ public function delete($taskId) {
  */
 public function getTaskComments($taskId) {
     try {
+        // Сначала получаем ВСЕ комментарии для задачи
         $sql = "SELECT 
-                tc.*,
-                CASE 
-                    WHEN tc.user_id IS NULL OR tc.comment_type = 'system' THEN 'Система'
-                    ELSE u.name 
-                END as user_name,
-                CASE 
-                    WHEN tc.user_id IS NULL OR tc.comment_type = 'system' THEN 1 
-                    ELSE 0 
-                END as is_system
-                FROM task_comments tc
-                LEFT JOIN users u ON tc.user_id = u.id
-                WHERE tc.task_id = :task_id
-                ORDER BY tc.created_at DESC";
+                id,
+                task_id,
+                user_id,
+                comment_type,
+                comment,
+                created_at
+                FROM task_comments
+                WHERE task_id = :task_id
+                ORDER BY created_at DESC";
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':task_id' => $taskId]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $comments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Затем для НЕ системных комментариев получаем имена пользователей
+        $userIds = array_filter(array_column($comments, 'user_id'));
+        $userNames = [];
+        
+        if (!empty($userIds)) {
+            $placeholders = implode(',', array_fill(0, count($userIds), '?'));
+            $sql = "SELECT id, name FROM users WHERE id IN ($placeholders)";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($userIds);
+            $userNames = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+        }
+        
+        // Формируем окончательный результат
+        $result = [];
+        foreach ($comments as $comment) {
+            $isSystem = ($comment['user_id'] === null || $comment['comment_type'] === 'system');
+            
+            $result[] = [
+                'id' => $comment['id'],
+                'task_id' => $comment['task_id'],
+                'user_id' => $comment['user_id'],
+                'comment_type' => $comment['comment_type'],
+                'comment' => $comment['comment'],
+                'created_at' => $comment['created_at'],
+                'user_name' => $isSystem ? 'Система' : ($userNames[$comment['user_id']] ?? 'Неизвестный'),
+                'is_system' => $isSystem ? 1 : 0
+            ];
+        }
+        
+        return $result;
         
     } catch (Exception $e) {
         error_log('Task getTaskComments error: ' . $e->getMessage());
@@ -388,10 +425,26 @@ public function addComment3($taskId, $userId, $comment) {
  */
 public function addSystemComment($taskId, $comment) {
     try {
-        // Способ 1: Если таблица поддерживает NULL для user_id
+        // Check if identical system comment already exists recently
+        $checkSql = "SELECT COUNT(*) FROM task_comments 
+                    WHERE task_id = :task_id 
+                    AND comment = :comment
+                    AND created_at > DATE_SUB(NOW(), INTERVAL 5 MINUTE)";
+        
+        $checkStmt = $this->db->prepare($checkSql);
+        $checkStmt->execute([
+            ':task_id' => $taskId,
+            ':comment' => '[СИСТЕМА] ' . $comment
+        ]);
+        
+        if ($checkStmt->fetchColumn() > 0) {
+            return false; // Skip adding duplicate
+        }
+
+        // Rest of your existing code...
         if ($this->supportsNullUserId()) {
             $sql = "INSERT INTO task_comments (task_id, user_id, comment, comment_type, created_at) 
-                    VALUES (:task_id, NULL, :comment, 'system', NOW())";
+                    VALUES (:task_id, 0, :comment, 'system', NOW())";
             
             $stmt = $this->db->prepare($sql);
             $result = $stmt->execute([
@@ -399,7 +452,6 @@ public function addSystemComment($taskId, $comment) {
                 ':comment' => '[СИСТЕМА] ' . $comment
             ]);
         } else {
-            // Способ 2: Если таблица не поддерживает NULL, используем специального системного пользователя
             $systemUserId = $this->getOrCreateSystemUser();
             
             $sql = "INSERT INTO task_comments (task_id, user_id, comment, comment_type, created_at) 
@@ -421,7 +473,6 @@ public function addSystemComment($taskId, $comment) {
         
     } catch (Exception $e) {
         error_log('Task addSystemComment error: ' . $e->getMessage());
-        // Fallback: добавляем как обычный комментарий от текущего пользователя
         if (isset($_SESSION['user_id'])) {
             return $this->addComment($taskId, $_SESSION['user_id'], '[СИСТЕМА] ' . $comment);
         }
@@ -439,7 +490,7 @@ private function supportsNullUserId() {
         $stmt = $this->db->query($sql);
         $column = $stmt->fetch(PDO::FETCH_ASSOC);
         
-        return $column && $column['Null'] === 'YES';
+        return false;
     } catch (Exception $e) {
         return false;
     }

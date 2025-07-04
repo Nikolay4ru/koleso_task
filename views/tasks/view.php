@@ -6,7 +6,7 @@
     <title><?= htmlspecialchars($task['title']) ?> - Система управления задачами</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
-    <style>
+     <style>
         body {
             background-color: #f8f9fa;
         }
@@ -520,7 +520,7 @@
                     <i class="bi bi-check-all"></i>
                     Принять и закрыть
                 </button>
-                <button class="status-action-btn btn-reject" onclick="changeStatus('in_progress', 'Требуется доработка')">
+                <button class="status-action-btn btn-reject" onclick="showRejectModal()">
                     <i class="bi bi-arrow-left-circle"></i>
                     Вернуть на доработку
                 </button>
@@ -567,7 +567,7 @@
                                     'mime_type' => $file['mime_type'],
                                     'preview_url' => '/file/preview/' . $file['id'],
                                     'download_url' => '/file/download/' . $file['id']
-                                ])) ?>)">
+                                ], JSON_HEX_APOS | JSON_HEX_QUOT)) ?>)">
                                     <?php if ($file['is_image'] && $file['thumbnail_path']): ?>
                                         <img src="<?= $fileModel->getThumbnailUrl($file) ?>" class="file-thumbnail" alt="<?= htmlspecialchars($file['original_name']) ?>">
                                     <?php else: ?>
@@ -601,14 +601,15 @@
                             <textarea class="form-control" 
                                       name="comment" 
                                       placeholder="Напишите комментарий..." 
-                                      required></textarea>
+                                    
+                                      autocomplete="off"></textarea>
                         </div>
                         
                         <!-- Загрузка файлов для комментария -->
                         <div class="file-uploader" id="commentFileUploader">
-                            <input type="file" class="d-none" id="commentFileInput" multiple accept="*/*">
+                            <input type="file" class="d-none" id="commentFileInput" name="files[]" multiple accept="*/*">
                             <i class="bi bi-paperclip" style="font-size: 1.5rem; color: #6c757d;"></i>
-                            <p class="mb-0 mt-1 small">Прикрепить файлы (макс. 10 MB)</p>
+                            <p class="mb-0 mt-1 small">Прикрепить файлы (макс. 10 MB) </p>
                         </div>
                         
                         <div class="file-preview" id="commentFilePreview"></div>
@@ -619,56 +620,58 @@
                         </button>
                     </form>
                     
-                    <!-- Список комментариев -->
-                    <div class="comments-list mt-4">
-                        <?php if (empty($comments)): ?>
-                            <p class="text-center text-muted py-4">Пока нет комментариев</p>
-                        <?php else: ?>
-                            <?php 
-                            $fileModel = new \App\Models\File($this->db);
-                            foreach ($comments as $comment): 
-                            ?>
-                                <div class="comment-item">
-                                    <div class="comment-header">
-                                        <div class="d-flex align-items-center">
-                                            <?php 
-                                            $initials = implode('', array_map(function($word) { 
-                                                return mb_substr($word, 0, 1); 
-                                            }, explode(' ', $comment['user_name'])));
-                                            ?>
-                                            <div class="user-avatar"><?= mb_strtoupper($initials) ?></div>
-                                            <span class="comment-author"><?= htmlspecialchars($comment['user_name']) ?></span>
-                                        </div>
-                                        <span class="comment-time">
-                                            <?= date('d.m.Y H:i', strtotime($comment['created_at'])) ?>
-                                        </span>
-                                    </div>
-                                    <div class="comment-text">
-                                        <?= nl2br(htmlspecialchars($comment['comment'])) ?>
-                                    </div>
-                                    
-                                    <?php if (!empty($comment['files'])): ?>
-                                    <div class="comment-files">
-                                        <?php foreach ($comment['files'] as $file): ?>
-                                            <a href="#" onclick="viewFile(<?= htmlspecialchars(json_encode([
-                                                'id' => $file['id'],
-                                                'name' => $file['original_name'],
-                                                'is_image' => $file['is_image'],
-                                                'mime_type' => $file['mime_type'],
-                                                'preview_url' => '/file/preview/' . $file['id'],
-                                                'download_url' => '/file/download/' . $file['id']
-                                            ])) ?>); return false;" class="comment-file">
-                                                <i class="bi <?= $fileModel->getFileIcon($file['mime_type']) ?>"></i>
-                                                <?= htmlspecialchars($file['original_name']) ?>
-                                                <small>(<?= $fileModel->formatFileSize($file['size']) ?>)</small>
-                                            </a>
-                                        <?php endforeach; ?>
-                                    </div>
-                                    <?php endif; ?>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
+                  <!-- Список комментариев -->
+<div class="comments-list mt-4">
+    <?php if (empty($comments)): ?>
+        <p class="text-center text-muted py-4">Пока нет комментариев</p>
+    <?php else: ?>
+        <?php 
+        // УБИРАЕМ дублирующую инициализацию $fileModel
+        // $fileModel уже создан в контроллере и передан в представление
+        foreach ($comments as $comment): 
+        ?>
+            <!-- УБИРАЕМ var_dump($comment) для отладки -->
+            <div class="comment-item">
+                <div class="comment-header">
+                    <div class="d-flex align-items-center">
+                        <?php 
+                        $initials = implode('', array_map(function($word) { 
+                            return mb_substr($word, 0, 1); 
+                        }, explode(' ', $comment['user_name'])));
+                        ?>
+                        <div class="user-avatar"><?= mb_strtoupper($initials) ?></div>
+                        <span class="comment-author"><?= htmlspecialchars($comment['user_name']) ?></span>
                     </div>
+                    <span class="comment-time">
+                        <?= date('d.m.Y H:i', strtotime($comment['created_at'])) ?>
+                    </span>
+                </div>
+                <div class="comment-text">
+                    <?= nl2br(htmlspecialchars($comment['comment'])) ?>
+                </div>
+                
+                <?php if (!empty($comment['files'])): ?>
+                <div class="comment-files">
+                    <?php foreach ($comment['files'] as $file): ?>
+                        <a href="#" onclick="viewFile(<?= htmlspecialchars(json_encode([
+                            'id' => $file['id'],
+                            'name' => $file['original_name'],
+                            'is_image' => $file['is_image'],
+                            'mime_type' => $file['mime_type'],
+                            'preview_url' => '/file/preview/' . $file['id'],
+                            'download_url' => '/file/download/' . $file['id']
+                        ], JSON_HEX_APOS | JSON_HEX_QUOT)) ?>); return false;" class="comment-file">
+                            <i class="bi <?= $fileModel->getFileIcon($file['mime_type']) ?>"></i>
+                            <?= htmlspecialchars($file['original_name']) ?>
+                            <small>(<?= $fileModel->formatFileSize($file['size']) ?>)</small>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
+            </div>
+        <?php endforeach; ?>
+    <?php endif; ?>
+</div>
                 </div>
             </div>
             
@@ -679,20 +682,20 @@
                     <h6 class="mb-3">Статус и приоритет</h6>
                     
                     <div class="mb-3">
-                        <small class="text-muted d-block mb-2">Статус</small>
-                        <?php
-                        $statusLabels = [
-                            'backlog' => 'Очередь задач',
-                            'todo' => 'К выполнению',
-                            'in_progress' => 'В работе',
-                            'review' => 'На проверке',
-                            'done' => 'Выполнено'
-                        ];
-                        ?>
-                        <span class="status-badge status-<?= $task['status'] ?>">
-                            <?= $statusLabels[$task['status']] ?? $task['status'] ?>
-                        </span>
-                    </div>
+    <small class="text-muted d-block mb-2">Статус</small>
+    <?php
+    $statusLabels = [
+        'backlog' => 'Очередь задач',
+        'todo' => 'К выполнению',
+        'in_progress' => 'В работе',
+        'waiting_approval' => 'Ожидает проверки',
+        'done' => 'Выполнено'
+    ];
+    ?>
+    <span id="currentStatus" class="status-badge status-<?= $task['status'] ?>" data-status="<?= htmlspecialchars($task['status']) ?>">
+        <?= htmlspecialchars($statusLabels[$task['status']] ?? $task['status']) ?>
+    </span>
+</div>
                     
                     <div>
                         <small class="text-muted d-block mb-2">Приоритет</small>
@@ -704,8 +707,8 @@
                             'urgent' => 'Срочный'
                         ];
                         ?>
-                        <span class="priority-badge priority-<?= $task['priority'] ?>">
-                            <?= $priorityLabels[$task['priority']] ?? $task['priority'] ?>
+                        <span class="priority-badge priority-<?= htmlspecialchars($task['priority']) ?>">
+                            <?= htmlspecialchars($priorityLabels[$task['priority']] ?? $task['priority']) ?>
                         </span>
                     </div>
                 </div>
@@ -800,6 +803,32 @@
             </div>
         </div>
     </div>
+
+    <!-- Модальное окно для отклонения задачи -->
+<div class="modal fade" id="rejectModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Вернуть задачу на доработку</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="rejectComment" class="form-label">Комментарий <span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="rejectComment" rows="3" 
+                              placeholder="Укажите, что необходимо доработать..." required></textarea>
+                    <div class="form-text">Обязательно укажите причину возврата на доработку</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-warning" id="confirmReject">
+                    <i class="bi bi-arrow-left-circle me-2"></i>Вернуть на доработку
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
     
     <!-- Модальное окно удаления -->
     <?php if ($isCreator): ?>
@@ -857,6 +886,19 @@
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+
+        document.getElementById('commentForm').addEventListener('submit', function(e) {
+    const text = this.querySelector('textarea[name="comment"]').value.trim();
+    const files = JSON.parse(this.querySelector('input[name="uploaded_files"]').value || '[]');
+    if (!text && (!files || files.length === 0)) {
+        alert("Введите комментарий или прикрепите хотя бы один файл.");
+        e.preventDefault();
+        return false;
+    }
+});
+
+
+        window.currentTaskId = <?= (int)$task['id'] ?>;
         // Удаление задачи
         <?php if ($isCreator): ?>
         document.getElementById('confirmDelete').addEventListener('click', function() {
@@ -883,10 +925,12 @@
         
         // Автоматическая высота textarea при вводе
         const textarea = document.querySelector('#commentForm textarea');
-        textarea.addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = (this.scrollHeight) + 'px';
-        });
+        if (textarea) {
+            textarea.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight) + 'px';
+            });
+        }
         
         // Прокрутка к комментариям если есть хеш
         if (window.location.hash === '#comments') {
@@ -1033,296 +1077,233 @@
             if (mimeType.includes('zip') || mimeType.includes('rar') || mimeType.includes('7z')) return 'bi-file-earmark-zip';
             return 'bi-file-earmark';
         }
-    </script>
 
-
-
-<script>
-        
-        
-        // Переменные для работы с модальным окном отклонения
+        // Модалка для возврата задачи на доработку
         let rejectModal = null;
-        let pendingRejectComment = '';
-        
         document.addEventListener('DOMContentLoaded', function() {
             rejectModal = new bootstrap.Modal(document.getElementById('rejectModal'));
-            
-            // Обработчик подтверждения отклонения
             document.getElementById('confirmReject').addEventListener('click', function() {
-                const comment = document.getElementById('rejectComment').value;
+                const comment = document.getElementById('rejectComment').value.trim();
+                if (!comment) {
+                    document.getElementById('rejectComment').focus();
+                    return;
+                }
                 rejectModal.hide();
-                
-                // Выполняем отклонение с комментарием
                 performStatusChange('in_progress', comment);
             });
         });
-        
-       
-        // Функция смены статуса с проверками
-function changeStatus(newStatus, comment = '') {
-    // Если это отклонение и нет комментария, показываем модальное окно
-    if (newStatus === 'in_progress' && comment === 'Требуется доработка') {
-        if (typeof rejectModal !== 'undefined' && rejectModal) {
-            rejectModal.show();
-            return;
-        }
-    }
-    
-    performStatusChange(newStatus, comment);
-}
-        
-        // Исправленные JavaScript функции для обновления статуса
 
-// Функция смены статуса с проверками
-function changeStatus(newStatus, comment = '') {
-    // Если это отклонение и нет комментария, показываем модальное окно
-    if (newStatus === 'in_progress' && comment === 'Требуется доработка') {
-        if (typeof rejectModal !== 'undefined' && rejectModal) {
-            rejectModal.show();
-            return;
-        }
-    }
-    
-    performStatusChange(newStatus, comment);
-}
-
-function performStatusChange(newStatus, comment = '') {
-    // Получаем ID задачи из URL или из атрибута data
-    const taskId = getTaskIdFromPage();
-    const oldStatus = getCurrentStatus();
-    
-    if (!taskId) {
-        console.error('Task ID not found');
-        showStatusNotification('Ошибка: ID задачи не найден', 'error');
-        return;
-    }
-    
-    // Отключаем все кнопки статуса
-    const statusButtons = document.querySelectorAll('.status-action-btn');
-    statusButtons.forEach(btn => {
-        btn.disabled = true;
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Обновление...';
-        btn.dataset.originalText = originalText;
-    });
-    
-    const formData = new FormData();
-    formData.append('task_id', taskId);
-    formData.append('old_status', oldStatus);
-    formData.append('new_status', newStatus);
-    if (comment) {
-        formData.append('comment', comment);
-    }
-    
-    fetch('/tasks/update-status', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return response.json();
-    })
-    .then(data => {
-        if (data.success) {
-            // Обновляем статус на странице
-            updateStatusDisplay(newStatus);
-            
-            // Если есть комментарий, добавляем его
-            if (comment) {
-                addStatusChangeComment(comment);
+        function showRejectModal() {
+            if (typeof rejectModal !== 'undefined' && rejectModal) {
+                document.getElementById('rejectComment').value = '';
+                rejectModal.show();
             }
-            
-            showStatusNotification('Статус задачи успешно изменен', 'success');
-            
-            // Перезагружаем страницу через 2 секунды для обновления кнопок
-            setTimeout(() => {
-                window.location.reload();
-            }, 2000);
-        } else {
-            throw new Error(data.error || 'Неизвестная ошибка');
         }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        showStatusNotification('Ошибка при изменении статуса: ' + error.message, 'error');
-        restoreStatusButtons();
-    });
-}
 
-
-
-// Получаем текущий статус задачи
-function getCurrentStatus() {
-    // Способ 1: из элемента статуса
-    const statusElement = document.getElementById('currentStatus');
-    if (statusElement && statusElement.dataset.status) {
-        return statusElement.dataset.status;
-    }
-    
-    // Способ 2: из карточки задачи
-    const taskCard = document.querySelector('.task-card[data-task-id]');
-    if (taskCard && taskCard.dataset.status) {
-        return taskCard.dataset.status;
-    }
-    
-    // Способ 3: из классов элемента статуса
-    if (statusElement) {
-        const classes = Array.from(statusElement.classList);
-        const statusClass = classes.find(cls => cls.startsWith('status-'));
-        if (statusClass) {
-            return statusClass.replace('status-', '');
+        // Функция смены статуса с проверками
+        function changeStatus(newStatus, comment = '') {
+            performStatusChange(newStatus, comment);
         }
-    }
-    
-    console.warn('Current status not found, using default');
-    return 'backlog';
-}
 
+        function performStatusChange(newStatus, comment = '') {
+            const taskId = getTaskIdFromPage();
+            const oldStatus = getCurrentStatus();
+            if (!taskId) {
+                console.error('Task ID not found');
+                showStatusNotification('Ошибка: ID задачи не найден', 'error');
+                return;
+            }
+            // Отключаем все кнопки статуса
+            const statusButtons = document.querySelectorAll('.status-action-btn');
+            statusButtons.forEach(btn => {
+                btn.disabled = true;
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Обновление...';
+                btn.dataset.originalText = originalText;
+            });
+            const formData = new FormData();
+            formData.append('task_id', taskId);
+            formData.append('old_status', oldStatus);
+            formData.append('new_status', newStatus);
+            if (comment) {
+                formData.append('comment', comment);
+            }
+            fetch('/tasks/update-status', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    updateStatusDisplay(newStatus);
+                    if (comment) {
+                        addStatusChangeComment(comment);
+                    }
+                    showStatusNotification('Статус задачи успешно изменен', 'success');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    throw new Error(data.error || 'Неизвестная ошибка');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showStatusNotification('Ошибка при изменении статуса: ' + error.message, 'error');
+                restoreStatusButtons();
+            });
+        }
 
+        function getCurrentStatus() {
+            const statusElement = document.getElementById('currentStatus');
+            if (statusElement && statusElement.dataset.status) {
+                return statusElement.dataset.status;
+            }
+            const taskCard = document.querySelector('.task-card[data-task-id]');
+            if (taskCard && taskCard.dataset.status) {
+                return taskCard.dataset.status;
+            }
+            if (statusElement) {
+                const classes = Array.from(statusElement.classList);
+                const statusClass = classes.find(cls => cls.startsWith('status-'));
+                if (statusClass) {
+                    return statusClass.replace('status-', '');
+                }
+            }
+            console.warn('Current status not found, using default');
+            return 'backlog';
+        }
 
-// Получаем ID задачи из URL или атрибутов страницы
-function getTaskIdFromPage() {
-    // Способ 1: из URL (для страницы просмотра задачи)
-    const urlMatch = window.location.pathname.match(/\/tasks\/view\/(\d+)/);
-    if (urlMatch) {
-        return urlMatch[1];
-    }
-    
-    // Способ 2: из канбан доски - из ближайшей карточки
-    const taskCard = document.querySelector('.task-card[data-task-id]');
-    if (taskCard) {
-        return taskCard.dataset.taskId;
-    }
-    
-    // Способ 3: из глобальной переменной, если она установлена
-    if (typeof window.currentTaskId !== 'undefined') {
-        return window.currentTaskId;
-    }
-    
-    // Способ 4: из метаданных страницы
-    const taskMeta = document.querySelector('meta[name="task-id"]');
-    if (taskMeta) {
-        return taskMeta.getAttribute('content');
-    }
-    
-    console.error('Task ID not found in URL, data attributes, or global variables');
-    return null;
-}
+        function getTaskIdFromPage() {
+            const urlMatch = window.location.pathname.match(/\/tasks\/view\/(\d+)/);
+            if (urlMatch) {
+                return urlMatch[1];
+            }
+            const taskCard = document.querySelector('.task-card[data-task-id]');
+            if (taskCard) {
+                return taskCard.dataset.taskId;
+            }
+            if (typeof window.currentTaskId !== 'undefined') {
+                return window.currentTaskId;
+            }
+            const taskMeta = document.querySelector('meta[name="task-id"]');
+            if (taskMeta) {
+                return taskMeta.getAttribute('content');
+            }
+            console.error('Task ID not found in URL, data attributes, or global variables');
+            return null;
+        }
         
-function updateStatusDisplay(newStatus) {
-    const statusLabels = {
-        'backlog': 'Очередь задач',
-        'todo': 'К выполнению', 
-        'in_progress': 'В работе',
-        'review': 'На проверке',
-        'waiting_approval': 'Ожидает проверки',
-        'done': 'Выполнено'
-    };
-    
-    // Обновляем основной элемент статуса
-    const statusElement = document.getElementById('currentStatus');
-    if (statusElement) {
-        statusElement.className = `status-badge status-${newStatus}`;
-        statusElement.textContent = statusLabels[newStatus] || newStatus;
-        statusElement.dataset.status = newStatus;
-    }
-    
-    // Обновляем карточку в канбан доске (если есть)
-    const taskCard = document.querySelector('.task-card[data-task-id]');
-    if (taskCard) {
-        taskCard.dataset.status = newStatus;
-        
-        // Перемещаем карточку в соответствующую колонку
-        const newColumn = document.querySelector(`[data-status="${newStatus}"] .tasks-container`);
-        if (newColumn) {
-            newColumn.appendChild(taskCard);
-            updateColumnCounts();
+        function updateStatusDisplay(newStatus) {
+            const statusLabels = {
+                'backlog': 'Очередь задач',
+                'todo': 'К выполнению', 
+                'in_progress': 'В работе',
+                'review': 'На проверке',
+                'waiting_approval': 'Ожидает проверки',
+                'done': 'Выполнено'
+            };
+            const statusElement = document.getElementById('currentStatus');
+            if (statusElement) {
+                statusElement.className = `status-badge status-${newStatus}`;
+                statusElement.textContent = statusLabels[newStatus] || newStatus;
+                statusElement.dataset.status = newStatus;
+            }
+            const taskCard = document.querySelector('.task-card[data-task-id]');
+            if (taskCard) {
+                taskCard.dataset.status = newStatus;
+                const newColumn = document.querySelector(`[data-status="${newStatus}"] .tasks-container`);
+                if (newColumn) {
+                    newColumn.appendChild(taskCard);
+                    if (typeof updateColumnCounts === 'function') updateColumnCounts();
+                }
+            }
         }
-    }
-}
         
         function addStatusChangeComment(comment) {
-    const commentsContainer = document.querySelector('.comments-list');
-    if (!commentsContainer) return;
-    
-    const newComment = document.createElement('div');
-    newComment.className = 'comment-item';
-    newComment.innerHTML = `
-        <div class="comment-header">
-            <div class="d-flex align-items-center">
-                <div class="user-avatar" style="background: #6c757d;">
-                    <i class="bi bi-gear"></i>
+            const commentsContainer = document.querySelector('.comments-list');
+            if (!commentsContainer) return;
+            const newComment = document.createElement('div');
+            newComment.className = 'comment-item';
+            newComment.innerHTML = `
+                <div class="comment-header">
+                    <div class="d-flex align-items-center">
+                        <div class="user-avatar" style="background: #6c757d;">
+                            <i class="bi bi-gear"></i>
+                        </div>
+                        <span class="comment-author">Система</span>
+                    </div>
+                    <span class="comment-time">
+                        ${new Date().toLocaleDateString('ru-RU')} ${new Date().toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'})}
+                    </span>
                 </div>
-                <span class="comment-author">Система</span>
-            </div>
-            <span class="comment-time">
-                ${new Date().toLocaleDateString('ru-RU')} ${new Date().toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'})}
-            </span>
-        </div>
-        <div class="comment-text">
-            <strong>Статус изменен</strong><br>
-            ${escapeHtml(comment)}
-        </div>
-    `;
-    
-    // Удаляем сообщение "Пока нет комментариев" если есть
-    const noCommentsMsg = commentsContainer.querySelector('.text-muted');
-    if (noCommentsMsg) {
-        noCommentsMsg.remove();
-    }
-    
-    commentsContainer.insertBefore(newComment, commentsContainer.firstChild);
-}
+                <div class="comment-text">
+                    <strong>Статус изменен</strong><br>
+                    ${escapeHtml(comment)}
+                </div>
+            `;
+            const noCommentsMsg = commentsContainer.querySelector('.text-muted');
+            if (noCommentsMsg) {
+                noCommentsMsg.remove();
+            }
+            commentsContainer.insertBefore(newComment, commentsContainer.firstChild);
+        }
         
-       
+        function escapeHtml(text) {
+            if (typeof text !== 'string') return '';
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+        }
         
         function restoreStatusButtons() {
-    const statusButtons = document.querySelectorAll('.status-action-btn');
-    statusButtons.forEach(btn => {
-        btn.disabled = false;
-        if (btn.dataset.originalText) {
-            btn.innerHTML = btn.dataset.originalText;
-            delete btn.dataset.originalText;
+            const statusButtons = document.querySelectorAll('.status-action-btn');
+            statusButtons.forEach(btn => {
+                btn.disabled = false;
+                if (btn.dataset.originalText) {
+                    btn.innerHTML = btn.dataset.originalText;
+                    delete btn.dataset.originalText;
+                }
+            });
         }
-    });
-}
 
-function showStatusNotification(message, type = 'success') {
-    // Создаем уведомление если его нет
-    let notification = document.getElementById('statusNotification');
-    if (!notification) {
-        notification = document.createElement('div');
-        notification.id = 'statusNotification';
-        notification.className = 'status-change-notification';
-        notification.innerHTML = `
-            <i class="bi bi-check-circle me-2"></i>
-            <span id="statusNotificationText"></span>
-        `;
-        document.body.appendChild(notification);
-    }
-    
-    const text = document.getElementById('statusNotificationText') || notification.querySelector('span');
-    const icon = notification.querySelector('i');
-    
-    if (text) text.textContent = message;
-    
-    if (type === 'error') {
-        notification.classList.add('error');
-        if (icon) icon.className = 'bi bi-exclamation-circle me-2';
-    } else {
-        notification.classList.remove('error');
-        if (icon) icon.className = 'bi bi-check-circle me-2';
-    }
-    
-    notification.classList.add('show');
-    
-    setTimeout(() => {
-        notification.classList.remove('show');
-    }, 4000);
-}
-    
+        function showStatusNotification(message, type = 'success') {
+            let notification = document.getElementById('statusNotification');
+            if (!notification) {
+                notification = document.createElement('div');
+                notification.id = 'statusNotification';
+                notification.className = 'status-change-notification';
+                notification.innerHTML = `
+                    <i class="bi bi-check-circle me-2"></i>
+                    <span id="statusNotificationText"></span>
+                `;
+                document.body.appendChild(notification);
+            }
+            const text = document.getElementById('statusNotificationText') || notification.querySelector('span');
+            const icon = notification.querySelector('i');
+            if (text) text.textContent = message;
+            if (type === 'error') {
+                notification.classList.add('error');
+                if (icon) icon.className = 'bi bi-exclamation-circle me-2';
+            } else {
+                notification.classList.remove('error');
+                if (icon) icon.className = 'bi bi-check-circle me-2';
+            }
+            notification.classList.add('show');
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 4000);
+        }
     </script>
 </body>
 </html>

@@ -284,10 +284,11 @@
             }
         }
     </style>
+
 </head>
 <body>
     <?php include __DIR__ . '/../layouts/main.php'; ?>
-    
+
     <div class="container-fluid tasks-container">
         <!-- Заголовок -->
         <div class="page-header">
@@ -310,9 +311,9 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="row">
-            <!-- Фильтры (для десктопа - боковая панель, для мобильных - выезжающая) -->
+            <!-- Фильтры -->
             <div class="col-md-3">
                 <div class="filters-card" id="filtersPanel">
                     <div class="d-flex justify-content-between align-items-center mb-3">
@@ -322,7 +323,6 @@
                             Сбросить
                         </button>
                     </div>
-                    
                     <!-- Быстрые фильтры -->
                     <div class="filter-group">
                         <div class="filter-label">Быстрые фильтры</div>
@@ -345,19 +345,17 @@
                             </div>
                         </div>
                     </div>
-                    
                     <!-- Статус -->
                     <div class="filter-group">
                         <div class="filter-label">Статус</div>
                         <select class="form-select form-select-sm" id="filterStatus" multiple>
-    <option value="backlog">Очередь задач</option>
-    <option value="todo">К выполнению</option>
-    <option value="in_progress">В работе</option>
-    <option value="waiting_approval">Ожидает проверки</option>
-    <option value="done">Выполнено</option>
-</select>
+                            <option value="backlog">Очередь задач</option>
+                            <option value="todo">К выполнению</option>
+                            <option value="in_progress">В работе</option>
+                            <option value="waiting_approval">Ожидает проверки</option>
+                            <option value="done">Выполнено</option>
+                        </select>
                     </div>
-                    
                     <!-- Приоритет -->
                     <div class="filter-group">
                         <div class="filter-label">Приоритет</div>
@@ -368,7 +366,6 @@
                             <option value="urgent">Срочный</option>
                         </select>
                     </div>
-                    
                     <!-- Исполнитель -->
                     <div class="filter-group">
                         <div class="filter-label">Исполнитель</div>
@@ -379,7 +376,6 @@
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    
                     <!-- Отдел -->
                     <div class="filter-group">
                         <div class="filter-label">Отдел</div>
@@ -390,7 +386,6 @@
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    
                     <!-- Период -->
                     <div class="filter-group">
                         <div class="filter-label">Период</div>
@@ -405,7 +400,7 @@
                 </div>
                 <div class="filters-backdrop" id="filtersBackdrop"></div>
             </div>
-            
+
             <!-- Таблица задач -->
             <div class="col-md-9">
                 <div class="table-card">
@@ -421,7 +416,6 @@
                                 <i class="bi bi-kanban"></i>
                             </a>
                         </div>
-                        
                         <div class="export-buttons">
                             <button class="btn btn-sm btn-outline-secondary" id="exportExcel">
                                 <i class="bi bi-file-earmark-excel me-1"></i>
@@ -437,7 +431,6 @@
                             </button>
                         </div>
                     </div>
-                    
                     <div class="table-container">
                         <table id="tasksTable" class="table table-hover task-table">
                             <thead>
@@ -461,7 +454,12 @@
                                 <?php foreach ($tasks as $task): ?>
                                     <tr data-task-id="<?= $task['id'] ?>" 
                                         data-status="<?= $task['status'] ?>"
-                                        data-priority="<?= $task['priority'] ?>">
+                                        data-priority="<?= $task['priority'] ?>"
+                                        data-assignees="<?= htmlspecialchars(json_encode($task['assignees'])) ?>"
+                                        data-department="<?= isset($task['department_id']) ? (int)$task['department_id'] : '' ?>"
+                                        data-creator="<?= isset($task['creator_id']) ? (int)$task['creator_id'] : '' ?>"
+                                        data-deadline="<?= $task['deadline'] ?>"
+                                    >
                                         <td>
                                             <div class="form-check">
                                                 <input class="form-check-input task-checkbox" type="checkbox" value="<?= $task['id'] ?>">
@@ -489,6 +487,7 @@
                                                 'todo' => 'К выполнению',
                                                 'in_progress' => 'В работе',
                                                 'review' => 'На проверке',
+                                                'waiting_approval' => 'Ожидает проверки',
                                                 'done' => 'Выполнено'
                                             ];
                                             ?>
@@ -598,7 +597,8 @@
             </div>
         </div>
     </div>
-    
+
+    <!-- JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
     <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
@@ -609,7 +609,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/vfs_fonts.js"></script>
     <script src="https://cdn.datatables.net/buttons/2.2.2/js/buttons.html5.min.js"></script>
     <script src="https://cdn.datatables.net/buttons/2.2.2/js/buttons.print.min.js"></script>
-    
+
     <script>
         // Инициализация DataTable
         const table = $('#tasksTable').DataTable({
@@ -617,9 +617,9 @@
                 url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/ru.json'
             },
             pageLength: 25,
-            order: [[7, 'desc']], // Сортировка по дате создания
+            order: [[7, 'desc']],
             columnDefs: [
-                { orderable: false, targets: [0, 8] }, // Отключаем сортировку для чекбоксов и действий
+                { orderable: false, targets: [0, 8] },
                 { className: 'text-center', targets: [0, 1, 3, 4, 6, 7, 8] }
             ],
             dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip',
@@ -650,95 +650,143 @@
                 }
             ]
         });
-        
+
         // Экспорт кнопки
-        $('#exportExcel').click(function() {
-            table.button('.buttons-excel').trigger();
-        });
-        
-        $('#exportPDF').click(function() {
-            table.button('.buttons-pdf').trigger();
-        });
-        
-        $('#printTable').click(function() {
-            table.button('.buttons-print').trigger();
-        });
-        
+        $('#exportExcel').click(() => table.button('.buttons-excel').trigger());
+        $('#exportPDF').click(() => table.button('.buttons-pdf').trigger());
+        $('#printTable').click(() => table.button('.buttons-print').trigger());
+
         // Мобильные фильтры
         $('#toggleFilters').click(function() {
             $('#filtersPanel').addClass('show');
             $('#filtersBackdrop').addClass('show');
         });
-        
         $('#filtersBackdrop').click(function() {
             $('#filtersPanel').removeClass('show');
             $('#filtersBackdrop').removeClass('show');
         });
-        
+
         // Выбрать все
         $('#selectAll').change(function() {
             $('.task-checkbox').prop('checked', this.checked);
         });
-        
+
         // Быстрые фильтры
-        $('.quick-filter').click(function() {
+        $('.quick-filter').click(function () {
+            $('.quick-filter').not(this).removeClass('active');
             $(this).toggleClass('active');
             applyFilters();
         });
-        
+
         // Применение фильтров
         function applyFilters() {
-            // Здесь должна быть логика фильтрации
-            // Для примера - простая фильтрация по статусу
             const selectedStatuses = $('#filterStatus').val() || [];
             const selectedPriorities = $('#filterPriority').val() || [];
-            
-            table.rows().every(function() {
-                const row = this.node();
-                const status = $(row).data('status');
-                const priority = $(row).data('priority');
-                
+            const selectedAssignee = $('#filterAssignee').val();
+            const selectedDepartment = $('#filterDepartment').val();
+            const selectedPeriod = $('#filterPeriod').val();
+
+            let currentUserId = <?= isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : 0 ?>;
+            let now = Math.floor(Date.now() / 1000);
+
+            table.rows().every(function () {
+                const row = $(this.node());
+                const status = row.data('status');
+                const priority = row.data('priority');
+                const assignees = JSON.parse(row.data('assignees') || '[]');
+                const department = row.data('department');
+                const creator = row.data('creator');
+                const deadline = row.data('deadline');
                 let show = true;
-                
-                if (selectedStatuses.length > 0 && !selectedStatuses.includes(status)) {
-                    show = false;
+
+                // Фильтр по статусу
+                if (selectedStatuses.length && !selectedStatuses.includes(status)) show = false;
+
+                // Фильтр по приоритету
+                if (show && selectedPriorities.length && !selectedPriorities.includes(priority)) show = false;
+
+                // Фильтр по исполнителю
+                if (show && selectedAssignee && (!assignees.some(a => (typeof a === 'object' ? a.id : a) == selectedAssignee))) show = false;
+
+                // Фильтр по отделу (ищем хотя бы одного исполнителя из отдела)
+                if (show && selectedDepartment) {
+                    let found = false;
+                    assignees.forEach(function(a) {
+                        if (typeof a === 'object' && a.department_id && a.department_id == selectedDepartment) found = true;
+                    });
+                    if (!found) show = false;
                 }
-                
-                if (selectedPriorities.length > 0 && !selectedPriorities.includes(priority)) {
-                    show = false;
+
+                // Фильтр по периоду
+                if (show && selectedPeriod) {
+                    let taskTime = 0;
+                    if (selectedPeriod === 'today' || selectedPeriod === 'week' || selectedPeriod === 'month') {
+                        taskTime = new Date(row.find('td').eq(7).text().split('.')[2] + '-' + row.find('td').eq(7).text().split('.')[1] + '-' + row.find('td').eq(7).text().split('.')[0]).getTime() / 1000;
+                    }
+                    if (selectedPeriod === 'today') {
+                        const today = new Date();
+                        const tDay = today.getDate(), tMonth = today.getMonth(), tYear = today.getFullYear();
+                        if (!row.find('td').eq(7).text().trim() ||
+                            new Date(row.find('td').eq(7).text()).getDate() !== tDay ||
+                            new Date(row.find('td').eq(7).text()).getMonth() !== tMonth ||
+                            new Date(row.find('td').eq(7).text()).getFullYear() !== tYear) show = false;
+                    }
+                    if (selectedPeriod === 'week') {
+                        // Неделя назад
+                        let weekAgo = now - 7 * 24 * 3600;
+                        if (taskTime < weekAgo) show = false;
+                    }
+                    if (selectedPeriod === 'month') {
+                        // Месяц назад
+                        let monthAgo = now - 30 * 24 * 3600;
+                        if (taskTime < monthAgo) show = false;
+                    }
+                    if (selectedPeriod === 'overdue') {
+                        let deadlineTs = deadline ? Date.parse(deadline.replace(/-/g, '/')) / 1000 : 0;
+                        if (!(deadlineTs && deadlineTs < now && status !== 'done')) show = false;
+                    }
                 }
-                
-                if (show) {
-                    $(row).show();
-                } else {
-                    $(row).hide();
+
+                // Быстрые фильтры
+                const quick = $('.quick-filter.active').data('filter');
+                if (show && quick) {
+                    if (quick === 'my-tasks') {
+                        if (!(assignees.some(a => (typeof a === 'object' ? a.id : a) == currentUserId) || creator == currentUserId)) show = false;
+                    }
+                    if (quick === 'assigned-to-me') {
+                        if (!assignees.some(a => (typeof a === 'object' ? a.id : a) == currentUserId)) show = false;
+                    }
+                    if (quick === 'created-by-me') {
+                        if (creator != currentUserId) show = false;
+                    }
+                    if (quick === 'overdue') {
+                        let deadlineTs = deadline ? Date.parse(deadline.replace(/-/g, '/')) / 1000 : 0;
+                        if (!(deadlineTs && deadlineTs < now && status !== 'done')) show = false;
+                    }
                 }
+
+                if (show) row.show();
+                else row.hide();
             });
-            
+
             table.draw();
         }
-        
+
         // Обработчики фильтров
-        $('#filterStatus, #filterPriority, #filterAssignee, #filterDepartment, #filterPeriod').change(function() {
-            applyFilters();
-        });
-        
+        $('#filterStatus, #filterPriority, #filterAssignee, #filterDepartment, #filterPeriod').change(applyFilters);
+
         // Сброс фильтров
-        $('#resetFilters').click(function() {
+        $('#resetFilters').click(function () {
             $('#filterStatus').val([]);
             $('#filterPriority').val([]);
             $('#filterAssignee').val('');
             $('#filterDepartment').val('');
             $('#filterPeriod').val('');
             $('.quick-filter').removeClass('active');
-            
-            // Показываем все строки
-            table.rows().every(function() {
-                $(this.node()).show();
-            });
+            table.rows().every(function () { $(this.node()).show(); });
             table.draw();
         });
-        
+
         // Дублирование задачи
         function duplicateTask(taskId) {
             if (confirm('Создать копию этой задачи?')) {
@@ -755,19 +803,19 @@
                 });
             }
         }
-        
+
         // Переключение видов
-        $('.view-toggle .btn').click(function() {
+        $('.view-toggle .btn').click(function () {
             if ($(this).data('view') === 'grid') {
                 window.location.href = '/tasks/grid';
             }
         });
-        
+
         // Применение настроек DataTable для мобильных
         if (window.innerWidth < 768) {
-            table.columns([5, 7]).visible(false); // Скрываем некоторые колонки на мобильных
+            table.columns([5, 7]).visible(false);
         }
-        
+
         // Инициализация multiple select
         $('#filterStatus, #filterPriority').attr('size', 5);
     </script>
