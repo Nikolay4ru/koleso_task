@@ -188,20 +188,26 @@ class TaskController {
  * Проверяет, может ли пользователь изменить статус задачи
  */
 private function canChangeStatus($oldStatus, $newStatus, $isCreator, $isAssignee) {
-    // Создатель может всегда изменить статус
+    // Создатель может изменять только определенные статусы
     if ($isCreator) {
-        return true;
+        // Создатель может принять выполненную задачу или вернуть на доработку
+        if ($oldStatus === 'waiting_approval' && in_array($newStatus, ['done', 'in_progress'])) {
+            return true;
+        }
+        // Создатель может закрыть задачу как выполненную из любого статуса кроме waiting_approval
+        if ($newStatus === 'done' && $oldStatus !== 'waiting_approval') {
+            return true;
+        }
     }
     
     // Исполнители могут изменять статусы в рамках своей работы
     if ($isAssignee) {
         $allowedTransitions = [
-            'backlog' => ['todo', 'in_progress'],
-            'todo' => ['in_progress', 'backlog'],
-            'in_progress' => ['review', 'waiting_approval', 'todo'],
-            'review' => ['in_progress', 'waiting_approval'],
-            'waiting_approval' => [], // Только создатель может изменять этот статус
-            'done' => ['in_progress'] // Переоткрытие задачи
+            'backlog' => ['in_progress'],
+            'todo' => ['in_progress'],
+            'in_progress' => ['waiting_approval'],
+            'waiting_approval' => [], // Исполнитель не может изменять этот статус
+            'done' => [] // Исполнитель не может переоткрыть задачу
         ];
         
         return isset($allowedTransitions[$oldStatus]) && 
@@ -216,10 +222,9 @@ private function canChangeStatus($oldStatus, $newStatus, $isCreator, $isAssignee
  */
 private function getStatusChangeMessage($oldStatus, $newStatus) {
     $statusLabels = [
-        'backlog' => 'Бэклог',
+        'backlog' => 'Очередь задач',
         'todo' => 'К выполнению',
         'in_progress' => 'В работе',
-        'review' => 'На проверке',
         'waiting_approval' => 'Ожидает проверки',
         'done' => 'Выполнено'
     ];
@@ -253,11 +258,12 @@ private function getStatusChangeMessage($oldStatus, $newStatus) {
             $comment['files'] = $fileModel->getCommentFiles($comment['id']);
         }
         
-        // Проверяем права доступа
-        $isAssignee = in_array($_SESSION['user_id'], array_column($task['assignees'], 'id'));
-        $isWatcher = in_array($_SESSION['user_id'], array_column($task['watchers'], 'id'));
-        $isCreator = $task['creator_id'] == $_SESSION['user_id'];
-        $canEdit = $isCreator || $isAssignee;
+
+       // Проверяем права доступа
+$isAssignee = in_array($_SESSION['user_id'], array_column($task['assignees'], 'id'));
+$isWatcher = in_array($_SESSION['user_id'], array_column($task['watchers'], 'id'));
+$isCreator = $task['creator_id'] == $_SESSION['user_id'];
+$canEdit = $isCreator; // Только создатель может редактировать
         
         require_once __DIR__ . '/../../views/tasks/view.php';
     }
@@ -272,13 +278,12 @@ private function getStatusChangeMessage($oldStatus, $newStatus) {
         }
         
         // Проверяем права на редактирование
-        $isAssignee = in_array($_SESSION['user_id'], array_column($task['assignees'], 'id'));
         $isCreator = $task['creator_id'] == $_SESSION['user_id'];
-        
-        if (!$isCreator && !$isAssignee) {
-            header('Location: /tasks/view/' . $taskId);
-            exit;
-        }
+
+if (!$isCreator) {
+    header('Location: /tasks/view/' . $taskId);
+    exit;
+}
         
         // Получаем список пользователей
         $userModel = new User($this->db);

@@ -95,13 +95,12 @@ public function notifyStatusChanged($taskId, $oldStatus, $newStatus, $changedBy)
         $recipients = $this->getTaskRecipients($taskId);
         
         $statusLabels = [
-            'backlog' => 'Бэклог',
-            'todo' => 'К выполнению',
-            'in_progress' => 'В работе',
-            'review' => 'На проверке',
-            'waiting_approval' => 'Ожидает проверки',
-            'done' => 'Выполнено'
-        ];
+    'backlog' => 'Очередь задач',
+    'todo' => 'К выполнению',
+    'in_progress' => 'В работе',
+    'waiting_approval' => 'Ожидает проверки',
+    'done' => 'Выполнено'
+];
         
         $notifications = [];
         

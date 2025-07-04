@@ -528,7 +528,7 @@
         <div class="kanban-board" id="kanbanBoard">
             <?php
             $columns = [
-                'backlog' => ['title' => 'Бэклог', 'icon' => 'bi-inbox'],
+                'backlog' => ['title' => 'Очередь задач', 'icon' => 'bi-inbox'],
                 'todo' => ['title' => 'К выполнению', 'icon' => 'bi-list-check'],
                 'in_progress' => ['title' => 'В работе', 'icon' => 'bi-gear'],
                 'review' => ['title' => 'На проверке', 'icon' => 'bi-eye'],
@@ -1041,14 +1041,13 @@ function quickChangeStatusWithConfirmation(taskId, newStatus) {
     const taskTitle = taskCard.querySelector('.task-title').textContent;
     const oldStatus = taskCard.dataset.status;
     
-    const statusLabels = {
-        'backlog': 'Бэклог',
-        'todo': 'К выполнению',
-        'in_progress': 'В работе',
-        'review': 'На проверке',
-        'waiting_approval': 'Ожидает проверки',
-        'done': 'Выполнено'
-    };
+const statusLabels = {
+    'backlog': 'Очередь задач',
+    'todo': 'К выполнению',
+    'in_progress': 'В работе',
+    'waiting_approval': 'Ожидает проверки',
+    'done': 'Выполнено'
+};
     
     const confirmMessage = `Изменить статус задачи "${taskTitle}" с "${statusLabels[oldStatus]}" на "${statusLabels[newStatus]}"?`;
     

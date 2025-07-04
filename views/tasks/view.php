@@ -461,11 +461,11 @@
                 </div>
                 <div class="col-lg-4 text-lg-end mt-3 mt-lg-0">
                     <div class="action-buttons justify-content-lg-end">
-                        <?php if ($canEdit): ?>
-                        <a href="/tasks/edit/<?= $task['id'] ?>" class="btn btn-primary">
-                            <i class="bi bi-pencil me-2"></i>Редактировать
-                        </a>
-                        <?php endif; ?>
+                        <?php if ($isCreator): ?>
+<a href="/tasks/edit/<?= $task['id'] ?>" class="btn btn-primary">
+    <i class="bi bi-pencil me-2"></i>Редактировать
+</a>
+<?php endif; ?>
                         
                         <?php if ($isCreator): ?>
                         <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
@@ -480,80 +480,63 @@
         <div class="row">
             <!-- Основной контент -->
             <div class="col-lg-8">
-                <!-- Быстрые действия со статусом -->
-                <?php if ($canEdit || $isCreator): ?>
-                <div class="status-actions">
-                    <h6 class="mb-3">
-                        <i class="bi bi-lightning me-2"></i>
-                        Быстрые действия
-                    </h6>
-                    
-                    <div class="status-buttons">
-                        <?php
-                        $currentStatus = $task['status'];
-                        $userId = $_SESSION['user_id'];
-                        
-                        // Определяем доступные действия в зависимости от статуса и роли
-                        if ($isAssignee || $canEdit): ?>
-                        
-                            <?php if (in_array($currentStatus, ['backlog', 'todo'])): ?>
-                                <button class="status-action-btn btn-start" onclick="changeStatus('in_progress')">
-                                    <i class="bi bi-play-fill"></i>
-                                    Начать работу
-                                </button>
-                            <?php endif; ?>
-                            
-                            <?php if ($currentStatus === 'in_progress'): ?>
-                                <button class="status-action-btn btn-complete" onclick="changeStatus('waiting_approval')">
-                                    <i class="bi bi-check-circle"></i>
-                                    Выполнено (на проверку)
-                                </button>
-                                <button class="status-action-btn btn-review" onclick="changeStatus('review')">
-                                    <i class="bi bi-eye"></i>
-                                    На внутреннюю проверку
-                                </button>
-                            <?php endif; ?>
-                            
-                            <?php if ($currentStatus === 'review'): ?>
-                                <button class="status-action-btn btn-complete" onclick="changeStatus('waiting_approval')">
-                                    <i class="bi bi-check-circle"></i>
-                                    Выполнено (на проверку)
-                                </button>
-                            <?php endif; ?>
-                            
-                        <?php endif; ?>
-                        
-                        <?php if ($isCreator): ?>
-                        
-                            <?php if ($currentStatus === 'waiting_approval'): ?>
-                                <button class="status-action-btn btn-approve" onclick="changeStatus('done')">
-                                    <i class="bi bi-check-all"></i>
-                                    Принять и закрыть
-                                </button>
-                                <button class="status-action-btn btn-reject" onclick="changeStatus('in_progress', 'Требуется доработка')">
-                                    <i class="bi bi-arrow-left-circle"></i>
-                                    Вернуть на доработку
-                                </button>
-                            <?php endif; ?>
-                            
-                            <?php if (in_array($currentStatus, ['backlog', 'todo', 'in_progress', 'review'])): ?>
-                                <button class="status-action-btn btn-approve" onclick="changeStatus('done')">
-                                    <i class="bi bi-check-all"></i>
-                                    Закрыть как выполненную
-                                </button>
-                            <?php endif; ?>
-                            
-                        <?php endif; ?>
-                        
-                        <?php if ($currentStatus === 'done' && ($isCreator || $isAssignee)): ?>
-                            <button class="status-action-btn btn-reject" onclick="changeStatus('in_progress')">
-                                <i class="bi bi-arrow-counterclockwise"></i>
-                                Переоткрыть задачу
-                            </button>
-                        <?php endif; ?>
-                    </div>
-                </div>
-                <?php endif; ?>
+              
+           <!-- Быстрые действия со статусом -->
+<?php if ($isAssignee || $isCreator): ?>
+<div class="status-actions">
+    <h6 class="mb-3">
+        <i class="bi bi-lightning me-2"></i>
+        Быстрые действия
+    </h6>
+    
+    <div class="status-buttons">
+        <?php
+        $currentStatus = $task['status'];
+        $userId = $_SESSION['user_id'];
+        
+        // Определяем доступные действия в зависимости от статуса и роли
+        if ($isAssignee): ?>
+        
+            <?php if (in_array($currentStatus, ['backlog', 'todo'])): ?>
+                <button class="status-action-btn btn-start" onclick="changeStatus('in_progress')">
+                    <i class="bi bi-play-fill"></i>
+                    Начать работу
+                </button>
+            <?php endif; ?>
+            
+            <?php if ($currentStatus === 'in_progress'): ?>
+                <button class="status-action-btn btn-complete" onclick="changeStatus('waiting_approval')">
+                    <i class="bi bi-check-circle"></i>
+                    Выполнено
+                </button>
+            <?php endif; ?>
+            
+        <?php endif; ?>
+        
+        <?php if ($isCreator): ?>
+        
+            <?php if ($currentStatus === 'waiting_approval'): ?>
+                <button class="status-action-btn btn-approve" onclick="changeStatus('done')">
+                    <i class="bi bi-check-all"></i>
+                    Принять и закрыть
+                </button>
+                <button class="status-action-btn btn-reject" onclick="changeStatus('in_progress', 'Требуется доработка')">
+                    <i class="bi bi-arrow-left-circle"></i>
+                    Вернуть на доработку
+                </button>
+            <?php endif; ?>
+            
+            <?php if (in_array($currentStatus, ['backlog', 'todo', 'in_progress'])): ?>
+                <button class="status-action-btn btn-approve" onclick="changeStatus('done')">
+                    <i class="bi bi-check-all"></i>
+                    Закрыть как выполненную
+                </button>
+            <?php endif; ?>
+            
+        <?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
                 <!-- Описание -->
                 <div class="content-card">
                     <h5 class="mb-3">Описание</h5>
@@ -663,7 +646,7 @@
                                     <div class="comment-text">
                                         <?= nl2br(htmlspecialchars($comment['comment'])) ?>
                                     </div>
-                                    <?php var_dump($comment['id']) ?>
+                                    
                                     <?php if (!empty($comment['files'])): ?>
                                     <div class="comment-files">
                                         <?php foreach ($comment['files'] as $file): ?>
@@ -699,7 +682,7 @@
                         <small class="text-muted d-block mb-2">Статус</small>
                         <?php
                         $statusLabels = [
-                            'backlog' => 'Бэклог',
+                            'backlog' => 'Очередь задач',
                             'todo' => 'К выполнению',
                             'in_progress' => 'В работе',
                             'review' => 'На проверке',
@@ -1230,7 +1213,7 @@ function getTaskIdFromPage() {
         
 function updateStatusDisplay(newStatus) {
     const statusLabels = {
-        'backlog': 'Бэклог',
+        'backlog': 'Очередь задач',
         'todo': 'К выполнению', 
         'in_progress': 'В работе',
         'review': 'На проверке',

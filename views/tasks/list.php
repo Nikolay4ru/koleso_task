@@ -350,12 +350,12 @@
                     <div class="filter-group">
                         <div class="filter-label">Статус</div>
                         <select class="form-select form-select-sm" id="filterStatus" multiple>
-                            <option value="backlog">Очередь задач</option>
-                            <option value="todo">К выполнению</option>
-                            <option value="in_progress">В работе</option>
-                            <option value="review">На проверке</option>
-                            <option value="done">Выполнено</option>
-                        </select>
+    <option value="backlog">Очередь задач</option>
+    <option value="todo">К выполнению</option>
+    <option value="in_progress">В работе</option>
+    <option value="waiting_approval">Ожидает проверки</option>
+    <option value="done">Выполнено</option>
+</select>
                     </div>
                     
                     <!-- Приоритет -->

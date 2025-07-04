@@ -311,16 +311,13 @@
     <label for="status" class="form-label">Статус</label>
     <select class="form-select" id="status" name="status">
         <option value="backlog" <?= (isset($_POST['status']) && $_POST['status'] == 'backlog') ? 'selected' : '' ?>>
-            📋 Бэклог
+            📋 Очередь задач
         </option>
         <option value="todo" <?= (isset($_POST['status']) && $_POST['status'] == 'todo') ? 'selected' : '' ?>>
             📝 К выполнению
         </option>
         <option value="in_progress" <?= (isset($_POST['status']) && $_POST['status'] == 'in_progress') ? 'selected' : '' ?>>
             🔄 В работе
-        </option>
-        <option value="review" <?= (isset($_POST['status']) && $_POST['status'] == 'review') ? 'selected' : '' ?>>
-            👁️ На проверке
         </option>
         <option value="waiting_approval" <?= (isset($_POST['status']) && $_POST['status'] == 'waiting_approval') ? 'selected' : '' ?>>
             ⏳ Ожидает проверки
