@@ -85,7 +85,13 @@ class NotificationService {
     }
     
 public function notifyStatusChanged($taskId, $oldStatus, $newStatus, $changedBy) {
+    try {
         $task = $this->getTaskInfo($taskId);
+        if (!$task) {
+            error_log("Task not found for notification: $taskId");
+            return false;
+        }
+        
         $recipients = $this->getTaskRecipients($taskId);
         
         $statusLabels = [
@@ -103,8 +109,11 @@ public function notifyStatusChanged($taskId, $oldStatus, $newStatus, $changedBy)
             if ($recipient['id'] == $changedBy) continue;
             
             $title = "Изменен статус задачи: {$task['title']}";
-            $message = "Статус изменен с '{$statusLabels[$oldStatus]}' на '{$statusLabels[$newStatus]}'";
+            $oldLabel = $statusLabels[$oldStatus] ?? $oldStatus;
+            $newLabel = $statusLabels[$newStatus] ?? $newStatus;
+            $message = "Статус изменен с '{$oldLabel}' на '{$newLabel}'";
             
+            // Создаем уведомление в БД
             $this->notification->create([
                 'user_id' => $recipient['id'],
                 'type' => 'status_changed',
@@ -113,7 +122,8 @@ public function notifyStatusChanged($taskId, $oldStatus, $newStatus, $changedBy)
                 'task_id' => $taskId
             ]);
             
-            if ($recipient['email_notifications']) {
+            // Email уведомление
+            if (!empty($recipient['email_notifications']) && !empty($recipient['email'])) {
                 $notifications[] = [
                     'user_id' => $recipient['id'],
                     'type' => 'status_changed',
@@ -130,7 +140,8 @@ public function notifyStatusChanged($taskId, $oldStatus, $newStatus, $changedBy)
                 ];
             }
             
-            if ($recipient['telegram_notifications'] && $recipient['telegram_chat_id']) {
+            // Telegram уведомление
+            if (!empty($recipient['telegram_notifications']) && !empty($recipient['telegram_chat_id'])) {
                 $notifications[] = [
                     'user_id' => $recipient['id'],
                     'type' => 'status_changed',
@@ -147,12 +158,20 @@ public function notifyStatusChanged($taskId, $oldStatus, $newStatus, $changedBy)
             }
         }
         
+        // Отправляем уведомления
         if ($this->useQueue && !empty($notifications)) {
             $this->queue->addBatch($notifications);
         } else {
             $this->sendImmediately($notifications);
         }
+        
+        return true;
+        
+    } catch (Exception $e) {
+        error_log('NotificationService::notifyStatusChanged error: ' . $e->getMessage());
+        return false;
     }
+}
 
 
      /**
@@ -511,47 +530,72 @@ public function notifyStatusChanged($taskId, $oldStatus, $newStatus, $changedBy)
     }
 }
     
-    /**
-     * Отправить уведомления немедленно (для критичных уведомлений)
-     */
-    private function sendImmediately($notifications) {
-        foreach ($notifications as $notification) {
-            try {
-                if ($notification['channel'] === 'email') {
-                    $this->emailService->send(
-                        $notification['recipient'],
-                        $notification['subject'],
-                        $notification['message']
-                    );
-                } elseif ($notification['channel'] === 'telegram') {
-                    $this->telegramService->sendMessage(
-                        $notification['recipient'],
-                        $notification['message']
-                    );
-                }
-            } catch (\Exception $e) {
-                error_log("Failed to send notification: " . $e->getMessage());
+/**
+ * Отправляет уведомления немедленно с обработкой ошибок
+ */
+private function sendImmediately($notifications) {
+    foreach ($notifications as $notification) {
+        try {
+            if ($notification['channel'] === 'email' && isset($this->emailService)) {
+                $this->emailService->send(
+                    $notification['recipient'],
+                    $notification['subject'],
+                    $notification['message']
+                );
+            } elseif ($notification['channel'] === 'telegram' && isset($this->telegramService)) {
+                $this->telegramService->sendMessage(
+                    $notification['recipient'],
+                    $notification['message']
+                );
             }
+        } catch (Exception $e) {
+            error_log("Failed to send {$notification['channel']} notification: " . $e->getMessage());
         }
     }
+}
     
-    private function getTaskInfo($taskId) {
+/**
+ * Безопасно получает информацию о задаче
+ */
+private function getTaskInfo($taskId) {
+    try {
         $sql = "SELECT * FROM tasks WHERE id = :id";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':id' => $taskId]);
         return $stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (Exception $e) {
+        error_log('getTaskInfo error: ' . $e->getMessage());
+        return false;
     }
+}
     
-    private function getTaskRecipients($taskId) {
-        $sql = "SELECT DISTINCT u.* FROM users u
+/**
+ * Безопасно получает получателей уведомлений для задачи
+ */
+private function getTaskRecipients($taskId) {
+    try {
+        $sql = "SELECT DISTINCT u.id, u.name, u.email, 
+                COALESCE(u.email_notifications, 1) as email_notifications,
+                COALESCE(u.telegram_notifications, 0) as telegram_notifications,
+                u.telegram_chat_id
+                FROM users u
                 LEFT JOIN task_assignees ta ON u.id = ta.user_id
                 LEFT JOIN task_watchers tw ON u.id = tw.user_id
-                WHERE ta.task_id = :task_id OR tw.task_id = :task_id2";
+                LEFT JOIN tasks t ON u.id = t.creator_id
+                WHERE ta.task_id = :task_id OR tw.task_id = :task_id2 OR t.id = :task_id3";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([':task_id' => $taskId, ':task_id2' => $taskId]);
+        $stmt->execute([
+            ':task_id' => $taskId, 
+            ':task_id2' => $taskId,
+            ':task_id3' => $taskId
+        ]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Exception $e) {
+        error_log('getTaskRecipients error: ' . $e->getMessage());
+        return [];
     }
+}
     
     private function getUserInfo($userId) {
         $sql = "SELECT * FROM users WHERE id = :id";

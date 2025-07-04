@@ -1074,144 +1074,271 @@
             });
         });
         
-        // Функция смены статуса
-        function changeStatus(newStatus, comment = '') {
-            // Если это отклонение и нет комментария, показываем модальное окно
-            if (newStatus === 'in_progress' && comment === 'Требуется доработка') {
-                rejectModal.show();
-                return;
-            }
-            
-            performStatusChange(newStatus, comment);
+       
+        // Функция смены статуса с проверками
+function changeStatus(newStatus, comment = '') {
+    // Если это отклонение и нет комментария, показываем модальное окно
+    if (newStatus === 'in_progress' && comment === 'Требуется доработка') {
+        if (typeof rejectModal !== 'undefined' && rejectModal) {
+            rejectModal.show();
+            return;
         }
+    }
+    
+    performStatusChange(newStatus, comment);
+}
         
-        function performStatusChange(newStatus, comment = '') {
-            // Отключаем все кнопки статуса
-            const statusButtons = document.querySelectorAll('.status-action-btn');
-            statusButtons.forEach(btn => {
-                btn.disabled = true;
-                const originalText = btn.innerHTML;
-                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Обновление...';
-                btn.dataset.originalText = originalText;
-            });
+        // Исправленные JavaScript функции для обновления статуса
+
+// Функция смены статуса с проверками
+function changeStatus(newStatus, comment = '') {
+    // Если это отклонение и нет комментария, показываем модальное окно
+    if (newStatus === 'in_progress' && comment === 'Требуется доработка') {
+        if (typeof rejectModal !== 'undefined' && rejectModal) {
+            rejectModal.show();
+            return;
+        }
+    }
+    
+    performStatusChange(newStatus, comment);
+}
+
+function performStatusChange(newStatus, comment = '') {
+    // Получаем ID задачи из URL или из атрибута data
+    const taskId = getTaskIdFromPage();
+    const oldStatus = getCurrentStatus();
+    
+    if (!taskId) {
+        console.error('Task ID not found');
+        showStatusNotification('Ошибка: ID задачи не найден', 'error');
+        return;
+    }
+    
+    // Отключаем все кнопки статуса
+    const statusButtons = document.querySelectorAll('.status-action-btn');
+    statusButtons.forEach(btn => {
+        btn.disabled = true;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Обновление...';
+        btn.dataset.originalText = originalText;
+    });
+    
+    const formData = new FormData();
+    formData.append('task_id', taskId);
+    formData.append('old_status', oldStatus);
+    formData.append('new_status', newStatus);
+    if (comment) {
+        formData.append('comment', comment);
+    }
+    
+    fetch('/tasks/update-status', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            // Обновляем статус на странице
+            updateStatusDisplay(newStatus);
             
-            const formData = new FormData();
-            formData.append('task_id', <?= $task['id'] ?>);
-            formData.append('old_status', '<?= $task['status'] ?>');
-            formData.append('new_status', newStatus);
+            // Если есть комментарий, добавляем его
             if (comment) {
-                formData.append('comment', comment);
+                addStatusChangeComment(comment);
             }
             
-            fetch('/tasks/update-status', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Обновляем статус на странице
-                    updateStatusDisplay(newStatus);
-                    
-                    // Если есть комментарий, добавляем его
-                    if (comment) {
-                        addStatusChangeComment(comment);
-                    }
-                    
-                    showStatusNotification('Статус задачи успешно изменен', 'success');
-                    
-                    // Перезагружаем страницу через 2 секунды для обновления кнопок
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 2000);
-                } else {
-                    showStatusNotification('Ошибка при изменении статуса', 'error');
-                    restoreStatusButtons();
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showStatusNotification('Произошла ошибка при изменении статуса', 'error');
-                restoreStatusButtons();
-            });
-        }
-        
-        function updateStatusDisplay(newStatus) {
-            const statusLabels = {
-                'backlog': 'Бэклог',
-                'todo': 'К выполнению', 
-                'in_progress': 'В работе',
-                'review': 'На проверке',
-                'waiting_approval': 'Ожидает проверки',
-                'done': 'Выполнено'
-            };
+            showStatusNotification('Статус задачи успешно изменен', 'success');
             
-            const statusElement = document.getElementById('currentStatus');
-            statusElement.className = `status-badge status-${newStatus}`;
-            statusElement.textContent = statusLabels[newStatus] || newStatus;
+            // Перезагружаем страницу через 2 секунды для обновления кнопок
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        } else {
+            throw new Error(data.error || 'Неизвестная ошибка');
         }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showStatusNotification('Ошибка при изменении статуса: ' + error.message, 'error');
+        restoreStatusButtons();
+    });
+}
+
+
+
+// Получаем текущий статус задачи
+function getCurrentStatus() {
+    // Способ 1: из элемента статуса
+    const statusElement = document.getElementById('currentStatus');
+    if (statusElement && statusElement.dataset.status) {
+        return statusElement.dataset.status;
+    }
+    
+    // Способ 2: из карточки задачи
+    const taskCard = document.querySelector('.task-card[data-task-id]');
+    if (taskCard && taskCard.dataset.status) {
+        return taskCard.dataset.status;
+    }
+    
+    // Способ 3: из классов элемента статуса
+    if (statusElement) {
+        const classes = Array.from(statusElement.classList);
+        const statusClass = classes.find(cls => cls.startsWith('status-'));
+        if (statusClass) {
+            return statusClass.replace('status-', '');
+        }
+    }
+    
+    console.warn('Current status not found, using default');
+    return 'backlog';
+}
+
+
+
+// Получаем ID задачи из URL или атрибутов страницы
+function getTaskIdFromPage() {
+    // Способ 1: из URL (для страницы просмотра задачи)
+    const urlMatch = window.location.pathname.match(/\/tasks\/view\/(\d+)/);
+    if (urlMatch) {
+        return urlMatch[1];
+    }
+    
+    // Способ 2: из канбан доски - из ближайшей карточки
+    const taskCard = document.querySelector('.task-card[data-task-id]');
+    if (taskCard) {
+        return taskCard.dataset.taskId;
+    }
+    
+    // Способ 3: из глобальной переменной, если она установлена
+    if (typeof window.currentTaskId !== 'undefined') {
+        return window.currentTaskId;
+    }
+    
+    // Способ 4: из метаданных страницы
+    const taskMeta = document.querySelector('meta[name="task-id"]');
+    if (taskMeta) {
+        return taskMeta.getAttribute('content');
+    }
+    
+    console.error('Task ID not found in URL, data attributes, or global variables');
+    return null;
+}
+        
+function updateStatusDisplay(newStatus) {
+    const statusLabels = {
+        'backlog': 'Бэклог',
+        'todo': 'К выполнению', 
+        'in_progress': 'В работе',
+        'review': 'На проверке',
+        'waiting_approval': 'Ожидает проверки',
+        'done': 'Выполнено'
+    };
+    
+    // Обновляем основной элемент статуса
+    const statusElement = document.getElementById('currentStatus');
+    if (statusElement) {
+        statusElement.className = `status-badge status-${newStatus}`;
+        statusElement.textContent = statusLabels[newStatus] || newStatus;
+        statusElement.dataset.status = newStatus;
+    }
+    
+    // Обновляем карточку в канбан доске (если есть)
+    const taskCard = document.querySelector('.task-card[data-task-id]');
+    if (taskCard) {
+        taskCard.dataset.status = newStatus;
+        
+        // Перемещаем карточку в соответствующую колонку
+        const newColumn = document.querySelector(`[data-status="${newStatus}"] .tasks-container`);
+        if (newColumn) {
+            newColumn.appendChild(taskCard);
+            updateColumnCounts();
+        }
+    }
+}
         
         function addStatusChangeComment(comment) {
-            // Добавляем системный комментарий об изменении статуса
-            const commentsContainer = document.querySelector('.comments-list');
-            const newComment = document.createElement('div');
-            newComment.className = 'comment-item';
-            newComment.innerHTML = `
-                <div class="comment-header">
-                    <div class="d-flex align-items-center">
-                        <div class="user-avatar" style="background: #6c757d;">
-                            <i class="bi bi-gear"></i>
-                        </div>
-                        <span class="comment-author">Система</span>
-                    </div>
-                    <span class="comment-time">
-                        ${new Date().toLocaleDateString('ru-RU')} ${new Date().toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'})}
-                    </span>
+    const commentsContainer = document.querySelector('.comments-list');
+    if (!commentsContainer) return;
+    
+    const newComment = document.createElement('div');
+    newComment.className = 'comment-item';
+    newComment.innerHTML = `
+        <div class="comment-header">
+            <div class="d-flex align-items-center">
+                <div class="user-avatar" style="background: #6c757d;">
+                    <i class="bi bi-gear"></i>
                 </div>
-                <div class="comment-text">
-                    <strong>Статус изменен</strong><br>
-                    ${comment}
-                </div>
-            `;
-            
-            if (commentsContainer.querySelector('.text-muted')) {
-                commentsContainer.innerHTML = '';
-            }
-            commentsContainer.insertBefore(newComment, commentsContainer.firstChild);
-        }
+                <span class="comment-author">Система</span>
+            </div>
+            <span class="comment-time">
+                ${new Date().toLocaleDateString('ru-RU')} ${new Date().toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'})}
+            </span>
+        </div>
+        <div class="comment-text">
+            <strong>Статус изменен</strong><br>
+            ${escapeHtml(comment)}
+        </div>
+    `;
+    
+    // Удаляем сообщение "Пока нет комментариев" если есть
+    const noCommentsMsg = commentsContainer.querySelector('.text-muted');
+    if (noCommentsMsg) {
+        noCommentsMsg.remove();
+    }
+    
+    commentsContainer.insertBefore(newComment, commentsContainer.firstChild);
+}
+        
+       
         
         function restoreStatusButtons() {
-            const statusButtons = document.querySelectorAll('.status-action-btn');
-            statusButtons.forEach(btn => {
-                btn.disabled = false;
-                if (btn.dataset.originalText) {
-                    btn.innerHTML = btn.dataset.originalText;
-                    delete btn.dataset.originalText;
-                }
-            });
+    const statusButtons = document.querySelectorAll('.status-action-btn');
+    statusButtons.forEach(btn => {
+        btn.disabled = false;
+        if (btn.dataset.originalText) {
+            btn.innerHTML = btn.dataset.originalText;
+            delete btn.dataset.originalText;
         }
-        
-        function showStatusNotification(message, type = 'success') {
-            const notification = document.getElementById('statusNotification');
-            const text = document.getElementById('statusNotificationText');
-            const icon = notification.querySelector('i');
-            
-            text.textContent = message;
-            
-            if (type === 'error') {
-                notification.classList.add('error');
-                icon.className = 'bi bi-exclamation-circle me-2';
-            } else {
-                notification.classList.remove('error');
-                icon.className = 'bi bi-check-circle me-2';
-            }
-            
-            notification.classList.add('show');
-            
-            setTimeout(() => {
-                notification.classList.remove('show');
-            }, 4000);
-        }
+    });
+}
+
+function showStatusNotification(message, type = 'success') {
+    // Создаем уведомление если его нет
+    let notification = document.getElementById('statusNotification');
+    if (!notification) {
+        notification = document.createElement('div');
+        notification.id = 'statusNotification';
+        notification.className = 'status-change-notification';
+        notification.innerHTML = `
+            <i class="bi bi-check-circle me-2"></i>
+            <span id="statusNotificationText"></span>
+        `;
+        document.body.appendChild(notification);
+    }
+    
+    const text = document.getElementById('statusNotificationText') || notification.querySelector('span');
+    const icon = notification.querySelector('i');
+    
+    if (text) text.textContent = message;
+    
+    if (type === 'error') {
+        notification.classList.add('error');
+        if (icon) icon.className = 'bi bi-exclamation-circle me-2';
+    } else {
+        notification.classList.remove('error');
+        if (icon) icon.className = 'bi bi-check-circle me-2';
+    }
+    
+    notification.classList.add('show');
+    
+    setTimeout(() => {
+        notification.classList.remove('show');
+    }, 4000);
+}
     
     </script>
 </body>

@@ -73,7 +73,11 @@ class Task {
         }
     }
     
+/**
+ * Обновляет задачи для канбан доски с поддержкой новых статусов
+ */
 public function getKanbanTasks() {
+    try {
         $sql = "SELECT t.*, u.name as creator_name,
                 GROUP_CONCAT(DISTINCT au.name) as assignee_names
                 FROM tasks t
@@ -103,16 +107,39 @@ public function getKanbanTasks() {
         }
         
         return $kanban;
+        
+    } catch (Exception $e) {
+        error_log('Task getKanbanTasks error: ' . $e->getMessage());
+        throw $e;
     }
+}
     
 public function updateStatus($taskId, $status) {
+    try {
         $sql = "UPDATE tasks SET status = :status, updated_at = CURRENT_TIMESTAMP WHERE id = :id";
         $stmt = $this->db->prepare($sql);
-        return $stmt->execute([
+        $result = $stmt->execute([
             ':id' => $taskId,
             ':status' => $status
         ]);
+        
+        if (!$result) {
+            throw new Exception('Failed to execute update query');
+        }
+        
+        $rowsAffected = $stmt->rowCount();
+        if ($rowsAffected === 0) {
+            throw new Exception('No rows were updated - task may not exist');
+        }
+        
+        return true;
+        
+    } catch (Exception $e) {
+        error_log('Task updateStatus error: ' . $e->getMessage());
+        throw $e;
     }
+}
+
 
     public function getUserRecentTasks($userId, $limit = 10) {
     $sql = "SELECT t.*, 
@@ -203,7 +230,11 @@ public function getOverdueTasksCount($userId) {
         return $result['count'];
     }
 
- public function getTaskDetails($taskId) {
+/**
+ * Получает детальную информацию о задаче
+ */
+public function getTaskDetails($taskId) {
+    try {
         // Получаем основную информацию о задаче
         $sql = "SELECT t.*, 
                 u.name as creator_name,
@@ -243,7 +274,13 @@ public function getOverdueTasksCount($userId) {
         $task['watchers'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         return $task;
+        
+    } catch (Exception $e) {
+        error_log('Task getTaskDetails error: ' . $e->getMessage());
+        throw $e;
     }
+}
+
 
 public function update($taskId, $data) {
     $this->db->beginTransaction();
@@ -302,16 +339,34 @@ public function delete($taskId) {
     return $stmt->execute([':id' => $taskId]);
 }
 
+/**
+ * Получает комментарии к задаче с поддержкой системных комментариев
+ */
 public function getTaskComments($taskId) {
-    $sql = "SELECT tc.*, u.name as user_name
-            FROM task_comments tc
-            JOIN users u ON tc.user_id = u.id
-            WHERE tc.task_id = :task_id
-            ORDER BY tc.created_at DESC";
-    
-    $stmt = $this->db->prepare($sql);
-    $stmt->execute([':task_id' => $taskId]);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    try {
+        $sql = "SELECT 
+                tc.*,
+                CASE 
+                    WHEN tc.user_id IS NULL OR tc.comment_type = 'system' THEN 'Система'
+                    ELSE u.name 
+                END as user_name,
+                CASE 
+                    WHEN tc.user_id IS NULL OR tc.comment_type = 'system' THEN 1 
+                    ELSE 0 
+                END as is_system
+                FROM task_comments tc
+                LEFT JOIN users u ON tc.user_id = u.id
+                WHERE tc.task_id = :task_id
+                ORDER BY tc.created_at DESC";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':task_id' => $taskId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+    } catch (Exception $e) {
+        error_log('Task getTaskComments error: ' . $e->getMessage());
+        return [];
+    }
 }
 
 public function addComment3($taskId, $userId, $comment) {
@@ -327,34 +382,126 @@ public function addComment3($taskId, $userId, $comment) {
 }
 
 
+
 /**
-     * Добавляет системный комментарий (без привязки к пользователю)
-     */
-    public function addSystemComment($taskId, $comment) {
-        $sql = "INSERT INTO task_comments (task_id, user_id, comment) 
-                VALUES (:task_id, NULL, :comment)";
+ * Добавляет системный комментарий (от имени системы)
+ */
+public function addSystemComment($taskId, $comment) {
+    try {
+        // Способ 1: Если таблица поддерживает NULL для user_id
+        if ($this->supportsNullUserId()) {
+            $sql = "INSERT INTO task_comments (task_id, user_id, comment, comment_type, created_at) 
+                    VALUES (:task_id, NULL, :comment, 'system', NOW())";
+            
+            $stmt = $this->db->prepare($sql);
+            $result = $stmt->execute([
+                ':task_id' => $taskId,
+                ':comment' => '[СИСТЕМА] ' . $comment
+            ]);
+        } else {
+            // Способ 2: Если таблица не поддерживает NULL, используем специального системного пользователя
+            $systemUserId = $this->getOrCreateSystemUser();
+            
+            $sql = "INSERT INTO task_comments (task_id, user_id, comment, comment_type, created_at) 
+                    VALUES (:task_id, :user_id, :comment, 'system', NOW())";
+            
+            $stmt = $this->db->prepare($sql);
+            $result = $stmt->execute([
+                ':task_id' => $taskId,
+                ':user_id' => $systemUserId,
+                ':comment' => '[СИСТЕМА] ' . $comment
+            ]);
+        }
+        
+        if (!$result) {
+            throw new Exception('Failed to add system comment');
+        }
+        
+        return $this->db->lastInsertId();
+        
+    } catch (Exception $e) {
+        error_log('Task addSystemComment error: ' . $e->getMessage());
+        // Fallback: добавляем как обычный комментарий от текущего пользователя
+        if (isset($_SESSION['user_id'])) {
+            return $this->addComment($taskId, $_SESSION['user_id'], '[СИСТЕМА] ' . $comment);
+        }
+        throw $e;
+    }
+}
+
+
+/**
+ * Проверяет, поддерживает ли таблица NULL для user_id
+ */
+private function supportsNullUserId() {
+    try {
+        $sql = "SHOW COLUMNS FROM task_comments WHERE Field = 'user_id'";
+        $stmt = $this->db->query($sql);
+        $column = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        return $column && $column['Null'] === 'YES';
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+/**
+ * Создает или получает системного пользователя
+ */
+private function getOrCreateSystemUser() {
+    try {
+        // Ищем системного пользователя
+        $sql = "SELECT id FROM users WHERE email = 'system@task.koleso.app' OR name = 'Система'";
+        $stmt = $this->db->query($sql);
+        $systemUser = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($systemUser) {
+            return $systemUser['id'];
+        }
+        
+        // Создаем системного пользователя
+        $sql = "INSERT INTO users (name, email, password, role, created_at) 
+                VALUES ('Система', 'system@task.koleso.app', '', 'system', NOW())";
+        $this->db->exec($sql);
+        
+        return $this->db->lastInsertId();
+        
+    } catch (Exception $e) {
+        error_log('Failed to create system user: ' . $e->getMessage());
+        // Возвращаем ID первого пользователя как fallback
+        $sql = "SELECT id FROM users ORDER BY id ASC LIMIT 1";
+        $stmt = $this->db->query($sql);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $user ? $user['id'] : 1;
+    }
+}
+
+
+/**
+ * Добавляет комментарий пользователя к задаче
+ */
+public function addComment($taskId, $userId, $comment) {
+    try {
+        $sql = "INSERT INTO task_comments (task_id, user_id, comment, created_at) 
+                VALUES (:task_id, :user_id, :comment, NOW())";
         
         $stmt = $this->db->prepare($sql);
-        return $stmt->execute([
+        $result = $stmt->execute([
             ':task_id' => $taskId,
+            ':user_id' => $userId,
             ':comment' => $comment
         ]);
+        
+        if (!$result) {
+            throw new Exception('Failed to add comment');
+        }
+        
+        return $this->db->lastInsertId();
+        
+    } catch (Exception $e) {
+        error_log('Task addComment error: ' . $e->getMessage());
+        throw $e;
     }
-
-
-public function addComment($taskId, $userId, $comment) {
-    $sql = "INSERT INTO task_comments (task_id, user_id, comment) 
-            VALUES (:task_id, :user_id, :comment)";
-    
-    $stmt = $this->db->prepare($sql);
-    $stmt->execute([
-        ':task_id' => $taskId,
-        ':user_id' => $userId,
-        ':comment' => $comment
-    ]);
-
-    // Возвращаем ID только что добавленного комментария
-    return $this->db->lastInsertId();
 }
 
 public function getActiveTasksForUser($userId) {

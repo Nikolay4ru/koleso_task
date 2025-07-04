@@ -699,6 +699,8 @@
             updateColumnCounts();
         });
 
+        
+
         // Drag and Drop
         function initializeDragAndDrop() {
             document.querySelectorAll('.task-card').forEach(card => {
@@ -809,15 +811,32 @@
 
         // Быстрая смена статуса
         function quickChangeStatus(taskId, newStatus) {
-            const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
-            const oldStatus = taskCard.dataset.status;
-            
-            // Показываем индикатор загрузки
-            const statusActions = taskCard.querySelector('.task-status-actions');
-            statusActions.innerHTML = '<div class="loading-spinner"></div>';
-            
-            updateTaskStatus(taskId, oldStatus, newStatus);
-        }
+    window.currentTaskId = taskId; // Устанавливаем глобальную переменную
+    
+    const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+    const oldStatus = taskCard ? taskCard.dataset.status : 'backlog';
+    
+    // Показываем индикатор загрузки
+    const statusActions = taskCard ? taskCard.querySelector('.task-status-actions') : null;
+    if (statusActions) {
+        statusActions.innerHTML = '<div class="loading-spinner"></div>';
+    }
+    
+    performStatusChange(newStatus);
+}
+
+
+// Вспомогательная функция для экранирования HTML
+function escapeHtml(text) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+}
 
         // Обновление статуса задачи
         function updateTaskStatus(taskId, oldStatus, newStatus) {
@@ -902,13 +921,18 @@
         }
 
         // Обновление счетчиков колонок
-        function updateColumnCounts() {
-            columns.forEach(column => {
-                const status = column.dataset.status;
-                const count = column.querySelectorAll('.task-card:not([style*="display: none"])').length;
-                column.querySelector('.column-count').textContent = count;
-            });
+        
+function updateColumnCounts() {
+    const columns = document.querySelectorAll('.kanban-column');
+    columns.forEach(column => {
+        const status = column.dataset.status;
+        const count = column.querySelectorAll('.task-card:not([style*="display: none"])').length;
+        const countElement = column.querySelector('.column-count');
+        if (countElement) {
+            countElement.textContent = count;
         }
+    });
+}
 
         // Уведомления
         function showNotification(message, type = 'success') {
