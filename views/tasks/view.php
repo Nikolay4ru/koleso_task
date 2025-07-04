@@ -422,6 +422,140 @@
         .status-change-notification.error {
             background: #dc3545;
         }
+        /* Стили для файлов в комментариях */
+.comment-files-section {
+    border-top: 1px solid #f0f0f0;
+    padding-top: 0.75rem;
+}
+
+.comment-files-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+.comment-file-card {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 0.75rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    min-height: 100px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.comment-file-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.12);
+    background: white;
+    border-color: #667eea;
+}
+
+.comment-file-thumbnail {
+    width: 100%;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}
+
+.comment-file-icon {
+    font-size: 2rem;
+    color: #6c757d;
+    margin-bottom: 0.5rem;
+}
+
+.comment-file-name {
+    font-size: 0.75rem;
+    color: #495057;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-bottom: 0.25rem;
+    font-weight: 500;
+    width: 100%;
+}
+
+.comment-file-info {
+    font-size: 0.65rem;
+    color: #6c757d;
+}
+
+/* Адаптивность для мобильных */
+@media (max-width: 576px) {
+    .comment-files-grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 0.5rem;
+    }
+    
+    .comment-file-card {
+        padding: 0.5rem;
+        min-height: 85px;
+    }
+    
+    .comment-file-thumbnail {
+        height: 45px;
+    }
+    
+    .comment-file-icon {
+        font-size: 1.5rem;
+    }
+}
+
+/* Улучшение существующих стилей комментариев */
+.comment-item {
+    border-bottom: 1px solid #e9ecef;
+    padding: 1.5rem 0;
+}
+
+.comment-item:last-child {
+    border-bottom: none;
+}
+
+.comment-text {
+    color: #495057;
+    line-height: 1.6;
+    margin-bottom: 0.5rem;
+}
+
+/* Альтернативный компактный вид файлов (если нужен) */
+.comment-files-compact {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.comment-file-compact {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.8rem;
+    color: #495057;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.comment-file-compact:hover {
+    background: white;
+    border-color: #667eea;
+    color: #667eea;
+    text-decoration: none;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
     </style>
 </head>
 <body>
@@ -619,18 +753,12 @@
                             <i class="bi bi-send me-2"></i>Отправить
                         </button>
                     </form>
-                    
-                  <!-- Список комментариев -->
+        <!-- Список комментариев -->
 <div class="comments-list mt-4">
     <?php if (empty($comments)): ?>
         <p class="text-center text-muted py-4">Пока нет комментариев</p>
     <?php else: ?>
-        <?php 
-        // УБИРАЕМ дублирующую инициализацию $fileModel
-        // $fileModel уже создан в контроллере и передан в представление
-        foreach ($comments as $comment): 
-        ?>
-            <!-- УБИРАЕМ var_dump($comment) для отладки -->
+        <?php foreach ($comments as $comment): ?>
             <div class="comment-item">
                 <div class="comment-header">
                     <div class="d-flex align-items-center">
@@ -646,26 +774,42 @@
                         <?= date('d.m.Y H:i', strtotime($comment['created_at'])) ?>
                     </span>
                 </div>
+                
+                <?php if (!empty($comment['comment'])): ?>
                 <div class="comment-text">
                     <?= nl2br(htmlspecialchars($comment['comment'])) ?>
                 </div>
+                <?php endif; ?>
                 
+                <!-- Файлы комментария с предпросмотром -->
                 <?php if (!empty($comment['files'])): ?>
-                <div class="comment-files">
-                    <?php foreach ($comment['files'] as $file): ?>
-                        <a href="#" onclick="viewFile(<?= htmlspecialchars(json_encode([
-                            'id' => $file['id'],
-                            'name' => $file['original_name'],
-                            'is_image' => $file['is_image'],
-                            'mime_type' => $file['mime_type'],
-                            'preview_url' => '/file/preview/' . $file['id'],
-                            'download_url' => '/file/download/' . $file['id']
-                        ], JSON_HEX_APOS | JSON_HEX_QUOT)) ?>); return false;" class="comment-file">
-                            <i class="bi <?= $fileModel->getFileIcon($file['mime_type']) ?>"></i>
-                            <?= htmlspecialchars($file['original_name']) ?>
-                            <small>(<?= $fileModel->formatFileSize($file['size']) ?>)</small>
-                        </a>
-                    <?php endforeach; ?>
+                <div class="comment-files-section mt-3">
+                    <div class="comment-files-grid">
+                        <?php foreach ($comment['files'] as $file): ?>
+                            <div class="comment-file-card" onclick="viewFile(<?= htmlspecialchars(json_encode([
+                                'id' => $file['id'],
+                                'name' => $file['original_name'],
+                                'is_image' => $file['is_image'],
+                                'mime_type' => $file['mime_type'],
+                                'preview_url' => '/file/preview/' . $file['id'],
+                                'download_url' => '/file/download/' . $file['id']
+                            ], JSON_HEX_APOS | JSON_HEX_QUOT)) ?>)">
+                                <?php if ($file['is_image'] && $file['thumbnail_path']): ?>
+                                    <img src="<?= $fileModel->getThumbnailUrl($file) ?>" 
+                                         class="comment-file-thumbnail" 
+                                         alt="<?= htmlspecialchars($file['original_name']) ?>">
+                                <?php else: ?>
+                                    <i class="comment-file-icon bi <?= $fileModel->getFileIcon($file['mime_type']) ?>"></i>
+                                <?php endif; ?>
+                                <div class="comment-file-name" title="<?= htmlspecialchars($file['original_name']) ?>">
+                                    <?= htmlspecialchars($file['original_name']) ?>
+                                </div>
+                                <div class="comment-file-info">
+                                    <?= $fileModel->formatFileSize($file['size']) ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
                 </div>
                 <?php endif; ?>
             </div>

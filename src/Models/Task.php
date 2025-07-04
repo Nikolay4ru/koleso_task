@@ -239,6 +239,102 @@ public function getOverdueTasksCount($userId) {
         return $result['count'];
     }
 
+
+
+     public function getFilteredTasks(array $filters = [], int $page = 1, int $perPage = 12): array {
+        try {
+            // Построение условий WHERE
+            $conditions = [];
+            $params = [];
+            
+            // Фильтр по статусу
+            if (!empty($filters['status'])) {
+                $conditions[] = 'status = :status';
+                $params[':status'] = $filters['status'];
+            }
+            
+            // Фильтр по приоритету
+            if (!empty($filters['priority'])) {
+                $conditions[] = 'priority = :priority';
+                $params[':priority'] = $filters['priority'];
+            }
+            
+            // Фильтр по пользователю
+            if (!empty($filters['user_id'])) {
+                $conditions[] = 'user_id = :user_id';
+                $params[':user_id'] = $filters['user_id'];
+            }
+            
+            // Поиск по тексту
+            if (!empty($filters['search'])) {
+                $conditions[] = '(title LIKE :search OR description LIKE :search)';
+                $params[':search'] = '%' . $filters['search'] . '%';
+            }
+            
+            // Фильтр по дате
+            if (!empty($filters['date_from'])) {
+                $conditions[] = 'created_at >= :date_from';
+                $params[':date_from'] = $filters['date_from'];
+            }
+            
+            if (!empty($filters['date_to'])) {
+                $conditions[] = 'created_at <= :date_to';
+                $params[':date_to'] = $filters['date_to'];
+            }
+            
+            // Формирование WHERE части запроса
+            $whereClause = !empty($conditions) ? 'WHERE ' . implode(' AND ', $conditions) : '';
+            
+            // Подсчет общего количества задач
+            $countSql = "SELECT COUNT(*) as total FROM tasks $whereClause";
+            $stmt = $this->db->prepare($countSql);
+            $stmt->execute($params);
+            $total = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+            
+            // Расчет пагинации
+            $totalPages = ceil($total / $perPage);
+            $offset = ($page - 1) * $perPage;
+            
+            // Получение задач с пагинацией
+            $sql = "SELECT * FROM tasks 
+                    $whereClause 
+                    ORDER BY created_at DESC 
+                    LIMIT :limit OFFSET :offset";
+            
+            $stmt = $this->db->prepare($sql);
+            foreach ($params as $key => $value) {
+                $stmt->bindValue($key, $value);
+            }
+            $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
+            $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+            $stmt->execute();
+            
+            $tasks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            return [
+                'tasks' => $tasks,
+                'total' => $total,
+                'totalPages' => $totalPages,
+                'currentPage' => $page,
+                'perPage' => $perPage
+            ];
+            
+        } catch (Exception $e) {
+            throw new Exception('Ошибка при получении задач: ' . $e->getMessage());
+        }
+    }
+
+
+
+        public function getById(int $id): ?array {
+        $sql = "SELECT * FROM tasks WHERE id = :id";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':id' => $id]);
+        
+        $task = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $task ?: null;
+    }
+
 /**
  * Получает детальную информацию о задаче
  */
@@ -289,6 +385,49 @@ public function getTaskDetails($taskId) {
         throw $e;
     }
 }
+
+
+
+ /**
+     * Получить статистику по задачам
+     */
+    public function getStatistics(int $userId = null): array {
+        $whereClause = $userId ? 'WHERE user_id = :user_id' : '';
+        $params = $userId ? [':user_id' => $userId] : [];
+        
+        // Статистика по статусам
+        $sql = "SELECT status, COUNT(*) as count 
+                FROM tasks 
+                $whereClause 
+                GROUP BY status";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $statusStats = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+        
+        // Статистика по приоритетам
+        $sql = "SELECT priority, COUNT(*) as count 
+                FROM tasks 
+                $whereClause 
+                GROUP BY priority";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $priorityStats = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+        
+        // Общее количество задач
+        $sql = "SELECT COUNT(*) as total FROM tasks $whereClause";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $total = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+        
+        return [
+            'total' => $total,
+            'byStatus' => $statusStats,
+            'byPriority' => $priorityStats
+        ];
+    }
+
 
 
 public function update($taskId, $data) {

@@ -531,7 +531,7 @@
                 'backlog' => ['title' => 'Очередь задач', 'icon' => 'bi-inbox'],
                 'todo' => ['title' => 'К выполнению', 'icon' => 'bi-list-check'],
                 'in_progress' => ['title' => 'В работе', 'icon' => 'bi-gear'],
-                'review' => ['title' => 'На проверке', 'icon' => 'bi-eye'],
+               
                 'waiting_approval' => ['title' => 'Ожидает проверки', 'icon' => 'bi-clock-history'],
                 'done' => ['title' => 'Выполнено', 'icon' => 'bi-check-circle']
             ];

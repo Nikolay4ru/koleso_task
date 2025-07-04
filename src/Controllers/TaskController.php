@@ -5,6 +5,7 @@ use App\Models\User;
 use App\Models\File;
 use App\Models\Department;
 use App\Services\NotificationService;
+use PDO;
 
 class TaskController {
     private $db;
@@ -30,7 +31,7 @@ class TaskController {
         $users = $userModel->getAll();
         require_once __DIR__ . '/../../views/tasks/kanban.php';
     }
-    
+
     public function create() {
         $userModel = new User($this->db);
         $users = $userModel->getAll();
@@ -204,7 +205,7 @@ class TaskController {
         return "Статус изменен с '{$oldLabel}' на '{$newLabel}'";
     }
     
-   public function view($taskId) {
+public function view($taskId) {
     try {
         // Получаем данные задачи
         $task = $this->task->getTaskDetails($taskId);
@@ -227,6 +228,9 @@ class TaskController {
         foreach ($comments as &$comment) {
             $comment['files'] = $fileModel->getCommentFiles($comment['id']);
         }
+        unset($comment);
+        // ОТЛАДКА: Проверяем финальный массив комментариев
+        error_log('Final comments before view: ' . print_r($comments, true));
         
         // Проверяем права пользователя
         $userId = $_SESSION['user_id'] ?? null;
@@ -235,8 +239,10 @@ class TaskController {
         $isCreator = $userId && $task['creator_id'] == $userId;
         $canEdit = $isCreator;
         
+        // Передаем $db для возможного использования в представлении
+        $db = $this->db;
+        
         // Передаем данные в представление
-        // $fileModel, $taskFiles, $comments уже доступны в представлении
         require_once __DIR__ . '/../../views/tasks/view.php';
     } catch (Exception $e) {
         error_log('Task view error: ' . $e->getMessage());
@@ -387,12 +393,81 @@ class TaskController {
         }
     }
 
-    public function grid() {
-        $tasks = $this->task->getAllTasksWithDetails();
-        $userModel = new User($this->db);
-        $users = $userModel->getAll();
-        $departmentModel = new Department($this->db);
-        $departments = $departmentModel->getAll();
+    // Метод для отображения задач в виде сетки
+// Добавьте этот метод в ваш TaskController.php
+
+public function grid() {
+    try {
+        // Получение параметров фильтрации и пагинации
+        $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+        $perPage = 12; // Количество задач на странице для grid view
+        $offset = ($page - 1) * $perPage;
+        
+        // Сбор фильтров
+        $filters = [
+            'status' => $_GET['status'] ?? '',
+            'priority' => $_GET['priority'] ?? '',
+            'search' => $_GET['search'] ?? ''
+        ];
+        
+        // Построение SQL запроса с фильтрами
+        $where = ['1=1'];
+        $params = [];
+        
+        if (!empty($filters['status'])) {
+            $where[] = 'status = :status';
+            $params[':status'] = $filters['status'];
+        }
+        
+        if (!empty($filters['priority'])) {
+            $where[] = 'priority = :priority';
+            $params[':priority'] = $filters['priority'];
+        }
+        
+        if (!empty($filters['search'])) {
+            $where[] = '(title LIKE :search OR description LIKE :search)';
+            $params[':search'] = '%' . $filters['search'] . '%';
+        }
+        
+        $whereClause = implode(' AND ', $where);
+        
+        // Получение общего количества задач
+        $countSql = "SELECT COUNT(*) as total FROM tasks WHERE $whereClause";
+        $stmt = $this->db->prepare($countSql);
+        $stmt->execute($params);
+        $totalTasks = $stmt->fetch()['total'];
+        $totalPages = ceil($totalTasks / $perPage);
+        
+        // Получение задач для текущей страницы
+        $sql = "SELECT * FROM tasks 
+                WHERE $whereClause 
+                ORDER BY created_at DESC 
+                LIMIT :limit OFFSET :offset";
+        
+        $stmt = $this->db->prepare($sql);
+        foreach ($params as $key => $value) {
+            $stmt->bindValue($key, $value);
+        }
+        $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->execute();
+        
+        $tasks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Передача данных в представление
+        $currentPage = $page;
+        
+        // Подключение представления
         require_once __DIR__ . '/../../views/tasks/grid.php';
+        
+    } catch (Exception $e) {
+        // Логирование ошибки
+        error_log('Error in TaskController::grid(): ' . $e->getMessage());
+        
+        // Отображение страницы с ошибкой
+        header('HTTP/1.1 500 Internal Server Error');
+        echo '<div class="alert alert-danger">Произошла ошибка при загрузке задач. Пожалуйста, попробуйте позже.</div>';
     }
+}
+
 }
