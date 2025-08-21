@@ -57,6 +57,11 @@ if (isset($_SESSION['user_id'])) {
                         </li>
                     </ul>
                 </li>
+                <li class="nav-item">
+    <a class="nav-link" href="/conference">
+        <i class="bi bi-camera-video"></i> Конференции
+    </a>
+</li>
                 <?php if (isset($_SESSION['is_admin']) && $_SESSION['is_admin']): ?>
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown">

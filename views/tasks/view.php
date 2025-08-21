@@ -639,7 +639,7 @@
             <?php endif; ?>
             
             <?php if ($currentStatus === 'in_progress'): ?>
-                <button class="status-action-btn btn-complete" onclick="changeStatus('waiting_approval')">
+                <button class="status-action-btn btn-complete" onclick="changeStatus('review')">
                     <i class="bi bi-check-circle"></i>
                     Выполнено
                 </button>
@@ -649,7 +649,7 @@
         
         <?php if ($isCreator): ?>
         
-            <?php if ($currentStatus === 'waiting_approval'): ?>
+            <?php if ($currentStatus === 'review'): ?>
                 <button class="status-action-btn btn-approve" onclick="changeStatus('done')">
                     <i class="bi bi-check-all"></i>
                     Принять и закрыть
@@ -832,7 +832,7 @@
         'backlog' => 'Очередь задач',
         'todo' => 'К выполнению',
         'in_progress' => 'В работе',
-        'waiting_approval' => 'Ожидает проверки',
+        //'waiting_approval' => 'Ожидает проверки',
         'done' => 'Выполнено'
     ];
     ?>
@@ -1349,7 +1349,7 @@
                 'todo': 'К выполнению', 
                 'in_progress': 'В работе',
                 'review': 'На проверке',
-                'waiting_approval': 'Ожидает проверки',
+               
                 'done': 'Выполнено'
             };
             const statusElement = document.getElementById('currentStatus');

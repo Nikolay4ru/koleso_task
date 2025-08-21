@@ -122,9 +122,7 @@
     <option value="backlog" <?= $task['status'] == 'backlog' ? 'selected' : '' ?>>
         📋 Очередь задач
     </option>
-    <option value="todo" <?= $task['status'] == 'todo' ? 'selected' : '' ?>>
-        📝 К выполнению
-    </option>
+    
     <option value="in_progress" <?= $task['status'] == 'in_progress' ? 'selected' : '' ?>>
         🔄 В работе
     </option>

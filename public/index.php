@@ -15,6 +15,8 @@ use App\Controllers\TaskController;
 use App\Controllers\UserController;
 use App\Controllers\DepartmentController;
 use App\Controllers\NotificationController;
+use App\Controllers\VideoConferenceController;
+use App\Controllers\SignalingController;
 use App\Controllers\FileController;
 use App\Services\EmailService;
 use App\Services\TelegramService;
@@ -40,7 +42,7 @@ if (!in_array($uri, $publicRoutes) && !isset($_SESSION['user_id'])) {
     header('Location: /login');
     exit;
 }
-
+//print_r($uri); // Отладочный вывод для проверки текущего URI
 // Маршруты
 switch ($uri) {
     case '/':
@@ -208,6 +210,70 @@ switch ($uri) {
         $controller = new FileController($db);
         $controller->upload();
         break;
+    case '/conference':
+        $controller = new VideoConferenceController($db, $notificationService);
+        $controller->index();
+        break;
+        
+    case '/conference/create':
+        $controller = new VideoConferenceController($db, $notificationService);
+        $controller->create();
+        break;
+        
+    case '/conference/quick-create':
+        $controller = new VideoConferenceController($db, $notificationService);
+        $controller->quickCreate();
+        break;
+        
+    case '/conference/scheduled':
+        $controller = new VideoConferenceController($db, $notificationService);
+        $controller->scheduled();
+        break;
+        
+    case '/conference/history':
+        $controller = new VideoConferenceController($db, $notificationService);
+        $controller->history();
+        break;
+        
+    case '/conference/send-message':
+        $controller = new VideoConferenceController($db, $notificationService);
+        $controller->sendMessage();
+        break;
+        
+    case '/conference/start-recording':
+        $controller = new VideoConferenceController($db, $notificationService);
+        $controller->startRecording();
+        break;
+        
+    case '/conference/stop-recording':
+        $controller = new VideoConferenceController($db, $notificationService);
+        $controller->stopRecording();
+        break;
+        
+    case '/conference/end':
+        $controller = new VideoConferenceController($db, $notificationService);
+        $controller->end();
+        break;
+
+    case '/signaling/poll':
+        $controller = new SignalingController($db);
+        $controller->poll();
+        break;
+        
+    case '/signaling/send':
+        $controller = new SignalingController($db);
+        $controller->send();
+        break;
+        
+    case '/signaling/participants':
+        $controller = new SignalingController($db);
+        $controller->participants();
+        break;
+        
+    case '/signaling/heartbeat':
+        $controller = new SignalingController($db);
+        $controller->heartbeat();
+        break;
         
     default:
         // Обработка динамических роутов
@@ -259,7 +325,17 @@ switch ($uri) {
         } elseif (preg_match('/^\/admin\/departments\/delete\/(\d+)$/', $uri, $matches)) {
             $controller = new AdminController($db, $emailService);
             $controller->deleteDepartment($matches[1]);
-        } elseif (preg_match('/^\/uploads\/(.+)$/', $uri, $matches)) {
+        } 
+          elseif (preg_match('/^\/conference\/join\/([0-9-]+)$/', $uri, $matches)) {
+            $controller = new VideoConferenceController($db, $notificationService);
+            $controller->join($matches[1]);
+        }
+        // Скачивание записи
+        elseif (preg_match('/^\/conference\/recording\/(\d+)$/', $uri, $matches)) {
+            $controller = new VideoConferenceController($db, $notificationService);
+            $controller->downloadRecording($matches[1]);
+        }
+    elseif (preg_match('/^\/uploads\/(.+)$/', $uri, $matches)) {
             // Обработка статических файлов из папки uploads
             $filePath = __DIR__ . '/../uploads/' . $matches[1];
             if (file_exists($filePath) && is_file($filePath)) {

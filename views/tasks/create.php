@@ -310,19 +310,16 @@
                             <div class="col-md-4 mb-3">
     <label for="status" class="form-label">Статус</label>
     <select class="form-select" id="status" name="status">
-        <option value="backlog" <?= (isset($_POST['status']) && $_POST['status'] == 'backlog') ? 'selected' : '' ?>>
+        <option value="backlog" selected>
             📋 Очередь задач
         </option>
-        <option value="todo" <?= (isset($_POST['status']) && $_POST['status'] == 'todo') ? 'selected' : '' ?>>
-            📝 К выполнению
-        </option>
-        <option value="in_progress" <?= (isset($_POST['status']) && $_POST['status'] == 'in_progress') ? 'selected' : '' ?>>
+        <option value="in_progress" <?= (isset($_POST['status']) && $_POST['status'] == 'in_progress') ? 'selected' : '' ?> disabled>
             🔄 В работе
         </option>
-        <option value="waiting_approval" <?= (isset($_POST['status']) && $_POST['status'] == 'waiting_approval') ? 'selected' : '' ?>>
+        <option value="waiting_approval" <?= (isset($_POST['status']) && $_POST['status'] == 'waiting_approval') ? 'selected' : '' ?> disabled>
             ⏳ Ожидает проверки
         </option>
-        <option value="done" <?= (isset($_POST['status']) && $_POST['status'] == 'done') ? 'selected' : '' ?>>
+        <option value="done" <?= (isset($_POST['status']) && $_POST['status'] == 'done') ? 'selected' : '' ?> disabled>
             ✅ Выполнено
         </option>
     </select>

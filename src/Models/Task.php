@@ -79,7 +79,8 @@ class Task {
  public function getKanbanTasks($userId, $departmentId) {
     try {
         $sql = "SELECT t.*, u.name as creator_name,
-                GROUP_CONCAT(DISTINCT au.name) as assignee_names
+                GROUP_CONCAT(DISTINCT au.name) as assignee_names,
+                GROUP_CONCAT(DISTINCT au.id) as assignee_ids
                 FROM tasks t
                 JOIN users u ON t.creator_id = u.id
                 LEFT JOIN task_assignees ta ON t.id = ta.task_id
@@ -103,10 +104,10 @@ class Task {
         // Группируем по статусам (включая новые)
         $kanban = [
             'backlog' => [],
-            'todo' => [],
+           // 'todo' => [],
             'in_progress' => [],
             'review' => [],
-            'waiting_approval' => [],
+            //'waiting_approval' => [],
             'done' => []
         ];
         
@@ -763,6 +764,7 @@ public function getAllTasksWithDetails() {
                 t.*,
                 u.name as creator_name,
                 GROUP_CONCAT(DISTINCT au.name SEPARATOR ', ') as assignee_names
+                GROUP_CONCAT(DISTINCT au.id SEPARATOR ', ') as assignee_ids
             FROM tasks t
             LEFT JOIN users u ON t.creator_id = u.id
             LEFT JOIN task_assignees ta ON t.id = ta.task_id
@@ -814,6 +816,7 @@ public function getAllTasksWithDetails() {
                 u.name as creator_name,
                 d.name as creator_department,
                 GROUP_CONCAT(DISTINCT au.name SEPARATOR ', ') as assignee_names,
+                GROUP_CONCAT(DISTINCT au.id SEPARATOR ', ') as assignee_ids
                 COUNT(DISTINCT tc.id) as comment_count,
                 CASE 
                     WHEN t.deadline < NOW() AND t.status NOT IN ('done') THEN 1
@@ -885,7 +888,8 @@ public function getCount() {
      */
     public function getTasksAwaitingApproval($creatorId) {
         $sql = "SELECT t.*, u.name as creator_name,
-                GROUP_CONCAT(DISTINCT au.name SEPARATOR ', ') as assignee_names
+                GROUP_CONCAT(DISTINCT au.name SEPARATOR ', ') as assignee_names,
+                GROUP_CONCAT(DISTINCT au.id SEPARATOR ', ') as assignee_ids
                 FROM tasks t
                 JOIN users u ON t.creator_id = u.id
                 LEFT JOIN task_assignees ta ON t.id = ta.task_id
