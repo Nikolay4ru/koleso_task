@@ -453,18 +453,36 @@ class VideoConference {
     /**
      * Получение списка участников
      */
-    public function getParticipants($conferenceId) {
-        $sql = "SELECT cp.*, u.name, u.email, u.avatar_url
-                FROM conference_participants cp
-                LEFT JOIN users u ON cp.user_id = u.id
-                WHERE cp.conference_id = :conference_id
-                ORDER BY cp.role DESC, cp.joined_at ASC";
+ public function getParticipants($conferenceId) {
+    try {
+        $sql = "SELECT 
+                cp.id,
+                cp.user_id,
+                cp.role,
+                cp.joined_at,
+                cp.left_at,
+                cp.is_active,
+                cp.last_seen,
+                u.name,
+                u.email,
+                u.avatar_url,
+                u.position
+            FROM conference_participants cp
+            LEFT JOIN users u ON cp.user_id = u.id
+            WHERE cp.conference_id = :conference_id
+            ORDER BY cp.joined_at ASC";
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':conference_id' => $conferenceId]);
         
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+    } catch (Exception $e) {
+        error_log('VideoConference getParticipants error: ' . $e->getMessage());
+        return [];
     }
+}
+
     
     /**
      * Приглашение пользователя

@@ -255,25 +255,24 @@ switch ($uri) {
         $controller->end();
         break;
 
-    case '/signaling/poll':
-        $controller = new SignalingController($db);
-        $controller->poll();
-        break;
-        
-    case '/signaling/send':
-        $controller = new SignalingController($db);
+    case '/signaling':
+    $controller = new SignalingController($db);
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $controller->send();
-        break;
-        
-    case '/signaling/participants':
-        $controller = new SignalingController($db);
-        $controller->participants();
-        break;
-        
-    case '/signaling/heartbeat':
-        $controller = new SignalingController($db);
-        $controller->heartbeat();
-        break;
+    } else {
+        $controller->poll();
+    }
+    break;
+
+     case '/signaling/poll':
+    $controller = new SignalingController($db);
+    $controller->poll();
+    break;
+    
+    case '/signaling/send':
+    $controller = new SignalingController($db);
+    $controller->send();
+    break;
         
     default:
         // Обработка динамических роутов
@@ -330,11 +329,61 @@ switch ($uri) {
             $controller = new VideoConferenceController($db, $notificationService);
             $controller->join($matches[1]);
         }
-        // Скачивание записи
-        elseif (preg_match('/^\/conference\/recording\/(\d+)$/', $uri, $matches)) {
-            $controller = new VideoConferenceController($db, $notificationService);
-            $controller->downloadRecording($matches[1]);
+        
+        // API для получения участников конференции
+elseif (preg_match('/^\/api\/conference\/participants\/(\d+)$/', $uri, $matches)) {
+    header('Content-Type: application/json');
+    
+    $conferenceId = $matches[1];
+    $controller = new VideoConferenceController($db, $notificationService);
+    
+    try {
+        // Получаем участников через модель
+        $participants = $controller->conferenceModel->getParticipants($conferenceId);
+        
+        if ($participants === false) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Conference not found']);
+        } else {
+            echo json_encode($participants);
         }
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Server error']);
+    }
+    exit;
+}
+
+// API для выхода из конференции
+elseif (preg_match('/^\/conference\/leave\/(\d+)$/', $uri, $matches)) {
+    header('Content-Type: application/json');
+    
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['error' => 'Method not allowed']);
+        exit;
+    }
+    
+    $conferenceId = $matches[1];
+    $userId = $_SESSION['user_id'] ?? 0;
+    
+    if (!$userId) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        exit;
+    }
+    
+    $controller = new VideoConferenceController($db, $notificationService);
+    
+    try {
+        $controller->conferenceModel->updateParticipantLeftTime($conferenceId, $userId);
+        echo json_encode(['success' => true]);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Server error']);
+    }
+    exit;
+}
     elseif (preg_match('/^\/uploads\/(.+)$/', $uri, $matches)) {
             // Обработка статических файлов из папки uploads
             $filePath = __DIR__ . '/../uploads/' . $matches[1];
