@@ -339,7 +339,7 @@ elseif (preg_match('/^\/api\/conference\/participants\/(\d+)$/', $uri, $matches)
     
     try {
         // Получаем участников через модель
-        $participants = $controller->conferenceModel->getParticipants($conferenceId);
+        $participants = $controller->getConferenceModel()->getParticipants($conferenceId);
         
         if ($participants === false) {
             http_response_code(404);

@@ -23,6 +23,11 @@ class VideoConferenceController {
         $this->userModel = new User($db);
         $this->notificationService = $notificationService;
     }
+
+
+    public function getConferenceModel() {
+    return $this->conferenceModel;
+}
     
     /**
      * Главная страница видеоконференций

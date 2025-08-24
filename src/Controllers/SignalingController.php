@@ -75,8 +75,10 @@ class SignalingController {
         header('Access-Control-Allow-Headers: Content-Type');
         
         if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-            exit(0);
-        }
+    http_response_code(200);
+    echo json_encode(['success' => true]);
+    exit;
+}
         
         $input = json_decode(file_get_contents('php://input'), true);
         

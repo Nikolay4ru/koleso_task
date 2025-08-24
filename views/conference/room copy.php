@@ -30,15 +30,21 @@
             --bg-primary: #0f0f14;
             --bg-secondary: #1a1a24;
             --bg-tertiary: #252533;
+            --bg-card: rgba(255, 255, 255, 0.05);
             
             --text-primary: #ffffff;
             --text-secondary: rgba(255, 255, 255, 0.7);
             --text-tertiary: rgba(255, 255, 255, 0.5);
             
             --border: rgba(255, 255, 255, 0.1);
+            --border-light: rgba(255, 255, 255, 0.05);
+            
             --shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.7);
             
             --radius: 16px;
+            --radius-lg: 24px;
+            
             --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
             
@@ -53,6 +59,7 @@
             height: 100vh;
             overflow: hidden;
             -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
 
         .conference-app {
@@ -68,10 +75,12 @@
             height: var(--header-height);
             background: linear-gradient(to bottom, rgba(15, 15, 20, 0.95), transparent);
             backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
             padding: 0 24px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            position: relative;
             z-index: 100;
             flex-shrink: 0;
         }
@@ -96,6 +105,7 @@
             cursor: pointer;
             border-radius: 12px;
             transition: var(--transition-fast);
+            flex-shrink: 0;
         }
 
         .back-button:hover {
@@ -114,6 +124,7 @@
         .conference-title {
             font-size: 18px;
             font-weight: 600;
+            letter-spacing: -0.3px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -134,6 +145,7 @@
             border-radius: 50%;
             animation: pulse 2s ease-in-out infinite;
             box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+            flex-shrink: 0;
         }
 
         @keyframes pulse {
@@ -144,6 +156,7 @@
         .header-actions {
             display: flex;
             gap: 12px;
+            flex-shrink: 0;
         }
 
         .header-button {
@@ -163,6 +176,7 @@
 
         .header-button:hover {
             background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-1px);
         }
 
         .header-button.active {
@@ -170,7 +184,7 @@
             color: white;
         }
 
-        /* Main Content */
+        /* Main Content Area */
         .main-content {
             flex: 1;
             display: flex;
@@ -186,181 +200,23 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            position: relative;
-        }
-
-        /* НОВОЕ: Плавающее локальное видео */
-        .floating-local-video {
-            position: absolute;
-            top: 16px;
-            right: 16px;
-            width: 200px;
-            height: 150px;
-            z-index: 50;
-            border-radius: var(--radius);
+            min-width: 0;
             overflow: hidden;
-            background: var(--bg-secondary);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            transition: var(--transition);
-            cursor: move;
         }
 
-        .floating-local-video:hover {
-            border-color: rgba(255, 255, 255, 0.2);
-            transform: scale(1.02);
-        }
-
-        .floating-local-video.dragging {
-            cursor: grabbing;
-            opacity: 0.8;
-            transition: none;
-        }
-
-        .floating-local-video video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-        }
-
-        .floating-local-video .video-avatar {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            font-weight: 600;
-            color: white;
-            text-transform: uppercase;
-        }
-
-        .floating-local-video .video-overlay {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            padding: 8px 12px;
-            background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            pointer-events: none;
-        }
-
-        .floating-local-video .video-name {
-            font-size: 12px;
-            font-weight: 500;
-            color: white;
-        }
-
-        .floating-local-video .video-indicators {
-            display: flex;
-            gap: 4px;
-        }
-
-        .floating-local-video .indicator {
-            width: 24px;
-            height: 24px;
-            border-radius: 6px;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .floating-local-video .indicator ion-icon {
-            font-size: 14px;
-            color: white;
-        }
-
-        .floating-local-video .indicator.muted {
-            background: rgba(239, 68, 68, 0.8);
-        }
-
-        /* Main video container */
-        .main-video-container {
+        .videos-wrapper {
             width: 100%;
             height: 100%;
             display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 16px;
-        }
-
-        /* Grid view */
-        .videos-grid {
-            width: 100%;
-            height: 100%;
-            display: grid;
-            gap: 12px;
-            transition: var(--transition);
-            align-content: center;
-            justify-content: center;
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-
-        .videos-grid[data-count="0"] {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .videos-grid[data-count="1"] {
-            grid-template-columns: 1fr;
-            max-width: 900px;
-        }
-
-        .videos-grid[data-count="2"] {
-            grid-template-columns: repeat(2, 1fr);
-            max-width: 1200px;
-        }
-
-        .videos-grid[data-count="3"],
-        .videos-grid[data-count="4"] {
-            grid-template-columns: repeat(2, 1fr);
-            grid-template-rows: repeat(2, 1fr);
-        }
-
-        .videos-grid[data-count="5"],
-        .videos-grid[data-count="6"] {
-            grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: repeat(2, 1fr);
-        }
-
-        .videos-grid[data-count="7"],
-        .videos-grid[data-count="8"],
-        .videos-grid[data-count="9"] {
-            grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: repeat(3, 1fr);
-        }
-
-        /* Speaker view */
-        .speaker-view {
-            width: 100%;
-            height: 100%;
-            display: none;
             flex-direction: column;
-            gap: 16px;
-            max-width: 1400px;
-            margin: 0 auto;
+            gap: 12px;
+            min-height: 0;
         }
 
-        .speaker-view.active {
-            display: flex;
-        }
-
+        /* Main speaker view */
         .main-speaker {
             flex: 1;
-            display: flex;
+            display: none;
             align-items: center;
             justify-content: center;
             min-height: 0;
@@ -369,22 +225,30 @@
         .main-speaker .video-tile {
             width: 100%;
             height: 100%;
-            max-height: calc(100vh - 240px);
+            max-width: 1200px;
+            aspect-ratio: 16/9;
         }
 
         /* Thumbnails strip */
         .thumbnails-strip {
             height: 120px;
-            display: flex;
+            display: none;
             gap: 8px;
             overflow-x: auto;
-            padding: 8px;
-            background: rgba(0, 0, 0, 0.2);
+            overflow-y: hidden;
+            padding: 4px;
+            background: rgba(0, 0, 0, 0.3);
             border-radius: var(--radius);
+            scroll-behavior: smooth;
+            flex-shrink: 0;
         }
 
         .thumbnails-strip::-webkit-scrollbar {
             height: 4px;
+        }
+
+        .thumbnails-strip::-webkit-scrollbar-track {
+            background: transparent;
         }
 
         .thumbnails-strip::-webkit-scrollbar-thumb {
@@ -396,10 +260,68 @@
             flex: 0 0 160px;
             height: 100%;
             cursor: pointer;
+            transition: all 0.2s ease;
         }
 
         .thumbnails-strip .video-tile:hover {
             transform: scale(1.05);
+            z-index: 10;
+        }
+
+        /* Grid view */
+        .videos-container {
+            width: 100%;
+            height: 100%;
+            display: grid;
+            gap: 8px;
+            transition: var(--transition);
+            align-content: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* Responsive grid */
+        .videos-container[data-count="1"] {
+            grid-template-columns: 1fr;
+            max-width: 800px;
+        }
+
+        .videos-container[data-count="2"] {
+            grid-template-columns: repeat(2, 1fr);
+            max-width: 1200px;
+        }
+
+        .videos-container[data-count="3"] {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .videos-container[data-count="4"] {
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+        }
+
+        .videos-container[data-count="5"],
+        .videos-container[data-count="6"] {
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+        }
+
+        .videos-container[data-count="7"],
+        .videos-container[data-count="8"] {
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+        }
+
+        .videos-container[data-count="9"] {
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+        }
+
+        .videos-container[data-count="10"],
+        .videos-container[data-count="11"],
+        .videos-container[data-count="12"] {
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(3, 1fr);
         }
 
         /* Video Tiles */
@@ -413,6 +335,7 @@
             justify-content: center;
             border: 3px solid transparent;
             transition: var(--transition);
+            min-height: 120px;
             aspect-ratio: 16/9;
         }
 
@@ -422,20 +345,18 @@
 
         .video-tile.speaking {
             border-color: var(--success);
-            box-shadow: 0 0 30px rgba(16, 185, 129, 0.5);
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
             animation: speakingPulse 2s ease-in-out infinite;
-            z-index: 10;
-            transform: scale(1.05);
         }
 
         @keyframes speakingPulse {
             0%, 100% { 
                 border-color: var(--success);
-                box-shadow: 0 0 30px rgba(16, 185, 129, 0.5);
+                box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
             }
             50% { 
-                border-color: rgba(16, 185, 129, 0.9);
-                box-shadow: 0 0 40px rgba(16, 185, 129, 0.7);
+                border-color: rgba(16, 185, 129, 0.8);
+                box-shadow: 0 0 30px rgba(16, 185, 129, 0.6);
             }
         }
 
@@ -445,6 +366,7 @@
             object-fit: cover;
             display: block;
             background: black;
+            border-radius: var(--radius);
         }
 
         .video-avatar {
@@ -481,11 +403,16 @@
             font-weight: 500;
             color: white;
             text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 60%;
         }
 
         .video-indicators {
             display: flex;
             gap: 8px;
+            flex-shrink: 0;
         }
 
         .indicator {
@@ -517,6 +444,7 @@
             flex-direction: column;
             transition: var(--transition);
             overflow: hidden;
+            flex-shrink: 0;
         }
 
         .chat-panel.open {
@@ -526,6 +454,7 @@
         .chat-header {
             padding: 20px;
             border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
         }
 
         .chat-title {
@@ -540,10 +469,15 @@
             display: flex;
             flex-direction: column;
             gap: 12px;
+            min-height: 0;
         }
 
         .chat-messages::-webkit-scrollbar {
             width: 6px;
+        }
+
+        .chat-messages::-webkit-scrollbar-track {
+            background: transparent;
         }
 
         .chat-messages::-webkit-scrollbar-thumb {
@@ -575,9 +509,21 @@
             background: var(--primary);
         }
 
+        .message-author {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 4px;
+        }
+
+        .message.own .message-author {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
         .message-text {
             font-size: 14px;
             line-height: 1.5;
+            word-wrap: break-word;
         }
 
         .message-time {
@@ -591,6 +537,8 @@
             border-top: 1px solid var(--border);
             display: flex;
             gap: 12px;
+            align-items: flex-end;
+            flex-shrink: 0;
         }
 
         .chat-input-wrapper {
@@ -598,16 +546,20 @@
             background: var(--bg-tertiary);
             border-radius: 12px;
             padding: 10px 14px;
+            display: flex;
+            align-items: center;
         }
 
         .chat-input {
-            width: 100%;
+            flex: 1;
             background: none;
             border: none;
             color: var(--text-primary);
             font-size: 14px;
             outline: none;
             resize: none;
+            max-height: 100px;
+            line-height: 1.5;
         }
 
         .send-button {
@@ -626,6 +578,7 @@
 
         .send-button:hover {
             background: var(--primary-dark);
+            transform: translateY(-1px);
         }
 
         /* Controls Bar */
@@ -634,9 +587,11 @@
             padding: 12px;
             background: linear-gradient(to top, rgba(15, 15, 20, 0.95), transparent);
             backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
             display: flex;
             justify-content: center;
             align-items: center;
+            flex-shrink: 0;
         }
 
         .controls-container {
@@ -658,6 +613,7 @@
             align-items: center;
             justify-content: center;
             transition: var(--transition-fast);
+            position: relative;
         }
 
         .control-button:hover {
@@ -665,14 +621,23 @@
             transform: translateY(-2px);
         }
 
+        .control-button.active {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
         .control-button.muted {
             background: var(--danger);
+            color: white;
         }
 
         .control-button.end-call {
             background: var(--danger);
             width: 64px;
             height: 64px;
+        }
+
+        .control-button.end-call:hover {
+            background: #dc2626;
         }
 
         .control-button ion-icon {
@@ -693,6 +658,11 @@
             color: white;
             font-size: 12px;
             cursor: pointer;
+            transition: var(--transition-fast);
+        }
+
+        .host-button:hover {
+            background: #d97706;
         }
 
         /* Toast */
@@ -713,6 +683,8 @@
             transition: var(--transition);
             z-index: 300;
             border: 1px solid var(--border);
+            max-width: calc(100vw - 40px);
+            text-align: center;
         }
 
         .toast.show {
@@ -765,28 +737,56 @@
                 --controls-height: 70px;
             }
 
-            .floating-local-video {
-                width: 120px;
-                height: 90px;
-                top: 12px;
-                right: 12px;
+            .header-bar {
+                padding: 0 16px;
             }
 
-            .floating-local-video .video-avatar {
-                width: 40px;
-                height: 40px;
-                font-size: 14px;
+            .conference-title {
+                font-size: 16px;
             }
 
-            .videos-grid[data-count="2"] {
+            .conference-status {
+                font-size: 12px;
+            }
+
+            .header-button {
+                width: 36px;
+                height: 36px;
+                font-size: 18px;
+            }
+
+            .videos-section {
+                padding: 4px;
+            }
+
+            .videos-container {
+                gap: 4px;
+            }
+
+            .videos-container[data-count="1"] {
+                grid-template-columns: 1fr;
+            }
+
+            .videos-container[data-count="2"] {
                 grid-template-columns: 1fr;
                 grid-template-rows: repeat(2, 1fr);
             }
 
-            .videos-grid[data-count="3"],
-            .videos-grid[data-count="4"] {
+            .videos-container[data-count="3"],
+            .videos-container[data-count="4"] {
                 grid-template-columns: repeat(2, 1fr);
                 grid-template-rows: repeat(2, 1fr);
+            }
+
+            .video-tile {
+                min-height: 100px;
+                aspect-ratio: 4/3;
+            }
+
+            .video-avatar {
+                width: 60px;
+                height: 60px;
+                font-size: 20px;
             }
 
             .chat-panel {
@@ -799,8 +799,7 @@
                 max-height: 50vh;
                 border-left: none;
                 border-top: 1px solid var(--border);
-                border-radius: var(--radius) var(--radius) 0 0;
-                z-index: 90;
+                border-radius: var(--radius-lg) var(--radius-lg) 0 0;
             }
 
             .chat-panel.open {
@@ -840,9 +839,6 @@
                 <button class="header-button" id="chatToggleBtn" onclick="toggleChat()">
                     <ion-icon name="chatbubble-outline"></ion-icon>
                 </button>
-                <button class="header-button" id="layoutToggleBtn" onclick="toggleLayout()" title="Изменить вид">
-                    <ion-icon name="grid-outline"></ion-icon>
-                </button>
                 <?php if (($conference['creator_id'] ?? 0) == ($_SESSION['user_id'] ?? 0)): ?>
                 <div class="host-controls">
                     <button class="host-button" onclick="endConferenceForAll()">
@@ -857,34 +853,18 @@
         <div class="main-content">
             <!-- Videos Section -->
             <div class="videos-section" id="videosSection">
-                <!-- НОВОЕ: Плавающее локальное видео -->
-                <div class="floating-local-video" id="floatingLocalVideo">
-                    <video id="localFloatingVideo" autoplay muted playsinline></video>
-                    <div class="video-avatar" id="localFloatingAvatar">You</div>
-                    <div class="video-overlay">
-                        <div class="video-name">Вы</div>
-                        <div class="video-indicators">
-                            <div class="indicator" id="floatingMicIndicator">
-                                <ion-icon name="mic"></ion-icon>
-                            </div>
-                            <div class="indicator" id="floatingCamIndicator">
-                                <ion-icon name="videocam"></ion-icon>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Main video container -->
-                <div class="main-video-container" id="mainVideoContainer">
-                    <!-- Grid view (default) -->
-                    <div class="videos-grid" id="videosGrid" data-count="0">
+                <div class="videos-wrapper" id="videosWrapper">
+                    <!-- Grid view by default -->
+                    <div class="videos-container" id="videosGrid" data-count="1">
                         <div class="loading-spinner" id="loadingSpinner"></div>
                     </div>
                     
                     <!-- Speaker view (hidden by default) -->
-                    <div class="speaker-view" id="speakerView">
-                        <div class="main-speaker" id="mainSpeaker"></div>
-                        <div class="thumbnails-strip" id="thumbnailsStrip"></div>
+                    <div class="main-speaker" id="mainSpeaker">
+                        <!-- Main speaker video will be moved here -->
+                    </div>
+                    <div class="thumbnails-strip" id="thumbnailsStrip">
+                        <!-- Other participants will be shown here -->
                     </div>
                 </div>
             </div>
@@ -900,10 +880,22 @@
                             <div class="message-text">Добро пожаловать в конференцию</div>
                         </div>
                     </div>
+                    <?php if (!empty($messages)): ?>
+                        <?php foreach ($messages as $msg): ?>
+                            <div class="message">
+                                <div class="message-bubble">
+                                    <div class="message-author"><?= htmlspecialchars($msg['user_name']) ?></div>
+                                    <div class="message-text"><?= htmlspecialchars($msg['message']) ?></div>
+                                    <div class="message-time"><?= date('H:i', strtotime($msg['sent_at'])) ?></div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </div>
                 <div class="chat-input-container">
                     <div class="chat-input-wrapper">
-                        <textarea class="chat-input" id="messageInput" placeholder="Написать сообщение..." rows="1"></textarea>
+                        <textarea class="chat-input" id="messageInput" placeholder="Написать сообщение..." rows="1"
+                                  onkeypress="handleChatKeyPress(event)" oninput="autoResize(this)"></textarea>
                     </div>
                     <button class="send-button" onclick="sendMessage()">
                         <ion-icon name="send"></ion-icon>
@@ -935,7 +927,7 @@
     </div>
 
     <script>
-        // Конфигурация
+        // ===== CONFIGURATION =====
         const CONFIG = {
             conferenceId: <?= (int)($conference['id'] ?? 1) ?>,
             roomCode: '<?= htmlspecialchars($conference['room_id'] ?? '123-456-789', ENT_QUOTES) ?>',
@@ -949,209 +941,313 @@
             ]
         };
 
-        // Состояние
+        // ===== STATE MANAGEMENT =====
         const state = {
             localStream: null,
             peerConnections: new Map(),
             participants: new Map(),
-            viewMode: 'grid',
+            pendingCandidates: new Map(),
+            isScreenSharing: false,
+            lastSignalId: 0,
+            pollingInterval: null,
+            heartbeatInterval: null,
+            reconnectAttempts: new Map(),
             currentSpeaker: null,
-            conferenceEnded: false
+            viewMode: 'grid',
+            audioProcessors: new Map(),
+            speakingTimeouts: new Map(),
+            conferenceEnded: false,
+            initialized: false,
+            connectionStates: new Map()
         };
 
-             // ===== INITIALIZATION =====
-        async function initialize() {
-            if (state.initialized) return;
-            state.initialized = true;
-            
-            console.log('Initializing conference...');
-            showToast('Подключение к конференции...', 'info');
-            
-            try {
-                // Получаем локальный медиапоток
-                state.localStream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        width: { ideal: 1280, max: 1920 },
-                        height: { ideal: 720, max: 1080 },
-                        facingMode: 'user'
-                    },
-                    audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true
-                    }
-                });
-                
-                // Устанавливаем локальное видео в плавающее окно
-                const floatingVideo = document.getElementById('localFloatingVideo');
-                const floatingAvatar = document.getElementById('localFloatingAvatar');
-                
-                if (floatingVideo) {
-                    floatingVideo.srcObject = state.localStream;
-                    floatingVideo.play().catch(() => {});
-                    
-                    // Обновляем аватар
-                    const initials = CONFIG.userName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-                    floatingAvatar.textContent = initials;
-                    
-                    // Скрываем аватар если есть видео
-                    const videoTracks = state.localStream.getVideoTracks();
-                    if (videoTracks.length > 0 && videoTracks[0].enabled) {
-                        floatingAvatar.style.display = 'none';
-                    }
-                }
-                
-                // Настраиваем перетаскивание плавающего видео
-                setupFloatingVideoDrag();
-                
-                // Скрываем спиннер
-                document.getElementById('loadingSpinner').style.display = 'none';
-                
-                // Запускаем сигналинг
-                startSignaling();
-                
-                // Отправляем сигнал о присоединении
-                await sendSignal('join', null, {
-                    userId: CONFIG.userId,
-                    userName: CONFIG.userName
-                });
-                
-                // Загружаем существующих участников
-                setTimeout(() => loadExistingParticipants(), 1000);
-                
-                showToast('Подключено к конференции', 'success');
-                
-            } catch (error) {
-                console.error('Media access error:', error);
-                handleMediaError(error);
-            }
+        // ===== VIDEO MANAGEMENT =====
+        class ConferenceVideoManager {
+    constructor() {
+        this.videoStreams = new Map(); // Хранение потоков
+        this.videoQueue = new Map();
+        this.processing = false;
+    }
+
+    async setVideoStream(userId, stream, userName = '') {
+        console.log(`Setting video stream for ${userName || userId}`);
+        
+        // Сохраняем поток
+        this.videoStreams.set(userId, stream);
+        
+        if (this.processing) {
+            this.videoQueue.set(userId, { stream, userName });
+            return;
         }
 
-        // Перетаскивание плавающего видео
-        function setupFloatingVideoDrag() {
-            const floatingVideo = document.getElementById('floatingLocalVideo');
-            if (!floatingVideo) return;
+        this.processing = true;
+        try {
+            await this._processVideoStream(userId, stream, userName);
             
-            let isDragging = false;
-            let startX, startY, initialLeft, initialTop;
-            
-            floatingVideo.addEventListener('mousedown', startDrag);
-            floatingVideo.addEventListener('touchstart', startDrag, { passive: false });
-            
-            function startDrag(e) {
-                if (e.target.tagName === 'VIDEO' || e.target.closest('.video-overlay')) {
-                    isDragging = true;
-                    floatingVideo.classList.add('dragging');
-                    
-                    const touch = e.touches ? e.touches[0] : e;
-                    startX = touch.clientX;
-                    startY = touch.clientY;
-                    
-                    const rect = floatingVideo.getBoundingClientRect();
-                    initialLeft = rect.left;
-                    initialTop = rect.top;
-                    
-                    document.addEventListener('mousemove', drag);
-                    document.addEventListener('mouseup', stopDrag);
-                    document.addEventListener('touchmove', drag, { passive: false });
-                    document.addEventListener('touchend', stopDrag);
-                    
-                    e.preventDefault();
-                }
+            // Process queued videos
+            for (const [queuedUserId, queuedData] of this.videoQueue) {
+                await this._processVideoStream(queuedUserId, queuedData.stream, queuedData.userName);
+                this.videoQueue.delete(queuedUserId);
             }
-            
-            function drag(e) {
-                if (!isDragging) return;
-                
-                e.preventDefault();
-                const touch = e.touches ? e.touches[0] : e;
-                
-                const deltaX = touch.clientX - startX;
-                const deltaY = touch.clientY - startY;
-                
-                const newLeft = initialLeft + deltaX;
-                const newTop = initialTop + deltaY;
-                
-                // Ограничиваем движение в пределах экрана
-                const maxLeft = window.innerWidth - floatingVideo.offsetWidth;
-                const maxTop = window.innerHeight - floatingVideo.offsetHeight - 80;
-                
-                floatingVideo.style.left = `${Math.max(0, Math.min(newLeft, maxLeft))}px`;
-                floatingVideo.style.top = `${Math.max(0, Math.min(newTop, maxTop))}px`;
-                floatingVideo.style.right = 'auto';
-            }
-            
-            function stopDrag() {
-                isDragging = false;
-                floatingVideo.classList.remove('dragging');
-                
-                document.removeEventListener('mousemove', drag);
-                document.removeEventListener('mouseup', stopDrag);
-                document.removeEventListener('touchmove', drag);
-                document.removeEventListener('touchend', stopDrag);
-            }
+        } finally {
+            this.processing = false;
         }
+    }
 
-        // WebRTC функции
-        function createPeerConnection(userId, userName, isInitiator = false) {
-            console.log(`Creating peer connection for ${userName} (${userId})`);
+    async _processVideoStream(userId, stream, userName) {
+        return new Promise((resolve) => {
+            const video = this._getOrCreateVideo(userId, userName);
+            if (!video) {
+                resolve();
+                return;
+            }
+
+            // Важно: НЕ останавливаем существующий поток, если это тот же поток
+            if (video.srcObject !== stream) {
+                video.srcObject = stream;
+            }
             
-            const pc = new RTCPeerConnection({
-                iceServers: CONFIG.iceServers
+            video.autoplay = true;
+            video.playsInline = true;
+            video.muted = userId === 'local';
+
+            let resolved = false;
+            const resolveOnce = () => {
+                if (!resolved) {
+                    resolved = true;
+                    resolve();
+                }
+            };
+
+            const handlePlay = () => {
+                console.log(`Video playing for ${userName || userId}`);
+                
+                // Проверяем, есть ли видео в потоке
+                const videoTracks = stream.getVideoTracks();
+                if (videoTracks.length > 0 && videoTracks[0].enabled) {
+                    this._hideAvatar(userId);
+                } else {
+                    this._showAvatar(userId);
+                }
+                
+                resolveOnce();
+            };
+
+            const handleError = (e) => {
+                console.error(`Video error for ${userName || userId}:`, e);
+                this._showAvatar(userId);
+                resolveOnce();
+            };
+
+            video.addEventListener('playing', handlePlay, { once: true });
+            video.addEventListener('error', handleError, { once: true });
+
+            // Попытка воспроизведения
+            video.play().catch(err => {
+                console.warn(`Autoplay failed for ${userName}:`, err);
+                // Для удаленных видео это нормально, они начнут играть после взаимодействия пользователя
+                handleError(err);
             });
-            
-            // Добавляем локальные треки
-            if (state.localStream) {
-                state.localStream.getTracks().forEach(track => {
-                    pc.addTrack(track, state.localStream);
-                });
+
+            setTimeout(resolveOnce, 3000);
+        });
+    }
+
+    _getOrCreateVideo(userId, userName) {
+        let tile = document.querySelector(`[data-user-id="${userId}"]`);
+        
+        if (!tile) {
+            tile = this._createVideoTile(userId, userName);
+            const container = document.getElementById('videosGrid');
+            if (container) {
+                container.appendChild(tile);
             }
-            
-            // Обработка входящих треков
-            pc.ontrack = (event) => {
-                console.log(`Received ${event.track.kind} track from ${userName}`);
-                if (event.streams && event.streams.length > 0) {
-                    handleRemoteStream(userId, userName, event.streams[0]);
-                }
-            };
-            
-            // Обработка ICE кандидатов
-            pc.onicecandidate = (event) => {
-                if (event.candidate) {
-                    sendSignal('ice-candidate', userId, {
-                        candidate: event.candidate.toJSON()
-                    });
-                }
-            };
-            
-            // Мониторинг состояния
-            pc.onconnectionstatechange = () => {
-                console.log(`Connection state with ${userName}: ${pc.connectionState}`);
-                
-                if (pc.connectionState === 'connected') {
-                    showToast(`${userName} подключился`, 'success');
-                } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        }
+
+        return tile.querySelector('video');
+    }
+
+    _createVideoTile(userId, userName) {
+        const tile = document.createElement('div');
+        tile.className = 'video-tile';
+        tile.dataset.userId = userId;
+        
+        const initials = (userName || 'U').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+        
+        if (userId === 'local') {
+            tile.id = 'localVideoTile';
+            tile.innerHTML = `
+                <video autoplay muted playsinline></video>
+                <div class="video-avatar">${initials}</div>
+                <div class="video-overlay">
+                    <div class="video-name">Вы</div>
+                    <div class="video-indicators">
+                        <div class="indicator" id="localMicIndicator">
+                            <ion-icon name="mic"></ion-icon>
+                        </div>
+                        <div class="indicator" id="localCamIndicator">
+                            <ion-icon name="videocam"></ion-icon>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else {
+            tile.innerHTML = `
+                <video autoplay playsinline></video>
+                <div class="video-avatar">${initials}</div>
+                <div class="video-overlay">
+                    <div class="video-name">${escapeHtml(userName)}</div>
+                    <div class="video-indicators">
+                        <div class="indicator">
+                            <ion-icon name="mic"></ion-icon>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        return tile;
+    }
+
+    restoreVideoStreams() {
+        // Восстанавливаем все видеопотоки после изменения DOM
+        this.videoStreams.forEach((stream, userId) => {
+            const video = document.querySelector(`[data-user-id="${userId}"] video`);
+            if (video && video.srcObject !== stream) {
+                video.srcObject = stream;
+                video.play().catch(() => {});
+            }
+        });
+    }
+
+    _hideAvatar(userId) {
+        const tile = document.querySelector(`[data-user-id="${userId}"]`);
+        if (tile) {
+            const avatar = tile.querySelector('.video-avatar');
+            if (avatar) avatar.style.display = 'none';
+        }
+    }
+
+    _showAvatar(userId) {
+        const tile = document.querySelector(`[data-user-id="${userId}"]`);
+        if (tile) {
+            const avatar = tile.querySelector('.video-avatar');
+            if (avatar) avatar.style.display = 'flex';
+        }
+    }
+
+    removeVideo(userId) {
+        const tile = document.querySelector(`[data-user-id="${userId}"]`);
+        if (tile) {
+            const video = tile.querySelector('video');
+            if (video && video.srcObject) {
+                // Не останавливаем треки здесь - они управляются внешне
+                video.srcObject = null;
+            }
+            tile.remove();
+        }
+        this.videoStreams.delete(userId);
+        this.videoQueue.delete(userId);
+    }
+}
+
+        const videoManager = new ConferenceVideoManager();
+
+        // ===== WEBRTC CONNECTION MANAGEMENT =====
+        function createPeerConnection(userId, userName, isInitiator = false) {
+    console.log(`Creating peer connection for ${userName} (${userId}), initiator: ${isInitiator}`);
+    
+    // Закрываем старое соединение если есть
+    if (state.peerConnections.has(userId)) {
+        const oldPc = state.peerConnections.get(userId);
+        oldPc.close();
+        state.peerConnections.delete(userId);
+    }
+    
+    const pc = new RTCPeerConnection({
+        iceServers: CONFIG.iceServers,
+        iceCandidatePoolSize: 10
+    });
+    
+    // Добавляем локальные треки
+    if (state.localStream) {
+        state.localStream.getTracks().forEach(track => {
+            pc.addTrack(track, state.localStream);
+            console.log(`Added local ${track.kind} track to connection with ${userName}`);
+        });
+    }
+    
+    // Обработка входящих треков
+    pc.ontrack = (event) => {
+        console.log(`Received ${event.track.kind} track from ${userName}`);
+        if (event.streams && event.streams.length > 0) {
+            // Немедленно обрабатываем поток
+            handleRemoteStream(userId, userName, event.streams[0]);
+        }
+    };
+    
+    // Обработка ICE кандидатов
+    pc.onicecandidate = (event) => {
+        if (event.candidate) {
+            sendSignal('ice-candidate', userId, {
+                candidate: event.candidate.toJSON()
+            });
+        }
+    };
+    
+    // Мониторинг состояния соединения
+    pc.onconnectionstatechange = () => {
+        state.connectionStates.set(userId, pc.connectionState);
+        console.log(`Connection state with ${userName}: ${pc.connectionState}`);
+        
+        if (pc.connectionState === 'connected') {
+            state.reconnectAttempts.set(userId, 0);
+            showToast(`${userName} подключился`, 'success');
+        } else if (pc.connectionState === 'failed') {
+            attemptReconnect(userId, userName);
+        } else if (pc.connectionState === 'disconnected') {
+            setTimeout(() => {
+                if (state.connectionStates.get(userId) === 'disconnected') {
                     removeParticipant(userId);
                 }
-            };
-            
-            state.peerConnections.set(userId, pc);
-            
-            if (isInitiator) {
-                createAndSendOffer(userId, pc);
-            }
-            
-            return pc;
+            }, 5000);
         }
+    };
+    
+    // Обработка отложенных ICE кандидатов
+    if (state.pendingCandidates.has(userId)) {
+        const candidates = state.pendingCandidates.get(userId);
+        candidates.forEach(candidate => {
+            pc.addIceCandidate(new RTCIceCandidate(candidate))
+                .catch(e => console.error('Error adding pending ICE candidate:', e));
+        });
+        state.pendingCandidates.delete(userId);
+    }
+    
+    state.peerConnections.set(userId, pc);
+    
+    // Если мы инициатор, создаем offer
+    if (isInitiator) {
+        setTimeout(() => createAndSendOffer(userId, pc), 100);
+    }
+    
+    return pc;
+}
 
         async function createAndSendOffer(userId, pc) {
             try {
-                const offer = await pc.createOffer();
+                const offer = await pc.createOffer({
+                    offerToReceiveVideo: true,
+                    offerToReceiveAudio: true
+                });
+                
                 await pc.setLocalDescription(offer);
+                
                 await sendSignal('offer', userId, {
                     sdp: offer.sdp,
                     type: offer.type
                 });
+                
             } catch (error) {
                 console.error('Error creating offer:', error);
             }
@@ -1174,6 +1270,7 @@
                     sdp: answer.sdp,
                     type: answer.type
                 });
+                
             } catch (error) {
                 console.error('Error handling offer:', error);
             }
@@ -1181,6 +1278,7 @@
 
         async function handleAnswer(fromUserId, answer) {
             const pc = state.peerConnections.get(fromUserId);
+            
             if (pc) {
                 try {
                     await pc.setRemoteDescription(new RTCSessionDescription(answer));
@@ -1192,65 +1290,94 @@
 
         async function handleIceCandidate(fromUserId, candidate) {
             const pc = state.peerConnections.get(fromUserId);
-            if (pc) {
+            
+            if (pc && pc.remoteDescription) {
                 try {
                     await pc.addIceCandidate(new RTCIceCandidate(candidate));
                 } catch (error) {
                     console.error('Error adding ICE candidate:', error);
                 }
+            } else {
+                if (!state.pendingCandidates.has(fromUserId)) {
+                    state.pendingCandidates.set(fromUserId, []);
+                }
+                state.pendingCandidates.get(fromUserId).push(candidate);
             }
         }
 
-        // Обработка удаленного потока
+        // ===== STREAM HANDLING =====
         async function handleRemoteStream(userId, userName, stream) {
-            console.log(`Handling remote stream for ${userName}`);
+    console.log(`Handling remote stream for ${userName}, tracks:`, {
+        audio: stream.getAudioTracks().length,
+        video: stream.getVideoTracks().length
+    });
+    
+    // Сохраняем информацию об участнике
+    state.participants.set(userId, { userName, stream });
+    
+    // Устанавливаем видеопоток
+    await videoManager.setVideoStream(userId, stream, userName);
+    
+    // Настраиваем детекцию звука
+    if (stream.getAudioTracks().length > 0) {
+        setupAudioDetection(stream, userId);
+    }
+    
+    // Обновляем UI
+    updateLayout();
+    updateParticipantCount();
+}
+
+        function removeParticipant(userId) {
+            console.log(`Removing participant ${userId}`);
             
-            state.participants.set(userId, { userName, stream });
-            
-            // Создаем видео тайл для участника
-            const grid = document.getElementById('videosGrid');
-            let tile = document.querySelector(`[data-user-id="${userId}"]`);
-            
-            if (!tile) {
-                tile = createVideoTile(userId, userName);
-                grid.appendChild(tile);
+            const pc = state.peerConnections.get(userId);
+            if (pc) {
+                pc.close();
+                state.peerConnections.delete(userId);
             }
             
-            const video = tile.querySelector('video');
-            video.srcObject = stream;
-            video.play().catch(() => {});
+            const audioProcessor = state.audioProcessors.get(userId);
+            if (audioProcessor) {
+                try {
+                    audioProcessor.microphone.disconnect();
+                    audioProcessor.audioContext.close();
+                } catch (e) {}
+                state.audioProcessors.delete(userId);
+            }
             
-            // Настраиваем детекцию звука
-            setupAudioDetection(stream, userId);
+            clearTimeout(state.speakingTimeouts.get(userId));
+            state.speakingTimeouts.delete(userId);
+            state.connectionStates.delete(userId);
+            
+            state.participants.delete(userId);
+            videoManager.removeVideo(userId);
+            
+            if (state.currentSpeaker === userId) {
+                switchToGridView();
+            }
             
             updateLayout();
             updateParticipantCount();
         }
 
-        function createVideoTile(userId, userName) {
-            const tile = document.createElement('div');
-            tile.className = 'video-tile';
-            tile.dataset.userId = userId;
+        function attemptReconnect(userId, userName) {
+            const attempts = state.reconnectAttempts.get(userId) || 0;
             
-            const initials = (userName || 'U').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-            
-            tile.innerHTML = `
-                <video autoplay playsinline></video>
-                <div class="video-avatar">${initials}</div>
-                <div class="video-overlay">
-                    <div class="video-name">${escapeHtml(userName)}</div>
-                    <div class="video-indicators">
-                        <div class="indicator">
-                            <ion-icon name="mic"></ion-icon>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            return tile;
+            if (attempts < 3) {
+                state.reconnectAttempts.set(userId, attempts + 1);
+                console.log(`Reconnect attempt ${attempts + 1} for ${userName}`);
+                
+                setTimeout(() => {
+                    createPeerConnection(userId, userName, true);
+                }, 2000 * (attempts + 1));
+            } else {
+                removeParticipant(userId);
+                showToast(`${userName} отключился`, 'error');
+            }
         }
 
-        // Детекция говорящего
+        // ===== AUDIO DETECTION =====
         function setupAudioDetection(stream, userId) {
             if (!stream.getAudioTracks().length) return;
             
@@ -1264,7 +1391,7 @@
                 
                 microphone.connect(analyser);
                 
-                let speakingStartTime = null;
+                let speakingCounter = 0;
                 let isSpeaking = false;
                 
                 const checkAudioLevel = () => {
@@ -1282,19 +1409,24 @@
                             if (!isSpeaking) {
                                 tile.classList.add('speaking');
                                 isSpeaking = true;
-                                speakingStartTime = Date.now();
+                                speakingCounter = 0;
                             }
+                            speakingCounter++;
                             
-                            // Переключаем на говорящего через 3 секунды
-                            if (Date.now() - speakingStartTime > 3000 && state.participants.size > 1) {
+                            if (speakingCounter > 20 && userId !== 'local') {
                                 setMainSpeaker(userId);
                             }
-                        } else if (isSpeaking) {
-                            setTimeout(() => {
-                                tile.classList.remove('speaking');
-                                isSpeaking = false;
-                                speakingStartTime = null;
-                            }, 500);
+                            
+                            clearTimeout(state.speakingTimeouts.get(userId));
+                            const timeout = setTimeout(() => {
+                                if (tile) {
+                                    tile.classList.remove('speaking');
+                                    isSpeaking = false;
+                                    speakingCounter = 0;
+                                }
+                            }, 1000);
+                            
+                            state.speakingTimeouts.set(userId, timeout);
                         }
                     }
                     
@@ -1302,263 +1434,148 @@
                 };
                 
                 checkAudioLevel();
+                state.audioProcessors.set(userId, { audioContext, analyser, microphone });
                 
             } catch (error) {
                 console.error('Audio detection setup failed:', error);
             }
         }
 
-        // Переключение на вид говорящего
+        // ===== SPEAKER VIEW MANAGEMENT =====
         function setMainSpeaker(userId) {
-            if (state.currentSpeaker === userId && state.viewMode === 'speaker') return;
+            if (state.currentSpeaker === userId) return;
+            
+            const totalParticipants = state.participants.size + 1;
+            if (totalParticipants <= 2) return;
             
             state.currentSpeaker = userId;
             switchToSpeakerView(userId);
         }
 
         function switchToSpeakerView(speakerId) {
-            const grid = document.getElementById('videosGrid');
-            const speakerView = document.getElementById('speakerView');
-            const mainSpeaker = document.getElementById('mainSpeaker');
-            const thumbnails = document.getElementById('thumbnailsStrip');
+    const grid = document.getElementById('videosGrid');
+    const mainSpeaker = document.getElementById('mainSpeaker');
+    const thumbnails = document.getElementById('thumbnailsStrip');
+    
+    const speakerStream = videoManager.videoStreams.get(speakerId);
+    if (!speakerStream) return;
+    
+    state.viewMode = 'speaker';
+    grid.style.display = 'none';
+    mainSpeaker.style.display = 'flex';
+    thumbnails.style.display = 'flex';
+    
+    // Очищаем контейнеры
+    mainSpeaker.innerHTML = '';
+    thumbnails.innerHTML = '';
+    
+    // Создаем главное видео
+    const participant = state.participants.get(speakerId);
+    const mainTile = videoManager._createVideoTile(speakerId, participant ? participant.userName : 'Speaker');
+    mainSpeaker.appendChild(mainTile);
+    
+    const mainVideo = mainTile.querySelector('video');
+    mainVideo.srcObject = speakerStream;
+    mainVideo.play().catch(() => {});
+    
+    // Добавляем миниатюры других участников
+    videoManager.videoStreams.forEach((stream, userId) => {
+        if (userId !== speakerId) {
+            const userInfo = userId === 'local' ? { userName: 'Вы' } : state.participants.get(userId);
+            const thumbTile = videoManager._createVideoTile(userId, userInfo ? userInfo.userName : 'User');
+            thumbTile.onclick = () => setMainSpeaker(userId);
+            thumbnails.appendChild(thumbTile);
             
-            const participant = state.participants.get(speakerId);
-            if (!participant) return;
-            
-            state.viewMode = 'speaker';
-            grid.style.display = 'none';
-            speakerView.classList.add('active');
-            
-            // Перемещаем видео говорящего в главную область
-            const speakerTile = document.querySelector(`[data-user-id="${speakerId}"]`);
-            if (speakerTile) {
-                mainSpeaker.innerHTML = '';
-                mainSpeaker.appendChild(speakerTile.cloneNode(true));
-                speakerTile.remove();
-            }
-            
-            // Перемещаем остальных в миниатюры
-            thumbnails.innerHTML = '';
-            state.participants.forEach((p, id) => {
-                if (id !== speakerId) {
-                    const tile = createVideoTile(id, p.userName);
-                    tile.onclick = () => setMainSpeaker(id);
-                    thumbnails.appendChild(tile);
-                    
-                    const video = tile.querySelector('video');
-                    video.srcObject = p.stream;
-                    video.play().catch(() => {});
-                }
-            });
-            
-            document.getElementById('layoutToggleBtn').innerHTML = '<ion-icon name="person-outline"></ion-icon>';
+            const thumbVideo = thumbTile.querySelector('video');
+            thumbVideo.srcObject = stream;
+            thumbVideo.play().catch(() => {});
         }
+    });
+}
 
-        function switchToGridView() {
-            const grid = document.getElementById('videosGrid');
-            const speakerView = document.getElementById('speakerView');
-            
-            state.viewMode = 'grid';
-            state.currentSpeaker = null;
-            
-            grid.style.display = 'grid';
-            speakerView.classList.remove('active');
-            
-            // Возвращаем всех в сетку
-            grid.innerHTML = '';
-            state.participants.forEach((p, id) => {
-                const tile = createVideoTile(id, p.userName);
-                grid.appendChild(tile);
-                
-                const video = tile.querySelector('video');
-                video.srcObject = p.stream;
-                video.play().catch(() => {});
-            });
-            
-            updateLayout();
-            
-            document.getElementById('layoutToggleBtn').innerHTML = '<ion-icon name="grid-outline"></ion-icon>';
-        }
+       function switchToGridView() {
+    const grid = document.getElementById('videosGrid');
+    const mainSpeaker = document.getElementById('mainSpeaker');
+    const thumbnails = document.getElementById('thumbnailsStrip');
+    
+    state.viewMode = 'grid';
+    state.currentSpeaker = null;
+    
+    grid.style.display = 'grid';
+    mainSpeaker.style.display = 'none';
+    thumbnails.style.display = 'none';
+    
+    // Восстанавливаем видеопотоки в сетке
+    videoManager.restoreVideoStreams();
+    
+    updateLayout();
+}
 
-        function toggleLayout() {
-            if (state.viewMode === 'grid' && state.participants.size > 0) {
-                const firstParticipantId = state.participants.keys().next().value;
-                switchToSpeakerView(firstParticipantId);
-            } else {
-                switchToGridView();
-            }
-        }
-
-        // Удаление участника
-        function removeParticipant(userId) {
-            console.log(`Removing participant ${userId}`);
+        // ===== INITIALIZATION =====
+        async function initialize() {
+            if (state.initialized) return;
+            state.initialized = true;
             
-            const pc = state.peerConnections.get(userId);
-            if (pc) {
-                pc.close();
-                state.peerConnections.delete(userId);
-            }
-            
-            state.participants.delete(userId);
-            
-            const tile = document.querySelector(`[data-user-id="${userId}"]`);
-            if (tile) tile.remove();
-            
-            if (state.currentSpeaker === userId) {
-                switchToGridView();
-            }
-            
-            updateLayout();
-            updateParticipantCount();
-        }
-
-        // Обновление макета
-        function updateLayout() {
-            const grid = document.getElementById('videosGrid');
-            const tileCount = grid.querySelectorAll('.video-tile').length;
-            
-            grid.dataset.count = Math.min(tileCount, 9);
-            
-            // Автоматически переключаем на вид спикера при большом количестве участников
-            if (tileCount > 4 && state.viewMode === 'grid' && state.currentSpeaker) {
-                switchToSpeakerView(state.currentSpeaker);
-            }
-        }
-
-        function updateParticipantCount() {
-            const count = state.participants.size + 1;
-            const text = count === 1 ? '1 участник' : `${count} участников`;
-            document.getElementById('participantCount').textContent = text;
-        }
-
-        // Контролы
-        function toggleMicrophone() {
-            const btn = document.getElementById('micBtn');
-            const indicator = document.getElementById('floatingMicIndicator');
-            
-            if (state.localStream) {
-                const audioTrack = state.localStream.getAudioTracks()[0];
-                if (audioTrack) {
-                    audioTrack.enabled = !audioTrack.enabled;
-                    
-                    if (audioTrack.enabled) {
-                        btn.classList.remove('muted');
-                        indicator?.classList.remove('muted');
-                        btn.innerHTML = '<ion-icon name="mic"></ion-icon>';
-                    } else {
-                        btn.classList.add('muted');
-                        indicator?.classList.add('muted');
-                        btn.innerHTML = '<ion-icon name="mic-off"></ion-icon>';
-                    }
-                }
-            }
-        }
-
-        function toggleCamera() {
-            const btn = document.getElementById('cameraBtn');
-            const indicator = document.getElementById('floatingCamIndicator');
-            const avatar = document.getElementById('localFloatingAvatar');
-            
-            if (state.localStream) {
-                const videoTrack = state.localStream.getVideoTracks()[0];
-                if (videoTrack) {
-                    videoTrack.enabled = !videoTrack.enabled;
-                    
-                    if (videoTrack.enabled) {
-                        btn.classList.remove('muted');
-                        indicator?.classList.remove('muted');
-                        btn.innerHTML = '<ion-icon name="videocam"></ion-icon>';
-                        if (avatar) avatar.style.display = 'none';
-                    } else {
-                        btn.classList.add('muted');
-                        indicator?.classList.add('muted');
-                        btn.innerHTML = '<ion-icon name="videocam-off"></ion-icon>';
-                        if (avatar) avatar.style.display = 'flex';
-                    }
-                }
-            }
-        }
-
-        async function toggleScreenShare() {
-            const btn = document.getElementById('screenBtn');
+            console.log('Initializing conference...');
+            showToast('Подключение к конференции...', 'info');
             
             try {
-                const screenStream = await navigator.mediaDevices.getDisplayMedia({
-                    video: { mediaSource: 'screen' },
-                    audio: true
+                state.localStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 1280, max: 1920 },
+                        height: { ideal: 720, max: 1080 },
+                        facingMode: 'user'
+                    },
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
                 });
                 
-                const videoTrack = screenStream.getVideoTracks()[0];
-                
-                state.peerConnections.forEach((pc) => {
-                    const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
-                    if (sender) sender.replaceTrack(videoTrack);
-                });
-                
-                videoTrack.onended = () => {
-                    const originalTrack = state.localStream.getVideoTracks()[0];
-                    state.peerConnections.forEach((pc) => {
-                        const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
-                        if (sender && originalTrack) sender.replaceTrack(originalTrack);
-                    });
-                    btn.classList.remove('active');
-                };
-                
-                btn.classList.add('active');
-                showToast('Демонстрация экрана включена', 'success');
+                console.log('Got local stream');
+                await videoManager.setVideoStream('local', state.localStream, 'Local');
+                setupAudioDetection(state.localStream, 'local');
                 
             } catch (error) {
-                showToast('Ошибка при демонстрации экрана', 'error');
+                console.error('Media access error:', error);
+                handleMediaError(error);
             }
+            
+            document.getElementById('loadingSpinner').style.display = 'none';
+            
+            startSignaling();
+            
+            await sendSignal('join', null, {
+                userId: CONFIG.userId,
+                userName: CONFIG.userName
+            });
+            
+            setTimeout(() => loadExistingParticipants(), 1000);
+            updateLayout();
+            
+            showToast('Подключено к конференции', 'success');
         }
 
-        // Чат
-        function toggleChat() {
-            const panel = document.getElementById('chatPanel');
-            const btn = document.getElementById('chatToggleBtn');
+        function handleMediaError(error) {
+            let message = 'Ошибка доступа к медиа устройствам';
             
-            panel.classList.toggle('open');
-            
-            if (panel.classList.contains('open')) {
-                btn.classList.add('active');
-                btn.innerHTML = '<ion-icon name="close-outline"></ion-icon>';
-            } else {
-                btn.classList.remove('active');
-                btn.innerHTML = '<ion-icon name="chatbubble-outline"></ion-icon>';
+            switch (error.name) {
+                case 'NotAllowedError':
+                    message = 'Доступ к камере/микрофону запрещен';
+                    break;
+                case 'NotFoundError':
+                    message = 'Камера или микрофон не найдены';
+                    break;
+                case 'NotReadableError':
+                    message = 'Камера или микрофон заняты';
+                    break;
             }
+            
+            showToast(message, 'error');
         }
 
-        function sendMessage() {
-            const input = document.getElementById('messageInput');
-            const message = input.value.trim();
-            
-            if (!message) return;
-            
-            sendSignal('chat', null, { message });
-            addChatMessage(CONFIG.userId, CONFIG.userName, message, true);
-            
-            input.value = '';
-        }
-
-        function addChatMessage(userId, userName, message, isOwn) {
-            const container = document.getElementById('chatMessages');
-            const messageEl = document.createElement('div');
-            messageEl.className = `message ${isOwn ? 'own' : ''}`;
-            
-            const time = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-            
-            messageEl.innerHTML = `
-                <div class="message-bubble">
-                    <div class="message-text">${escapeHtml(message)}</div>
-                    <div class="message-time">${time}</div>
-                </div>
-            `;
-            
-            container.appendChild(messageEl);
-            container.scrollTop = container.scrollHeight;
-        }
-
-        // Сигналинг
+        // ===== SIGNALING =====
         async function sendSignal(type, targetUserId, data = {}) {
             if (state.conferenceEnded) return;
             
@@ -1572,44 +1589,52 @@
             };
             
             try {
-                await fetch(CONFIG.signalingUrl, {
+                const response = await fetch(CONFIG.signalingUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(signal)
                 });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.lastId) {
+                        state.lastSignalId = Math.max(state.lastSignalId, result.lastId);
+                    }
+                }
             } catch (error) {
                 console.error('Error sending signal:', error);
             }
         }
 
-        let pollingInterval;
-        let lastSignalId = 0;
-
-        function startSignaling() {
-            pollingInterval = setInterval(async () => {
-                try {
-                    const response = await fetch(`${CONFIG.signalingUrl}?room_id=${CONFIG.roomCode}&last_id=${lastSignalId}`);
+        async function pollSignals() {
+            if (state.conferenceEnded) return;
+            
+            try {
+                const response = await fetch(`${CONFIG.signalingUrl}?room_id=${CONFIG.roomCode}&last_id=${state.lastSignalId}`);
+                
+                if (response.ok) {
+                    const signals = await response.json();
                     
-                    if (response.ok) {
-                        const signals = await response.json();
+                    for (const signal of signals) {
+                        if (signal.id > state.lastSignalId) {
+                            state.lastSignalId = signal.id;
+                        }
                         
-                        for (const signal of signals) {
-                            if (signal.id > lastSignalId) {
-                                lastSignalId = signal.id;
-                            }
-                            
-                            if (signal.from_user_id != CONFIG.userId) {
+                        if (signal.from_user_id != CONFIG.userId) {
+                            if (!signal.to_user_id || signal.to_user_id == CONFIG.userId) {
                                 await processSignal(signal);
                             }
                         }
                     }
-                } catch (error) {
-                    console.error('Error polling signals:', error);
                 }
-            }, 1000);
+            } catch (error) {
+                console.error('Error polling signals:', error);
+            }
         }
 
         async function processSignal(signal) {
+            if (state.conferenceEnded) return;
+            
             const data = signal.data ? JSON.parse(signal.data) : {};
             
             switch (signal.type) {
@@ -1626,11 +1651,10 @@
                     await handleIceCandidate(signal.from_user_id, data.candidate);
                     break;
                 case 'leave':
-                    removeParticipant(signal.from_user_id);
-                    showToast(`${signal.from_user_name} покинул конференцию`, 'info');
+                    handleParticipantLeft(signal.from_user_id, signal.from_user_name);
                     break;
                 case 'chat':
-                    addChatMessage(signal.from_user_id, signal.from_user_name, data.message, false);
+                    handleChatMessage(signal.from_user_id, signal.from_user_name, data.message);
                     break;
                 case 'host-end-conference':
                     handleHostEndConference();
@@ -1644,6 +1668,17 @@
                 showToast(`${userName} присоединился`, 'success');
                 createPeerConnection(userId, userName, true);
             }
+        }
+
+        function handleParticipantLeft(userId, userName) {
+            removeParticipant(userId);
+            showToast(`${userName} покинул конференцию`, 'info');
+        }
+
+        function handleHostEndConference() {
+            state.conferenceEnded = true;
+            showToast('Конференция завершена хостом', 'info');
+            setTimeout(() => window.location.href = '/conference', 3000);
         }
 
         async function loadExistingParticipants() {
@@ -1663,23 +1698,201 @@
             }
         }
 
-        // Покинуть конференцию
-        async function leaveConference() {
-            if (confirm('Вы уверены, что хотите покинуть конференцию?')) {
-                state.conferenceEnded = true;
-                
-                await sendSignal('leave');
-                
-                if (state.localStream) {
-                    state.localStream.getTracks().forEach(track => track.stop());
-                }
-                
-                state.peerConnections.forEach(pc => pc.close());
-                
-                clearInterval(pollingInterval);
-                
-                window.location.href = '/conference';
+        function startSignaling() {
+            if (state.pollingInterval) return;
+            
+            state.pollingInterval = setInterval(pollSignals, 1000);
+            state.heartbeatInterval = setInterval(() => {
+                sendSignal('heartbeat');
+            }, 10000);
+        }
+
+        function stopSignaling() {
+            if (state.pollingInterval) {
+                clearInterval(state.pollingInterval);
+                state.pollingInterval = null;
             }
+            if (state.heartbeatInterval) {
+                clearInterval(state.heartbeatInterval);
+                state.heartbeatInterval = null;
+            }
+        }
+
+        // ===== CONTROLS =====
+        function toggleMicrophone() {
+            const btn = document.getElementById('micBtn');
+            const indicator = document.getElementById('localMicIndicator');
+            
+            if (state.localStream) {
+                const audioTrack = state.localStream.getAudioTracks()[0];
+                if (audioTrack) {
+                    audioTrack.enabled = !audioTrack.enabled;
+                    
+                    if (audioTrack.enabled) {
+                        btn.classList.remove('muted');
+                        indicator.classList.remove('muted');
+                        btn.innerHTML = '<ion-icon name="mic"></ion-icon>';
+                    } else {
+                        btn.classList.add('muted');
+                        indicator.classList.add('muted');
+                        btn.innerHTML = '<ion-icon name="mic-off"></ion-icon>';
+                    }
+                }
+            }
+        }
+
+        function toggleCamera() {
+            const btn = document.getElementById('cameraBtn');
+            const indicator = document.getElementById('localCamIndicator');
+            
+            if (state.localStream) {
+                const videoTrack = state.localStream.getVideoTracks()[0];
+                if (videoTrack) {
+                    videoTrack.enabled = !videoTrack.enabled;
+                    
+                    if (videoTrack.enabled) {
+                        btn.classList.remove('muted');
+                        indicator.classList.remove('muted');
+                        btn.innerHTML = '<ion-icon name="videocam"></ion-icon>';
+                        videoManager._hideAvatar('local');
+                    } else {
+                        btn.classList.add('muted');
+                        indicator.classList.add('muted');
+                        btn.innerHTML = '<ion-icon name="videocam-off"></ion-icon>';
+                        videoManager._showAvatar('local');
+                    }
+                }
+            }
+        }
+
+        async function toggleScreenShare() {
+            const btn = document.getElementById('screenBtn');
+            
+            if (!state.isScreenSharing) {
+                try {
+                    const screenStream = await navigator.mediaDevices.getDisplayMedia({
+                        video: { mediaSource: 'screen' },
+                        audio: true
+                    });
+                    
+                    const videoTrack = screenStream.getVideoTracks()[0];
+                    
+                    state.peerConnections.forEach((pc) => {
+                        const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                        if (sender) sender.replaceTrack(videoTrack);
+                    });
+                    
+                    await videoManager.setVideoStream('local', screenStream, 'Screen Share');
+                    
+                    videoTrack.onended = () => stopScreenShare();
+                    
+                    state.isScreenSharing = true;
+                    btn.classList.add('active');
+                    showToast('Демонстрация экрана включена', 'success');
+                    
+                } catch (error) {
+                    showToast('Ошибка при демонстрации экрана', 'error');
+                }
+            } else {
+                stopScreenShare();
+            }
+        }
+
+        function stopScreenShare() {
+            const btn = document.getElementById('screenBtn');
+            
+            if (state.localStream) {
+                const videoTrack = state.localStream.getVideoTracks()[0];
+                
+                state.peerConnections.forEach((pc) => {
+                    const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                    if (sender && videoTrack) sender.replaceTrack(videoTrack);
+                });
+                
+                videoManager.setVideoStream('local', state.localStream, 'Local');
+            }
+            
+            state.isScreenSharing = false;
+            btn.classList.remove('active');
+            showToast('Демонстрация экрана выключена', 'info');
+        }
+
+        // ===== CHAT =====
+        function toggleChat() {
+            const panel = document.getElementById('chatPanel');
+            const btn = document.getElementById('chatToggleBtn');
+            
+            panel.classList.toggle('open');
+            
+            if (panel.classList.contains('open')) {
+                btn.classList.add('active');
+                btn.innerHTML = '<ion-icon name="close-outline"></ion-icon>';
+                setTimeout(() => {
+                    const messages = document.getElementById('chatMessages');
+                    messages.scrollTop = messages.scrollHeight;
+                }, 100);
+            } else {
+                btn.classList.remove('active');
+                btn.innerHTML = '<ion-icon name="chatbubble-outline"></ion-icon>';
+            }
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            sendSignal('chat', null, { message });
+            addChatMessage(CONFIG.userId, CONFIG.userName, message, true);
+            
+            input.value = '';
+            input.style.height = 'auto';
+        }
+
+        function handleChatMessage(userId, userName, message) {
+            addChatMessage(userId, userName, message, false);
+            
+            const panel = document.getElementById('chatPanel');
+            if (!panel.classList.contains('open')) {
+                showToast(`${userName}: ${message.substring(0, 30)}...`, 'info');
+            }
+        }
+
+        function addChatMessage(userId, userName, message, isOwn) {
+            const container = document.getElementById('chatMessages');
+            const messageEl = document.createElement('div');
+            messageEl.className = `message ${isOwn ? 'own' : ''}`;
+            
+            const time = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+            
+            messageEl.innerHTML = `
+                <div class="message-bubble">
+                    <div class="message-text">${escapeHtml(message)}</div>
+                    <div class="message-time">${time}</div>
+                </div>
+            `;
+            
+            container.appendChild(messageEl);
+            container.scrollTop = container.scrollHeight;
+            
+            fetch('/conference/send-message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `conference_id=${CONFIG.conferenceId}&message=${encodeURIComponent(message)}`
+            }).catch(error => console.error('Error saving message:', error));
+        }
+
+        function handleChatKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        function autoResize(textarea) {
+            textarea.style.height = 'auto';
+            textarea.style.height = Math.min(textarea.scrollHeight, 100) + 'px';
         }
 
         // ===== HOST CONTROLS =====
