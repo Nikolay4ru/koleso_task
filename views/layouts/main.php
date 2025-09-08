@@ -57,6 +57,38 @@ if (isset($_SESSION['user_id'])) {
                         </li>
                     </ul>
                 </li>
+
+
+                 <!-- Новый пункт меню -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                        <i class="bi bi-share me-1"></i>
+                        Файлы
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li>
+                            <a class="dropdown-item" href="/shares/upload">
+                                <i class="bi bi-cloud-upload me-2"></i>
+                                Загрузить и поделиться
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="/shares/my">
+                                <i class="bi bi-link-45deg me-2"></i>
+                                Мои ссылки
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item" href="/files/gallery">
+                                <i class="bi bi-images me-2"></i>
+                                Галерея файлов
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+
+                
                 <li class="nav-item">
     <a class="nav-link" href="/conference">
         <i class="bi bi-camera-video"></i> Конференции
