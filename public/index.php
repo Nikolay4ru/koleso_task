@@ -519,6 +519,66 @@ switch ($uri) {
         } elseif (preg_match('/^\/file\/preview\/(\d+)$/', $uri, $matches)) {
             $controller = new FileController($db);
             $controller->preview($matches[1]);
+
+
+        } elseif ($uri === '/shares/create') {
+    $controller = new \App\Controllers\FileShareController($db);
+    $controller->create();
+
+    } elseif ($uri === '/shares/upload') {
+    $controller = new \App\Controllers\FileShareController($db);
+    $controller->uploadPage();
+
+// Быстрое создание ссылки (загрузка + создание за один запрос)
+} elseif ($uri === '/shares/quick-create') {
+    $controller = new \App\Controllers\FileShareController($db);
+    $controller->quickShare();
+
+// Обновленный маршрут для загрузки файлов (с поддержкой типа 'share')
+} elseif ($uri === '/files/upload') {
+    $controller = new \App\Controllers\FileController($db);
+    $controller->upload();
+
+
+// Мои ссылки
+} elseif ($uri === '/shares/my') {
+    $controller = new \App\Controllers\FileShareController($db);
+    $controller->myShares();
+
+// Просмотр файла по короткой ссылке
+} elseif (preg_match('/^\/s\/([a-zA-Z0-9]+)$/', $uri, $matches)) {
+    $controller = new \App\Controllers\FileShareController($db);
+    $controller->view($matches[1]);
+
+// Предпросмотр файла по короткой ссылке
+} elseif (preg_match('/^\/s\/([a-zA-Z0-9]+)\/preview$/', $uri, $matches)) {
+    $controller = new \App\Controllers\FileShareController($db);
+    $controller->preview($matches[1]);
+
+// Скачивание файла по короткой ссылке
+} elseif (preg_match('/^\/s\/([a-zA-Z0-9]+)\/download$/', $uri, $matches)) {
+    $controller = new \App\Controllers\FileShareController($db);
+    $controller->download($matches[1]);
+
+// Статистика ссылки
+} elseif (preg_match('/^\/shares\/([a-zA-Z0-9]+)\/stats$/', $uri, $matches)) {
+    $controller = new \App\Controllers\FileShareController($db);
+    $controller->stats($matches[1]);
+
+// Деактивация ссылки
+} elseif (preg_match('/^\/shares\/([a-zA-Z0-9]+)\/deactivate$/', $uri, $matches)) {
+    $controller = new \App\Controllers\FileShareController($db);
+    $controller->deactivate($matches[1]);
+
+// Удаление ссылки
+} elseif (preg_match('/^\/shares\/([a-zA-Z0-9]+)\/delete$/', $uri, $matches)) {
+    $controller = new \App\Controllers\FileShareController($db);
+    $controller->delete($matches[1]);
+
+// Генерация предпросмотра для файла
+} elseif (preg_match('/^\/files\/(\d+)\/generate-preview$/', $uri, $matches)) {
+    $controller = new \App\Controllers\FileShareController($db);
+    $controller->generatePreview($matches[1]);
             
         // Загруженные файлы (статические)
         } elseif (preg_match('/^\/uploads\/(.+)$/', $uri, $matches)) {
