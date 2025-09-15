@@ -1,0 +1,1943 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Management System</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #4F46E5;
+            --primary-dark: #4338CA;
+            --secondary: #7C3AED;
+            --success: #10B981;
+            --warning: #F59E0B;
+            --danger: #EF4444;
+            --info: #3B82F6;
+            --dark: #1F2937;
+            --gray: #6B7280;
+            --gray-light: #D1D5DB;
+            --gray-lighter: #E5E7EB;
+            --gray-lightest: #F3F4F6;
+            --white: #FFFFFF;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --radius: 0.5rem;
+            --radius-lg: 0.75rem;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: var(--dark);
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(0); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid var(--gray-light);
+            border-radius: 50%;
+            border-top-color: var(--primary);
+            animation: spin 1s linear infinite;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--gray-lightest);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--gray-light);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--gray);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext } = React;
+
+        // API Configuration
+        const API_URL = window.location.hostname === 'localhost' 
+            ? 'http://localhost:3000/api' 
+            : '/api';
+
+        // Auth Context
+        const AuthContext = createContext();
+
+        // Socket Context
+        const SocketContext = createContext();
+
+        // API Service
+        class ApiService {
+            constructor() {
+                this.token = localStorage.getItem('token');
+            }
+
+            setToken(token) {
+                this.token = token;
+                if (token) {
+                    localStorage.setItem('token', token);
+                } else {
+                    localStorage.removeItem('token');
+                }
+            }
+
+            async request(endpoint, options = {}) {
+                const config = {
+                    ...options,
+                    headers: {
+                        ...options.headers,
+                        'Authorization': this.token ? `Bearer ${this.token}` : undefined
+                    }
+                };
+
+                if (!(options.body instanceof FormData)) {
+                    config.headers['Content-Type'] = 'application/json';
+                    if (options.body) {
+                        config.body = JSON.stringify(options.body);
+                    }
+                }
+
+                const response = await fetch(`${API_URL}${endpoint}`, config);
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'API Error');
+                }
+
+                return response.json();
+            }
+
+            // Auth methods
+            async login(email, password) {
+                const data = await this.request('/auth/login', {
+                    method: 'POST',
+                    body: { email, password }
+                });
+                this.setToken(data.token);
+                return data;
+            }
+
+            async register(email, password, name) {
+                const data = await this.request('/auth/register', {
+                    method: 'POST',
+                    body: { email, password, name }
+                });
+                this.setToken(data.token);
+                return data;
+            }
+
+            async getProfile() {
+                return this.request('/auth/profile');
+            }
+
+            async updateNotifications(settings) {
+                return this.request('/auth/notifications', {
+                    method: 'PUT',
+                    body: settings
+                });
+            }
+
+            async getTelegramToken() {
+                return this.request('/auth/telegram-token', {
+                    method: 'POST'
+                });
+            }
+
+            // Tasks methods
+            async getTasks() {
+                return this.request('/tasks');
+            }
+
+            async createTask(task) {
+                return this.request('/tasks', {
+                    method: 'POST',
+                    body: task
+                });
+            }
+
+            async updateTask(id, updates) {
+                return this.request(`/tasks/${id}`, {
+                    method: 'PUT',
+                    body: updates
+                });
+            }
+
+            async deleteTask(id) {
+                return this.request(`/tasks/${id}`, {
+                    method: 'DELETE'
+                });
+            }
+
+            // Comments methods
+            async getComments(taskId) {
+                return this.request(`/tasks/${taskId}/comments`);
+            }
+
+            async addComment(taskId, text, files) {
+                const formData = new FormData();
+                formData.append('text', text);
+                
+                if (files) {
+                    for (const file of files) {
+                        formData.append('files', file);
+                    }
+                }
+
+                return this.request(`/tasks/${taskId}/comments`, {
+                    method: 'POST',
+                    body: formData
+                });
+            }
+
+            // Files methods
+            async uploadFile(file) {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                return this.request('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+            }
+
+            async getFile(id) {
+                return `${API_URL}/files/${id}`;
+            }
+
+            // Notifications methods
+            async getNotifications() {
+                return this.request('/notifications');
+            }
+
+            async markNotificationRead(id) {
+                return this.request(`/notifications/${id}/read`, {
+                    method: 'PUT'
+                });
+            }
+
+            // Admin methods
+            async getAdminStats() {
+                return this.request('/admin/stats');
+            }
+
+            async getUsers() {
+                return this.request('/admin/users');
+            }
+
+            async updateUser(id, updates) {
+                return this.request(`/admin/users/${id}`, {
+                    method: 'PUT',
+                    body: updates
+                });
+            }
+        }
+
+        const api = new ApiService();
+
+        // Main App Component
+        function App() {
+            const [user, setUser] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [socket, setSocket] = useState(null);
+
+            useEffect(() => {
+                checkAuth();
+                connectSocket();
+            }, []);
+
+            const checkAuth = async () => {
+                const token = localStorage.getItem('token');
+                if (token) {
+                    try {
+                        const profile = await api.getProfile();
+                        setUser(profile);
+                    } catch (error) {
+                        console.error('Auth check failed:', error);
+                        api.setToken(null);
+                    }
+                }
+                setLoading(false);
+            };
+
+            const connectSocket = () => {
+                const ws = io(window.location.hostname === 'localhost' ? 'http://localhost:3000' : '');
+                
+                ws.on('connect', () => {
+                    console.log('WebSocket connected');
+                    const token = localStorage.getItem('token');
+                    if (token) {
+                        ws.emit('authenticate', token);
+                    }
+                });
+
+                ws.on('notification', (data) => {
+                    console.log('New notification:', data);
+                    showNotification(data.data.message || 'Новое уведомление', data.type);
+                });
+
+                setSocket(ws);
+
+                return () => ws.disconnect();
+            };
+
+            const showNotification = (message, type = 'info') => {
+                // Можно добавить библиотеку для красивых уведомлений
+                console.log(`[${type}] ${message}`);
+            };
+
+            const login = async (email, password) => {
+                const data = await api.login(email, password);
+                setUser(data.user);
+                if (socket) {
+                    socket.emit('authenticate', data.token);
+                }
+                return data;
+            };
+
+            const register = async (email, password, name) => {
+                const data = await api.register(email, password, name);
+                setUser(data.user);
+                if (socket) {
+                    socket.emit('authenticate', data.token);
+                }
+                return data;
+            };
+
+            const logout = () => {
+                api.setToken(null);
+                setUser(null);
+                if (socket) {
+                    socket.disconnect();
+                    connectSocket();
+                }
+            };
+
+            if (loading) {
+                return (
+                    <div style={styles.loadingContainer}>
+                        <div className="spinner" style={{ width: 50, height: 50 }}></div>
+                    </div>
+                );
+            }
+
+            return (
+                <AuthContext.Provider value={{ user, login, register, logout }}>
+                    <SocketContext.Provider value={socket}>
+                        {user ? <Dashboard /> : <AuthPage />}
+                    </SocketContext.Provider>
+                </AuthContext.Provider>
+            );
+        }
+
+        // Auth Page Component
+        function AuthPage() {
+            const [mode, setMode] = useState('login');
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [name, setName] = useState('');
+            const [error, setError] = useState('');
+            const [loading, setLoading] = useState(false);
+            const { login, register } = useContext(AuthContext);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setError('');
+                setLoading(true);
+
+                try {
+                    if (mode === 'login') {
+                        await login(email, password);
+                    } else {
+                        await register(email, password, name);
+                    }
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div style={styles.authContainer}>
+                    <div style={styles.authCard} className="fade-in">
+                        <h1 style={styles.authTitle}>
+                            {mode === 'login' ? 'Вход в систему' : 'Регистрация'}
+                        </h1>
+                        
+                        <form onSubmit={handleSubmit} style={styles.authForm}>
+                            {mode === 'register' && (
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>Имя</label>
+                                    <input
+                                        type="text"
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                        style={styles.input}
+                                        placeholder="Ваше имя"
+                                        required
+                                    />
+                                </div>
+                            )}
+
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>Email</label>
+                                <input
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    style={styles.input}
+                                    placeholder="email@example.com"
+                                    required
+                                />
+                            </div>
+
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>Пароль</label>
+                                <input
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    style={styles.input}
+                                    placeholder="••••••••"
+                                    required
+                                    minLength="6"
+                                />
+                            </div>
+
+                            {error && (
+                                <div style={styles.errorMessage}>
+                                    {error}
+                                </div>
+                            )}
+
+                            <button 
+                                type="submit" 
+                                style={styles.submitButton}
+                                disabled={loading}
+                            >
+                                {loading ? (
+                                    <span className="spinner"></span>
+                                ) : (
+                                    mode === 'login' ? 'Войти' : 'Зарегистрироваться'
+                                )}
+                            </button>
+                        </form>
+
+                        <div style={styles.authSwitch}>
+                            {mode === 'login' ? (
+                                <>
+                                    Нет аккаунта?{' '}
+                                    <button
+                                        onClick={() => setMode('register')}
+                                        style={styles.linkButton}
+                                    >
+                                        Зарегистрироваться
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    Уже есть аккаунт?{' '}
+                                    <button
+                                        onClick={() => setMode('login')}
+                                        style={styles.linkButton}
+                                    >
+                                        Войти
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Dashboard Component
+        function Dashboard() {
+            const [activeView, setActiveView] = useState('tasks');
+            const { user, logout } = useContext(AuthContext);
+            const socket = useContext(SocketContext);
+            const [notifications, setNotifications] = useState([]);
+            const [showNotifications, setShowNotifications] = useState(false);
+
+            useEffect(() => {
+                loadNotifications();
+            }, []);
+
+            const loadNotifications = async () => {
+                try {
+                    const data = await api.getNotifications();
+                    setNotifications(data);
+                } catch (error) {
+                    console.error('Failed to load notifications:', error);
+                }
+            };
+
+            return (
+                <div style={styles.dashboard}>
+                    {/* Sidebar */}
+                    <aside style={styles.sidebar}>
+                        <div style={styles.logo}>
+                            <h2>📋 TaskFlow</h2>
+                        </div>
+
+                        <nav style={styles.nav}>
+                            <button
+                                style={{
+                                    ...styles.navItem,
+                                    ...(activeView === 'tasks' ? styles.navItemActive : {})
+                                }}
+                                onClick={() => setActiveView('tasks')}
+                            >
+                                📌 Задачи
+                            </button>
+                            <button
+                                style={{
+                                    ...styles.navItem,
+                                    ...(activeView === 'profile' ? styles.navItemActive : {})
+                                }}
+                                onClick={() => setActiveView('profile')}
+                            >
+                                👤 Профиль
+                            </button>
+                            {user.role === 'admin' && (
+                                <button
+                                    style={{
+                                        ...styles.navItem,
+                                        ...(activeView === 'admin' ? styles.navItemActive : {})
+                                    }}
+                                    onClick={() => setActiveView('admin')}
+                                >
+                                    ⚙️ Админ панель
+                                </button>
+                            )}
+                        </nav>
+
+                        <div style={styles.userSection}>
+                            <div style={styles.userInfo}>
+                                <div style={styles.userName}>{user.name}</div>
+                                <div style={styles.userEmail}>{user.email}</div>
+                            </div>
+                            <button onClick={logout} style={styles.logoutButton}>
+                                Выйти
+                            </button>
+                        </div>
+                    </aside>
+
+                    {/* Main Content */}
+                    <main style={styles.mainContent}>
+                        {/* Header */}
+                        <header style={styles.header}>
+                            <h1 style={styles.pageTitle}>
+                                {activeView === 'tasks' && 'Управление задачами'}
+                                {activeView === 'profile' && 'Настройки профиля'}
+                                {activeView === 'admin' && 'Админ панель'}
+                            </h1>
+
+                            <div style={styles.headerActions}>
+                                <button
+                                    style={styles.notificationButton}
+                                    onClick={() => setShowNotifications(!showNotifications)}
+                                >
+                                    🔔
+                                    {notifications.filter(n => !n.read).length > 0 && (
+                                        <span style={styles.notificationBadge}>
+                                            {notifications.filter(n => !n.read).length}
+                                        </span>
+                                    )}
+                                </button>
+                            </div>
+                        </header>
+
+                        {/* Content */}
+                        <div style={styles.content}>
+                            {activeView === 'tasks' && <TasksView />}
+                            {activeView === 'profile' && <ProfileView />}
+                            {activeView === 'admin' && <AdminView />}
+                        </div>
+
+                        {/* Notifications Dropdown */}
+                        {showNotifications && (
+                            <div style={styles.notificationsDropdown}>
+                                <h3 style={styles.dropdownTitle}>Уведомления</h3>
+                                {notifications.length === 0 ? (
+                                    <p style={styles.emptyMessage}>Нет уведомлений</p>
+                                ) : (
+                                    notifications.map(notification => (
+                                        <div
+                                            key={notification.id}
+                                            style={{
+                                                ...styles.notificationItem,
+                                                ...(notification.read ? styles.notificationRead : {})
+                                            }}
+                                            onClick={() => markAsRead(notification.id)}
+                                        >
+                                            <div style={styles.notificationContent}>
+                                                {notification.data.message || 'Новое уведомление'}
+                                            </div>
+                                            <div style={styles.notificationTime}>
+                                                {new Date(notification.createdAt).toLocaleString('ru')}
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
+                    </main>
+                </div>
+            );
+        }
+
+        // Tasks View Component
+        function TasksView() {
+            const [tasks, setTasks] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [view, setView] = useState('kanban');
+            const [showCreateModal, setShowCreateModal] = useState(false);
+            const [selectedTask, setSelectedTask] = useState(null);
+
+            useEffect(() => {
+                loadTasks();
+            }, []);
+
+            const loadTasks = async () => {
+                try {
+                    const data = await api.getTasks();
+                    setTasks(data);
+                } catch (error) {
+                    console.error('Failed to load tasks:', error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleCreateTask = async (taskData) => {
+                try {
+                    const newTask = await api.createTask(taskData);
+                    setTasks([...tasks, newTask]);
+                    setShowCreateModal(false);
+                } catch (error) {
+                    console.error('Failed to create task:', error);
+                }
+            };
+
+            const handleUpdateTask = async (id, updates) => {
+                try {
+                    const updatedTask = await api.updateTask(id, updates);
+                    setTasks(tasks.map(t => t.id === id ? updatedTask : t));
+                } catch (error) {
+                    console.error('Failed to update task:', error);
+                }
+            };
+
+            const handleDeleteTask = async (id) => {
+                if (!confirm('Удалить задачу?')) return;
+                
+                try {
+                    await api.deleteTask(id);
+                    setTasks(tasks.filter(t => t.id !== id));
+                } catch (error) {
+                    console.error('Failed to delete task:', error);
+                }
+            };
+
+            if (loading) {
+                return <div className="spinner"></div>;
+            }
+
+            return (
+                <div style={styles.tasksContainer}>
+                    {/* Toolbar */}
+                    <div style={styles.toolbar}>
+                        <div style={styles.viewToggle}>
+                            <button
+                                style={{
+                                    ...styles.viewButton,
+                                    ...(view === 'kanban' ? styles.viewButtonActive : {})
+                                }}
+                                onClick={() => setView('kanban')}
+                            >
+                                Канбан
+                            </button>
+                            <button
+                                style={{
+                                    ...styles.viewButton,
+                                    ...(view === 'list' ? styles.viewButtonActive : {})
+                                }}
+                                onClick={() => setView('list')}
+                            >
+                                Список
+                            </button>
+                        </div>
+
+                        <button
+                            style={styles.createButton}
+                            onClick={() => setShowCreateModal(true)}
+                        >
+                            ➕ Новая задача
+                        </button>
+                    </div>
+
+                    {/* Tasks Display */}
+                    {view === 'kanban' ? (
+                        <KanbanView
+                            tasks={tasks}
+                            onUpdateTask={handleUpdateTask}
+                            onSelectTask={setSelectedTask}
+                        />
+                    ) : (
+                        <ListView
+                            tasks={tasks}
+                            onSelectTask={setSelectedTask}
+                            onDeleteTask={handleDeleteTask}
+                        />
+                    )}
+
+                    {/* Create Modal */}
+                    {showCreateModal && (
+                        <TaskModal
+                            onClose={() => setShowCreateModal(false)}
+                            onSave={handleCreateTask}
+                        />
+                    )}
+
+                    {/* Task Details Modal */}
+                    {selectedTask && (
+                        <TaskDetailsModal
+                            task={selectedTask}
+                            onClose={() => setSelectedTask(null)}
+                            onUpdate={handleUpdateTask}
+                            onDelete={handleDeleteTask}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        // Kanban View Component
+        function KanbanView({ tasks, onUpdateTask, onSelectTask }) {
+            const columns = [
+                { id: 'backlog', title: 'Очередь', color: '#6B7280' },
+                { id: 'in_progress', title: 'В работе', color: '#3B82F6' },
+                { id: 'waiting_approval', title: 'На проверке', color: '#F59E0B' },
+                { id: 'done', title: 'Выполнено', color: '#10B981' }
+            ];
+
+            const handleDragStart = (e, task) => {
+                e.dataTransfer.setData('taskId', task.id);
+            };
+
+            const handleDragOver = (e) => {
+                e.preventDefault();
+            };
+
+            const handleDrop = (e, newStatus) => {
+                e.preventDefault();
+                const taskId = parseInt(e.dataTransfer.getData('taskId'));
+                onUpdateTask(taskId, { status: newStatus });
+            };
+
+            return (
+                <div style={styles.kanbanBoard}>
+                    {columns.map(column => (
+                        <div
+                            key={column.id}
+                            style={styles.kanbanColumn}
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, column.id)}
+                        >
+                            <div style={{...styles.columnHeader, borderColor: column.color}}>
+                                <h3 style={styles.columnTitle}>{column.title}</h3>
+                                <span style={styles.columnCount}>
+                                    {tasks.filter(t => t.status === column.id).length}
+                                </span>
+                            </div>
+
+                            <div style={styles.columnContent}>
+                                {tasks
+                                    .filter(task => task.status === column.id)
+                                    .map(task => (
+                                        <div
+                                            key={task.id}
+                                            style={styles.taskCard}
+                                            draggable
+                                            onDragStart={(e) => handleDragStart(e, task)}
+                                            onClick={() => onSelectTask(task)}
+                                        >
+                                            <h4 style={styles.taskTitle}>{task.title}</h4>
+                                            {task.description && (
+                                                <p style={styles.taskDescription}>
+                                                    {task.description}
+                                                </p>
+                                            )}
+                                            <div style={styles.taskMeta}>
+                                                <span style={{
+                                                    ...styles.priorityBadge,
+                                                    background: task.priority === 'urgent' ? '#FEE2E2' :
+                                                               task.priority === 'high' ? '#FED7AA' :
+                                                               task.priority === 'medium' ? '#DBEAFE' : '#D1FAE5',
+                                                    color: task.priority === 'urgent' ? '#DC2626' :
+                                                           task.priority === 'high' ? '#EA580C' :
+                                                           task.priority === 'medium' ? '#2563EB' : '#059669'
+                                                }}>
+                                                    {task.priority}
+                                                </span>
+                                                {task.deadline && (
+                                                    <span style={styles.deadline}>
+                                                        📅 {new Date(task.deadline).toLocaleDateString('ru')}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))
+                                }
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+
+        // Task Modal Component
+        function TaskModal({ task, onClose, onSave }) {
+            const [formData, setFormData] = useState({
+                title: task?.title || '',
+                description: task?.description || '',
+                priority: task?.priority || 'medium',
+                status: task?.status || 'backlog',
+                deadline: task?.deadline || '',
+                assignees: task?.assignees || [],
+                watchers: task?.watchers || []
+            });
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onSave(formData);
+            };
+
+            return (
+                <div style={styles.modalOverlay} onClick={onClose}>
+                    <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+                        <div style={styles.modalHeader}>
+                            <h2>{task ? 'Редактировать задачу' : 'Новая задача'}</h2>
+                            <button onClick={onClose} style={styles.closeButton}>✕</button>
+                        </div>
+
+                        <form onSubmit={handleSubmit} style={styles.modalBody}>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>Название</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={formData.title}
+                                    onChange={(e) => setFormData({...formData, title: e.target.value})}
+                                    style={styles.input}
+                                />
+                            </div>
+
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>Описание</label>
+                                <textarea
+                                    value={formData.description}
+                                    onChange={(e) => setFormData({...formData, description: e.target.value})}
+                                    style={styles.textarea}
+                                    rows="4"
+                                />
+                            </div>
+
+                            <div style={styles.formRow}>
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>Приоритет</label>
+                                    <select
+                                        value={formData.priority}
+                                        onChange={(e) => setFormData({...formData, priority: e.target.value})}
+                                        style={styles.select}
+                                    >
+                                        <option value="low">Низкий</option>
+                                        <option value="medium">Средний</option>
+                                        <option value="high">Высокий</option>
+                                        <option value="urgent">Срочный</option>
+                                    </select>
+                                </div>
+
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>Срок</label>
+                                    <input
+                                        type="date"
+                                        value={formData.deadline}
+                                        onChange={(e) => setFormData({...formData, deadline: e.target.value})}
+                                        style={styles.input}
+                                    />
+                                </div>
+                            </div>
+
+                            <div style={styles.modalFooter}>
+                                <button type="button" onClick={onClose} style={styles.cancelButton}>
+                                    Отмена
+                                </button>
+                                <button type="submit" style={styles.submitButton}>
+                                    {task ? 'Сохранить' : 'Создать'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        // Task Details Modal
+        function TaskDetailsModal({ task, onClose, onUpdate, onDelete }) {
+            const [comments, setComments] = useState([]);
+            const [newComment, setNewComment] = useState('');
+            const [files, setFiles] = useState([]);
+            const [loading, setLoading] = useState(false);
+
+            useEffect(() => {
+                loadComments();
+            }, [task.id]);
+
+            const loadComments = async () => {
+                try {
+                    const data = await api.getComments(task.id);
+                    setComments(data);
+                } catch (error) {
+                    console.error('Failed to load comments:', error);
+                }
+            };
+
+            const handleAddComment = async (e) => {
+                e.preventDefault();
+                if (!newComment.trim() && files.length === 0) return;
+
+                setLoading(true);
+                try {
+                    const comment = await api.addComment(task.id, newComment, files);
+                    setComments([...comments, comment]);
+                    setNewComment('');
+                    setFiles([]);
+                } catch (error) {
+                    console.error('Failed to add comment:', error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div style={styles.modalOverlay} onClick={onClose}>
+                    <div style={{...styles.modal, maxWidth: '800px'}} onClick={(e) => e.stopPropagation()}>
+                        <div style={styles.modalHeader}>
+                            <h2>{task.title}</h2>
+                            <button onClick={onClose} style={styles.closeButton}>✕</button>
+                        </div>
+
+                        <div style={styles.modalBody}>
+                            <div style={styles.taskDetails}>
+                                <p>{task.description || 'Нет описания'}</p>
+                                
+                                <div style={styles.taskMetaInfo}>
+                                    <div>Статус: <strong>{task.status}</strong></div>
+                                    <div>Приоритет: <strong>{task.priority}</strong></div>
+                                    <div>Срок: <strong>{task.deadline || 'Не указан'}</strong></div>
+                                    <div>Создатель: <strong>{task.creatorName}</strong></div>
+                                </div>
+                            </div>
+
+                            <div style={styles.commentsSection}>
+                                <h3>Комментарии ({comments.length})</h3>
+                                
+                                <div style={styles.commentsList}>
+                                    {comments.map(comment => (
+                                        <div key={comment.id} style={styles.comment}>
+                                            <div style={styles.commentHeader}>
+                                                <strong>{comment.userName}</strong>
+                                                <span style={styles.commentTime}>
+                                                    {new Date(comment.createdAt).toLocaleString('ru')}
+                                                </span>
+                                            </div>
+                                            <div style={styles.commentText}>{comment.text}</div>
+                                            {comment.files && comment.files.length > 0 && (
+                                                <div style={styles.commentFiles}>
+                                                    {comment.files.map(fileId => (
+                                                        <a key={fileId} href={`${API_URL}/files/${fileId}`} 
+                                                           target="_blank" style={styles.fileLink}>
+                                                            📎 Файл
+                                                        </a>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <form onSubmit={handleAddComment} style={styles.commentForm}>
+                                    <textarea
+                                        value={newComment}
+                                        onChange={(e) => setNewComment(e.target.value)}
+                                        placeholder="Добавить комментарий..."
+                                        style={styles.commentInput}
+                                        rows="3"
+                                    />
+                                    <div style={styles.commentActions}>
+                                        <input
+                                            type="file"
+                                            multiple
+                                            onChange={(e) => setFiles(Array.from(e.target.files))}
+                                            style={{display: 'none'}}
+                                            id="file-upload"
+                                        />
+                                        <label htmlFor="file-upload" style={styles.fileButton}>
+                                            📎 Прикрепить файлы
+                                        </label>
+                                        {files.length > 0 && (
+                                            <span style={styles.fileCount}>
+                                                Выбрано файлов: {files.length}
+                                            </span>
+                                        )}
+                                        <button type="submit" style={styles.sendButton} disabled={loading}>
+                                            {loading ? 'Отправка...' : 'Отправить'}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div style={styles.modalFooter}>
+                            <button onClick={() => onDelete(task.id)} style={styles.deleteButton}>
+                                Удалить задачу
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Profile View Component
+        function ProfileView() {
+            const { user } = useContext(AuthContext);
+            const [settings, setSettings] = useState({
+                emailNotifications: user.emailNotifications,
+                telegramNotifications: user.telegramNotifications
+            });
+            const [telegramLink, setTelegramLink] = useState('');
+            const [loading, setLoading] = useState(false);
+
+            const handleUpdateSettings = async () => {
+                setLoading(true);
+                try {
+                    await api.updateNotifications(settings);
+                    alert('Настройки сохранены');
+                } catch (error) {
+                    alert('Ошибка при сохранении настроек');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleGetTelegramLink = async () => {
+                try {
+                    const data = await api.getTelegramToken();
+                    setTelegramLink(data.link);
+                } catch (error) {
+                    alert('Ошибка при получении ссылки');
+                }
+            };
+
+            return (
+                <div style={styles.profileContainer}>
+                    <div style={styles.profileCard}>
+                        <h2>Информация о профиле</h2>
+                        <div style={styles.profileInfo}>
+                            <div style={styles.infoRow}>
+                                <span style={styles.infoLabel}>Имя:</span>
+                                <span>{user.name}</span>
+                            </div>
+                            <div style={styles.infoRow}>
+                                <span style={styles.infoLabel}>Email:</span>
+                                <span>{user.email}</span>
+                            </div>
+                            <div style={styles.infoRow}>
+                                <span style={styles.infoLabel}>Роль:</span>
+                                <span>{user.role === 'admin' ? 'Администратор' : 'Пользователь'}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style={styles.profileCard}>
+                        <h2>Настройки уведомлений</h2>
+                        
+                        <div style={styles.settingRow}>
+                            <label style={styles.checkboxLabel}>
+                                <input
+                                    type="checkbox"
+                                    checked={settings.emailNotifications}
+                                    onChange={(e) => setSettings({
+                                        ...settings,
+                                        emailNotifications: e.target.checked
+                                    })}
+                                />
+                                Email уведомления
+                            </label>
+                        </div>
+
+                        <div style={styles.settingRow}>
+                            <label style={styles.checkboxLabel}>
+                                <input
+                                    type="checkbox"
+                                    checked={settings.telegramNotifications}
+                                    onChange={(e) => setSettings({
+                                        ...settings,
+                                        telegramNotifications: e.target.checked
+                                    })}
+                                />
+                                Telegram уведомления
+                            </label>
+                        </div>
+
+                        <button 
+                            onClick={handleUpdateSettings}
+                            style={styles.saveButton}
+                            disabled={loading}
+                        >
+                            {loading ? 'Сохранение...' : 'Сохранить настройки'}
+                        </button>
+                    </div>
+
+                    <div style={styles.profileCard}>
+                        <h2>Подключение Telegram</h2>
+                        <p>Подключите Telegram для получения уведомлений в мессенджере.</p>
+                        
+                        <button onClick={handleGetTelegramLink} style={styles.telegramButton}>
+                            Получить ссылку для подключения
+                        </button>
+
+                        {telegramLink && (
+                            <div style={styles.telegramLink}>
+                                <p>Перейдите по ссылке для подключения:</p>
+                                <a href={telegramLink} target="_blank" style={styles.link}>
+                                    {telegramLink}
+                                </a>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // Admin View Component
+        function AdminView() {
+            const [stats, setStats] = useState(null);
+            const [users, setUsers] = useState([]);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                loadAdminData();
+            }, []);
+
+            const loadAdminData = async () => {
+                try {
+                    const [statsData, usersData] = await Promise.all([
+                        api.getAdminStats(),
+                        api.getUsers()
+                    ]);
+                    setStats(statsData);
+                    setUsers(usersData);
+                } catch (error) {
+                    console.error('Failed to load admin data:', error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            if (loading) {
+                return <div className="spinner"></div>;
+            }
+
+            return (
+                <div style={styles.adminContainer}>
+                    <div style={styles.statsGrid}>
+                        <div style={styles.statCard}>
+                            <div style={styles.statValue}>{stats.totalUsers}</div>
+                            <div style={styles.statLabel}>Пользователей</div>
+                        </div>
+                        <div style={styles.statCard}>
+                            <div style={styles.statValue}>{stats.totalTasks}</div>
+                            <div style={styles.statLabel}>Задач</div>
+                        </div>
+                        <div style={styles.statCard}>
+                            <div style={styles.statValue}>{stats.activeTasks}</div>
+                            <div style={styles.statLabel}>Активных задач</div>
+                        </div>
+                        <div style={styles.statCard}>
+                            <div style={styles.statValue}>{stats.completedTasks}</div>
+                            <div style={styles.statLabel}>Выполнено</div>
+                        </div>
+                        <div style={styles.statCard}>
+                            <div style={styles.statValue}>{stats.totalComments}</div>
+                            <div style={styles.statLabel}>Комментариев</div>
+                        </div>
+                        <div style={styles.statCard}>
+                            <div style={styles.statValue}>{stats.telegramUsers}</div>
+                            <div style={styles.statLabel}>Telegram подключений</div>
+                        </div>
+                    </div>
+
+                    <div style={styles.usersTable}>
+                        <h2>Пользователи</h2>
+                        <table style={styles.table}>
+                            <thead>
+                                <tr>
+                                    <th style={styles.th}>ID</th>
+                                    <th style={styles.th}>Имя</th>
+                                    <th style={styles.th}>Email</th>
+                                    <th style={styles.th}>Роль</th>
+                                    <th style={styles.th}>Telegram</th>
+                                    <th style={styles.th}>Дата регистрации</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {users.map(user => (
+                                    <tr key={user.id}>
+                                        <td style={styles.td}>{user.id}</td>
+                                        <td style={styles.td}>{user.name}</td>
+                                        <td style={styles.td}>{user.email}</td>
+                                        <td style={styles.td}>{user.role}</td>
+                                        <td style={styles.td}>{user.telegramChatId ? '✅' : '❌'}</td>
+                                        <td style={styles.td}>
+                                            {new Date(user.createdAt).toLocaleDateString('ru')}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        }
+
+        // Styles
+        const styles = {
+            // Auth styles
+            authContainer: {
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                minHeight: '100vh',
+                padding: '2rem'
+            },
+            authCard: {
+                background: 'white',
+                borderRadius: 'var(--radius-lg)',
+                padding: '2.5rem',
+                width: '100%',
+                maxWidth: '400px',
+                boxShadow: 'var(--shadow-lg)'
+            },
+            authTitle: {
+                fontSize: '1.75rem',
+                fontWeight: '700',
+                color: 'var(--dark)',
+                marginBottom: '2rem',
+                textAlign: 'center'
+            },
+            authForm: {
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1.5rem'
+            },
+            formGroup: {
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.5rem'
+            },
+            label: {
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                color: 'var(--gray)'
+            },
+            input: {
+                padding: '0.75rem',
+                border: '1px solid var(--gray-light)',
+                borderRadius: 'var(--radius)',
+                fontSize: '1rem',
+                transition: 'border-color 0.2s',
+                outline: 'none'
+            },
+            textarea: {
+                padding: '0.75rem',
+                border: '1px solid var(--gray-light)',
+                borderRadius: 'var(--radius)',
+                fontSize: '1rem',
+                resize: 'vertical',
+                outline: 'none',
+                fontFamily: 'inherit'
+            },
+            select: {
+                padding: '0.75rem',
+                border: '1px solid var(--gray-light)',
+                borderRadius: 'var(--radius)',
+                fontSize: '1rem',
+                background: 'white',
+                cursor: 'pointer',
+                outline: 'none'
+            },
+            submitButton: {
+                padding: '0.75rem',
+                background: 'var(--primary)',
+                color: 'white',
+                border: 'none',
+                borderRadius: 'var(--radius)',
+                fontSize: '1rem',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'background 0.2s',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center'
+            },
+            errorMessage: {
+                padding: '0.75rem',
+                background: '#FEE2E2',
+                color: '#DC2626',
+                borderRadius: 'var(--radius)',
+                fontSize: '0.875rem'
+            },
+            authSwitch: {
+                marginTop: '1.5rem',
+                textAlign: 'center',
+                color: 'var(--gray)'
+            },
+            linkButton: {
+                background: 'none',
+                border: 'none',
+                color: 'var(--primary)',
+                fontWeight: '600',
+                cursor: 'pointer',
+                textDecoration: 'underline'
+            },
+
+            // Dashboard styles
+            dashboard: {
+                display: 'flex',
+                minHeight: '100vh',
+                background: 'var(--gray-lightest)'
+            },
+            sidebar: {
+                width: '250px',
+                background: 'white',
+                boxShadow: 'var(--shadow)',
+                display: 'flex',
+                flexDirection: 'column'
+            },
+            logo: {
+                padding: '1.5rem',
+                borderBottom: '1px solid var(--gray-lighter)',
+                fontWeight: '700'
+            },
+            nav: {
+                flex: 1,
+                padding: '1rem'
+            },
+            navItem: {
+                display: 'block',
+                width: '100%',
+                padding: '0.75rem 1rem',
+                background: 'transparent',
+                border: 'none',
+                borderRadius: 'var(--radius)',
+                textAlign: 'left',
+                cursor: 'pointer',
+                transition: 'background 0.2s',
+                marginBottom: '0.5rem',
+                fontSize: '1rem'
+            },
+            navItemActive: {
+                background: 'var(--primary)',
+                color: 'white'
+            },
+            userSection: {
+                padding: '1rem',
+                borderTop: '1px solid var(--gray-lighter)'
+            },
+            userInfo: {
+                marginBottom: '1rem'
+            },
+            userName: {
+                fontWeight: '600',
+                color: 'var(--dark)'
+            },
+            userEmail: {
+                fontSize: '0.875rem',
+                color: 'var(--gray)'
+            },
+            logoutButton: {
+                width: '100%',
+                padding: '0.5rem',
+                background: 'var(--gray-lighter)',
+                border: 'none',
+                borderRadius: 'var(--radius)',
+                cursor: 'pointer',
+                transition: 'background 0.2s'
+            },
+            mainContent: {
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column'
+            },
+            header: {
+                background: 'white',
+                padding: '1.5rem 2rem',
+                boxShadow: 'var(--shadow)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+            },
+            pageTitle: {
+                fontSize: '1.5rem',
+                fontWeight: '700',
+                color: 'var(--dark)'
+            },
+            headerActions: {
+                display: 'flex',
+                gap: '1rem',
+                position: 'relative'
+            },
+            notificationButton: {
+                position: 'relative',
+                padding: '0.5rem',
+                background: 'var(--gray-lighter)',
+                border: 'none',
+                borderRadius: 'var(--radius)',
+                fontSize: '1.25rem',
+                cursor: 'pointer'
+            },
+            notificationBadge: {
+                position: 'absolute',
+                top: '-5px',
+                right: '-5px',
+                background: 'var(--danger)',
+                color: 'white',
+                borderRadius: '50%',
+                width: '20px',
+                height: '20px',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                fontSize: '0.75rem',
+                fontWeight: '600'
+            },
+            content: {
+                flex: 1,
+                padding: '2rem',
+                overflow: 'auto'
+            },
+
+            // Loading
+            loadingContainer: {
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                minHeight: '100vh'
+            },
+
+            // Tasks styles
+            tasksContainer: {
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1.5rem'
+            },
+            toolbar: {
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                background: 'white',
+                padding: '1rem',
+                borderRadius: 'var(--radius)',
+                boxShadow: 'var(--shadow)'
+            },
+            viewToggle: {
+                display: 'flex',
+                gap: '0.5rem'
+            },
+            viewButton: {
+                padding: '0.5rem 1rem',
+                background: 'var(--gray-lighter)',
+                border: 'none',
+                borderRadius: 'var(--radius)',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+            },
+            viewButtonActive: {
+                background: 'var(--primary)',
+                color: 'white'
+            },
+            createButton: {
+                padding: '0.5rem 1.5rem',
+                background: 'var(--success)',
+                color: 'white',
+                border: 'none',
+                borderRadius: 'var(--radius)',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'background 0.2s'
+            },
+
+            // Kanban styles
+            kanbanBoard: {
+                display: 'flex',
+                gap: '1.5rem',
+                overflowX: 'auto',
+                paddingBottom: '1rem'
+            },
+            kanbanColumn: {
+                flex: '0 0 300px',
+                background: 'white',
+                borderRadius: 'var(--radius)',
+                padding: '1rem',
+                minHeight: '500px'
+            },
+            columnHeader: {
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                paddingBottom: '1rem',
+                marginBottom: '1rem',
+                borderBottom: '2px solid',
+                borderColor: 'var(--gray-lighter)'
+            },
+            columnTitle: {
+                fontSize: '1.125rem',
+                fontWeight: '600',
+                color: 'var(--dark)'
+            },
+            columnCount: {
+                background: 'var(--gray-lighter)',
+                padding: '0.25rem 0.75rem',
+                borderRadius: '20px',
+                fontSize: '0.875rem',
+                fontWeight: '600'
+            },
+            columnContent: {
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem'
+            },
+            taskCard: {
+                background: 'var(--gray-lightest)',
+                padding: '1rem',
+                borderRadius: 'var(--radius)',
+                cursor: 'move',
+                transition: 'all 0.2s'
+            },
+            taskTitle: {
+                fontSize: '1rem',
+                fontWeight: '600',
+                color: 'var(--dark)',
+                marginBottom: '0.5rem'
+            },
+            taskDescription: {
+                fontSize: '0.875rem',
+                color: 'var(--gray)',
+                marginBottom: '0.75rem',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical'
+            },
+            taskMeta: {
+                display: 'flex',
+                gap: '0.5rem',
+                flexWrap: 'wrap'
+            },
+            priorityBadge: {
+                padding: '0.25rem 0.5rem',
+                borderRadius: '4px',
+                fontSize: '0.75rem',
+                fontWeight: '600',
+                textTransform: 'uppercase'
+            },
+            deadline: {
+                fontSize: '0.75rem',
+                color: 'var(--gray)'
+            },
+
+            // Modal styles
+            modalOverlay: {
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: 'rgba(0, 0, 0, 0.5)',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                zIndex: 1000,
+                padding: '2rem'
+            },
+            modal: {
+                background: 'white',
+                borderRadius: 'var(--radius-lg)',
+                width: '100%',
+                maxWidth: '600px',
+                maxHeight: '90vh',
+                overflow: 'auto'
+            },
+            modalHeader: {
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '1.5rem',
+                borderBottom: '1px solid var(--gray-lighter)'
+            },
+            modalBody: {
+                padding: '1.5rem'
+            },
+            modalFooter: {
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: '1rem',
+                padding: '1.5rem',
+                borderTop: '1px solid var(--gray-lighter)'
+            },
+            closeButton: {
+                background: 'none',
+                border: 'none',
+                fontSize: '1.5rem',
+                cursor: 'pointer',
+                color: 'var(--gray)'
+            },
+            formRow: {
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '1rem'
+            },
+            cancelButton: {
+                padding: '0.75rem 1.5rem',
+                background: 'var(--gray-lighter)',
+                border: 'none',
+                borderRadius: 'var(--radius)',
+                cursor: 'pointer'
+            },
+            saveButton: {
+                padding: '0.75rem 1.5rem',
+                background: 'var(--primary)',
+                color: 'white',
+                border: 'none',
+                borderRadius: 'var(--radius)',
+                fontWeight: '600',
+                cursor: 'pointer'
+            },
+            deleteButton: {
+                padding: '0.75rem 1.5rem',
+                background: 'var(--danger)',
+                color: 'white',
+                border: 'none',
+                borderRadius: 'var(--radius)',
+                cursor: 'pointer'
+            },
+
+            // Comments styles
+            commentsSection: {
+                marginTop: '2rem',
+                borderTop: '1px solid var(--gray-lighter)',
+                paddingTop: '1.5rem'
+            },
+            commentsList: {
+                maxHeight: '300px',
+                overflowY: 'auto',
+                marginBottom: '1rem'
+            },
+            comment: {
+                padding: '1rem',
+                background: 'var(--gray-lightest)',
+                borderRadius: 'var(--radius)',
+                marginBottom: '0.75rem'
+            },
+            commentHeader: {
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginBottom: '0.5rem'
+            },
+            commentTime: {
+                fontSize: '0.75rem',
+                color: 'var(--gray)'
+            },
+            commentText: {
+                fontSize: '0.875rem',
+                lineHeight: '1.5'
+            },
+            commentFiles: {
+                marginTop: '0.5rem',
+                display: 'flex',
+                gap: '0.5rem'
+            },
+            fileLink: {
+                color: 'var(--primary)',
+                textDecoration: 'none',
+                fontSize: '0.875rem'
+            },
+            commentForm: {
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1rem'
+            },
+            commentInput: {
+                padding: '0.75rem',
+                border: '1px solid var(--gray-light)',
+                borderRadius: 'var(--radius)',
+                resize: 'vertical',
+                fontFamily: 'inherit'
+            },
+            commentActions: {
+                display: 'flex',
+                gap: '1rem',
+                alignItems: 'center'
+            },
+            fileButton: {
+                padding: '0.5rem 1rem',
+                background: 'var(--gray-lighter)',
+                borderRadius: 'var(--radius)',
+                cursor: 'pointer',
+                fontSize: '0.875rem'
+            },
+            fileCount: {
+                fontSize: '0.875rem',
+                color: 'var(--gray)'
+            },
+            sendButton: {
+                marginLeft: 'auto',
+                padding: '0.5rem 1.5rem',
+                background: 'var(--primary)',
+                color: 'white',
+                border: 'none',
+                borderRadius: 'var(--radius)',
+                cursor: 'pointer'
+            },
+
+            // Profile styles
+            profileContainer: {
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1.5rem',
+                maxWidth: '800px'
+            },
+            profileCard: {
+                background: 'white',
+                padding: '2rem',
+                borderRadius: 'var(--radius)',
+                boxShadow: 'var(--shadow)'
+            },
+            profileInfo: {
+                marginTop: '1.5rem'
+            },
+            infoRow: {
+                display: 'flex',
+                gap: '1rem',
+                padding: '0.75rem 0',
+                borderBottom: '1px solid var(--gray-lighter)'
+            },
+            infoLabel: {
+                fontWeight: '600',
+                color: 'var(--gray)',
+                minWidth: '100px'
+            },
+            settingRow: {
+                padding: '1rem 0'
+            },
+            checkboxLabel: {
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                cursor: 'pointer'
+            },
+            telegramButton: {
+                padding: '0.75rem 1.5rem',
+                background: '#0088cc',
+                color: 'white',
+                border: 'none',
+                borderRadius: 'var(--radius)',
+                cursor: 'pointer',
+                marginTop: '1rem'
+            },
+            telegramLink: {
+                marginTop: '1rem',
+                padding: '1rem',
+                background: 'var(--gray-lightest)',
+                borderRadius: 'var(--radius)'
+            },
+            link: {
+                color: 'var(--primary)',
+                wordBreak: 'break-all'
+            },
+
+            // Admin styles
+            adminContainer: {
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2rem'
+            },
+            statsGrid: {
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '1.5rem'
+            },
+            statCard: {
+                background: 'white',
+                padding: '1.5rem',
+                borderRadius: 'var(--radius)',
+                boxShadow: 'var(--shadow)',
+                textAlign: 'center'
+            },
+            statValue: {
+                fontSize: '2rem',
+                fontWeight: '700',
+                color: 'var(--primary)',
+                marginBottom: '0.5rem'
+            },
+            statLabel: {
+                fontSize: '0.875rem',
+                color: 'var(--gray)',
+                textTransform: 'uppercase'
+            },
+            usersTable: {
+                background: 'white',
+                padding: '1.5rem',
+                borderRadius: 'var(--radius)',
+                boxShadow: 'var(--shadow)',
+                overflowX: 'auto'
+            },
+            table: {
+                width: '100%',
+                borderCollapse: 'collapse',
+                marginTop: '1rem'
+            },
+            th: {
+                textAlign: 'left',
+                padding: '0.75rem',
+                borderBottom: '2px solid var(--gray-lighter)',
+                fontWeight: '600',
+                color: 'var(--gray)'
+            },
+            td: {
+                padding: '0.75rem',
+                borderBottom: '1px solid var(--gray-lighter)'
+            },
+
+            // Task details
+            taskDetails: {
+                marginBottom: '1.5rem'
+            },
+            taskMetaInfo: {
+                marginTop: '1rem',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: '0.75rem',
+                padding: '1rem',
+                background: 'var(--gray-lightest)',
+                borderRadius: 'var(--radius)'
+            },
+
+            // Notifications dropdown
+            notificationsDropdown: {
+                position: 'absolute',
+                top: '60px',
+                right: '2rem',
+                background: 'white',
+                borderRadius: 'var(--radius)',
+                boxShadow: 'var(--shadow-lg)',
+                width: '350px',
+                maxHeight: '400px',
+                overflow: 'auto',
+                zIndex: 100
+            },
+            dropdownTitle: {
+                padding: '1rem',
+                borderBottom: '1px solid var(--gray-lighter)',
+                fontWeight: '600'
+            },
+            notificationItem: {
+                padding: '1rem',
+                borderBottom: '1px solid var(--gray-lighter)',
+                cursor: 'pointer',
+                transition: 'background 0.2s'
+            },
+            notificationRead: {
+                opacity: 0.6
+            },
+            notificationContent: {
+                marginBottom: '0.25rem'
+            },
+            notificationTime: {
+                fontSize: '0.75rem',
+                color: 'var(--gray)'
+            },
+            emptyMessage: {
+                padding: '2rem',
+                textAlign: 'center',
+                color: 'var(--gray)'
+            }
+        };
+
+        // Responsive adjustments
+        if (window.innerWidth <= 768) {
+            styles.dashboard.flexDirection = 'column';
+            styles.sidebar.width = '100%';
+            styles.kanbanBoard.flexDirection = 'column';
+            styles.kanbanColumn.flex = '1';
+            styles.formRow.gridTemplateColumns = '1fr';
+            styles.statsGrid.gridTemplateColumns = 'repeat(2, 1fr)';
+        }
+
+        // Render the app
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
