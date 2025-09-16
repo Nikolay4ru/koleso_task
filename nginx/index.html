@@ -8,6 +8,8 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+   
     <style>
         * {
             margin: 0;
@@ -281,6 +283,27 @@
         }
 
         const api = new ApiService();
+
+
+
+        ApiService.prototype.getTaskChat = function(taskId) {
+            return this.request(`/tasks/${taskId}/chat`);
+        };
+        
+        ApiService.prototype.sendTaskChatMessage = function(taskId, text, files) {
+            const formData = new FormData();
+            formData.append('text', text);
+            if (files) for (const file of files) formData.append('files', file);
+            return this.request(`/tasks/${taskId}/chat`, { method: 'POST', body: formData });
+        };
+        ApiService.prototype.getTaskFiles = function(taskId) {
+            return this.request(`/tasks/${taskId}/files`);
+        };
+        ApiService.prototype.uploadTaskFile = function(taskId, file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            return this.request(`/tasks/${taskId}/files`, { method: 'POST', body: formData });
+        };
 
         // Main App Component
         function App() {
@@ -761,6 +784,58 @@
             );
         }
 
+
+        // Представление списком
+        function ListView({ tasks, onSelectTask, onDeleteTask }) {
+    return (
+        <div style={{
+            background: 'white',
+            borderRadius: 'var(--radius)',
+            boxShadow: 'var(--shadow)',
+            padding: '1rem'
+        }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                    <tr>
+                        <th style={{ ...styles.th, minWidth: 80 }}>Название</th>
+                        <th style={styles.th}>Описание</th>
+                        <th style={styles.th}>Статус</th>
+                        <th style={styles.th}>Приоритет</th>
+                        <th style={styles.th}>Срок</th>
+                        <th style={styles.th}>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {tasks.map(task => (
+                        <tr key={task.id}>
+                            <td style={styles.td}>
+                                <button 
+                                    style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer' }}
+                                    onClick={() => onSelectTask(task)}
+                                >
+                                    {task.title}
+                                </button>
+                            </td>
+                            <td style={styles.td}>{task.description}</td>
+                            <td style={styles.td}>{task.status}</td>
+                            <td style={styles.td}>{task.priority}</td>
+                            <td style={styles.td}>{task.deadline ? new Date(task.deadline).toLocaleDateString('ru') : ''}</td>
+                            <td style={styles.td}>
+                                <button 
+                                    style={{ ...styles.deleteButton, padding: '0.25rem 0.75rem', fontSize: '0.9rem' }}
+                                    onClick={() => onDeleteTask(task.id)}
+                                >
+                                    Удалить
+                                </button>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
         // Kanban View Component
         function KanbanView({ tasks, onUpdateTask, onSelectTask }) {
             const columns = [
@@ -862,14 +937,13 @@
                 onSave(formData);
             };
 
-            return (
+             return (
                 <div style={styles.modalOverlay} onClick={onClose}>
                     <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
                         <div style={styles.modalHeader}>
                             <h2>{task ? 'Редактировать задачу' : 'Новая задача'}</h2>
                             <button onClick={onClose} style={styles.closeButton}>✕</button>
                         </div>
-
                         <form onSubmit={handleSubmit} style={styles.modalBody}>
                             <div style={styles.formGroup}>
                                 <label style={styles.label}>Название</label>
@@ -877,18 +951,18 @@
                                     type="text"
                                     required
                                     value={formData.title}
-                                    onChange={(e) => setFormData({...formData, title: e.target.value})}
+                                    onChange={e => setFormData({...formData, title: e.target.value})}
                                     style={styles.input}
                                 />
                             </div>
-
                             <div style={styles.formGroup}>
-                                <label style={styles.label}>Описание</label>
+                                <label style={styles.label}>Описание <span style={{color:'#aaa'}}>(Markdown поддерживается)</span></label>
                                 <textarea
                                     value={formData.description}
-                                    onChange={(e) => setFormData({...formData, description: e.target.value})}
+                                    onChange={e => setFormData({...formData, description: e.target.value})}
                                     style={styles.textarea}
                                     rows="4"
+                                    placeholder="**Жирный**, _курсив_, списки, ссылки и др."
                                 />
                             </div>
 
@@ -934,6 +1008,7 @@
 
         // Task Details Modal
         function TaskDetailsModal({ task, onClose, onUpdate, onDelete }) {
+            const [activeTab, setActiveTab] = React.useState('description');
             const [comments, setComments] = useState([]);
             const [newComment, setNewComment] = useState('');
             const [files, setFiles] = useState([]);
@@ -969,91 +1044,232 @@
                 }
             };
 
+             function ChatView({ taskId }) {
+                const [messages, setMessages] = React.useState([]);
+                const [text, setText] = React.useState('');
+                const [files, setFiles] = React.useState([]);
+                const socket = React.useContext(SocketContext);
+                const { user } = React.useContext(AuthContext);
+
+                React.useEffect(() => {
+                    api.getTaskChat(taskId).then(setMessages);
+                    if (!socket) return;
+                    socket.emit('join_task_chat', taskId);
+                    const handler = msg => setMessages(m => [...m, msg]);
+                    socket.on('chat_message', handler);
+                    return () => socket.off('chat_message', handler);
+                }, [taskId, socket]);
+
+                const sendChatMessage = async (e) => {
+                    e.preventDefault();
+                    if (!text.trim() && files.length === 0) return;
+                    try {
+                        const msg = await api.sendTaskChatMessage(taskId, text, files);
+                        setText('');
+                        setFiles([]);
+                    } catch (err) {
+                        alert('Ошибка отправки: ' + err.message);
+                    }
+                };
+
+                return (
+                    <div>
+                        <div style={{maxHeight: 250, overflowY:'auto', marginBottom: 16}}>
+                            {messages.map(msg => (
+                                <div key={msg.id} style={styles.comment}>
+                                    <div style={styles.commentHeader}>
+                                        <strong>{msg.userName}</strong>
+                                        <span style={styles.commentTime}>
+                                            {new Date(msg.createdAt).toLocaleString('ru')}
+                                        </span>
+                                    </div>
+                                    <div style={styles.commentText}
+                                         dangerouslySetInnerHTML={{__html: marked.parse(msg.text || '')}}></div>
+                                    {msg.files && msg.files.length > 0 && (
+                                        <div style={styles.commentFiles}>
+                                            {msg.files.map(fid => (
+                                                <a key={fid} href={`${API_URL}/files/${fid}`} target="_blank" style={styles.fileLink}>📎</a>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                        <form onSubmit={sendChatMessage} style={styles.commentForm}>
+                            <textarea
+                                value={text}
+                                onChange={e => setText(e.target.value)}
+                                placeholder="Ваше сообщение (Markdown поддерживается)"
+                                style={styles.commentInput}
+                                rows="2"
+                            />
+                            <div style={styles.commentActions}>
+                                <input type="file" multiple style={{display:'none'}} id="chat-files"
+                                       onChange={e => setFiles(Array.from(e.target.files))}/>
+                                <label htmlFor="chat-files" style={styles.fileButton}>📎 Файл</label>
+                                {files.length > 0 && <span style={styles.fileCount}>Файлов: {files.length}</span>}
+                                <button type="submit" style={styles.sendButton}>Отправить</button>
+                            </div>
+                        </form>
+                    </div>
+                );
+            }
+
+            // --- Новый компонент TaskFilesView ---
+            function TaskFilesView({taskId}) {
+                const [files, setFiles] = React.useState([]);
+                const [uploading, setUploading] = React.useState(false);
+                React.useEffect(() => {
+                    api.getTaskFiles(taskId).then(setFiles);
+                }, [taskId]);
+                const handleUpload = async (e) => {
+                    e.preventDefault();
+                    const file = e.target.file.files[0];
+                    if (!file) return;
+                    setUploading(true);
+                    try {
+                        await api.uploadTaskFile(taskId, file);
+                        api.getTaskFiles(taskId).then(setFiles);
+                    } finally {
+                        setUploading(false);
+                    }
+                };
+                return (
+                    <div>
+                        <div style={{marginBottom: 8}}>
+                            {files.map(file => (
+                                <div key={file.id}>
+                                    <a href={`${API_URL}/files/${file.id}`} target="_blank">{file.originalName}</a>
+                                </div>
+                            ))}
+                        </div>
+                        <form onSubmit={handleUpload}>
+                            <input type="file" name="file" required />
+                            <button type="submit" disabled={uploading}>Загрузить</button>
+                        </form>
+                    </div>
+                );
+            }
+
+            // --- Описание/Комментарии/Чат/Файлы ---
             return (
                 <div style={styles.modalOverlay} onClick={onClose}>
-                    <div style={{...styles.modal, maxWidth: '800px'}} onClick={(e) => e.stopPropagation()}>
+                    <div style={{...styles.modal, maxWidth: '800px'}} onClick={e => e.stopPropagation()}>
                         <div style={styles.modalHeader}>
                             <h2>{task.title}</h2>
                             <button onClick={onClose} style={styles.closeButton}>✕</button>
                         </div>
-
                         <div style={styles.modalBody}>
-                            <div style={styles.taskDetails}>
-                                <p>{task.description || 'Нет описания'}</p>
-                                
-                                <div style={styles.taskMetaInfo}>
-                                    <div>Статус: <strong>{task.status}</strong></div>
-                                    <div>Приоритет: <strong>{task.priority}</strong></div>
-                                    <div>Срок: <strong>{task.deadline || 'Не указан'}</strong></div>
-                                    <div>Создатель: <strong>{task.creatorName}</strong></div>
-                                </div>
+                            <div style={{marginBottom: '1rem'}}>
+                                <button onClick={() => setActiveTab('description')}
+                                    style={activeTab==='description'?styles.navItemActive:styles.navItem}>Описание</button>
+                                <button onClick={() => setActiveTab('comments')}
+                                    style={activeTab==='comments'?styles.navItemActive:styles.navItem}>Комментарии</button>
+                                <button onClick={() => setActiveTab('chat')}
+                                    style={activeTab==='chat'?styles.navItemActive:styles.navItem}>Чат</button>
+                                <button onClick={() => setActiveTab('files')}
+                                    style={activeTab==='files'?styles.navItemActive:styles.navItem}>Файлы</button>
                             </div>
-
-                            <div style={styles.commentsSection}>
-                                <h3>Комментарии ({comments.length})</h3>
-                                
-                                <div style={styles.commentsList}>
-                                    {comments.map(comment => (
-                                        <div key={comment.id} style={styles.comment}>
-                                            <div style={styles.commentHeader}>
-                                                <strong>{comment.userName}</strong>
-                                                <span style={styles.commentTime}>
-                                                    {new Date(comment.createdAt).toLocaleString('ru')}
-                                                </span>
-                                            </div>
-                                            <div style={styles.commentText}>{comment.text}</div>
-                                            {comment.files && comment.files.length > 0 && (
-                                                <div style={styles.commentFiles}>
-                                                    {comment.files.map(fileId => (
-                                                        <a key={fileId} href={`${API_URL}/files/${fileId}`} 
-                                                           target="_blank" style={styles.fileLink}>
-                                                            📎 Файл
-                                                        </a>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-
-                                <form onSubmit={handleAddComment} style={styles.commentForm}>
-                                    <textarea
-                                        value={newComment}
-                                        onChange={(e) => setNewComment(e.target.value)}
-                                        placeholder="Добавить комментарий..."
-                                        style={styles.commentInput}
-                                        rows="3"
-                                    />
-                                    <div style={styles.commentActions}>
-                                        <input
-                                            type="file"
-                                            multiple
-                                            onChange={(e) => setFiles(Array.from(e.target.files))}
-                                            style={{display: 'none'}}
-                                            id="file-upload"
-                                        />
-                                        <label htmlFor="file-upload" style={styles.fileButton}>
-                                            📎 Прикрепить файлы
-                                        </label>
-                                        {files.length > 0 && (
-                                            <span style={styles.fileCount}>
-                                                Выбрано файлов: {files.length}
-                                            </span>
-                                        )}
-                                        <button type="submit" style={styles.sendButton} disabled={loading}>
-                                            {loading ? 'Отправка...' : 'Отправить'}
-                                        </button>
+                            {activeTab === 'description' && (
+                                <div>
+                                    <div dangerouslySetInnerHTML={{__html: marked.parse(task.description || '')}} />
+                                    <div style={styles.taskMetaInfo}>
+                                        <div>Статус: <strong>{task.status}</strong></div>
+                                        <div>Приоритет: <strong>{task.priority}</strong></div>
+                                        <div>Срок: <strong>{task.deadline || 'Не указан'}</strong></div>
+                                        <div>Создатель: <strong>{task.creatorName}</strong></div>
                                     </div>
-                                </form>
-                            </div>
+                                </div>
+                            )}
+                            {activeTab === 'comments' && (
+                                <CommentsSection task={task} />
+                            )}
+                            {activeTab === 'chat' && <ChatView taskId={task.id} />}
+                            {activeTab === 'files' && <TaskFilesView taskId={task.id} />}
                         </div>
-
                         <div style={styles.modalFooter}>
                             <button onClick={() => onDelete(task.id)} style={styles.deleteButton}>
                                 Удалить задачу
                             </button>
                         </div>
                     </div>
+                </div>
+            );
+        }
+
+
+
+
+
+         // --- Комментарии (оставляем как есть, только markdown в тексте) ---
+        function CommentsSection({ task }) {
+            const [comments, setComments] = React.useState([]);
+            const [newComment, setNewComment] = React.useState('');
+            const [files, setFiles] = React.useState([]);
+            const [loading, setLoading] = React.useState(false);
+
+            React.useEffect(() => {
+                api.getComments(task.id).then(setComments);
+            }, [task.id]);
+
+            const handleAddComment = async (e) => {
+                e.preventDefault();
+                if (!newComment.trim() && files.length === 0) return;
+                setLoading(true);
+                try {
+                    const comment = await api.addComment(task.id, newComment, files);
+                    setComments([...comments, comment]);
+                    setNewComment('');
+                    setFiles([]);
+                } catch (error) {
+                    console.error('Failed to add comment:', error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div style={styles.commentsSection}>
+                    <h3>Комментарии ({comments.length})</h3>
+                    <div style={styles.commentsList}>
+                        {comments.map(comment => (
+                            <div key={comment.id} style={styles.comment}>
+                                <div style={styles.commentHeader}>
+                                    <strong>{comment.userName}</strong>
+                                    <span style={styles.commentTime}>
+                                        {new Date(comment.createdAt).toLocaleString('ru')}
+                                    </span>
+                                </div>
+                                <div style={styles.commentText}
+                                     dangerouslySetInnerHTML={{__html: marked.parse(comment.text || '')}}/>
+                                {comment.files && comment.files.length > 0 && (
+                                    <div style={styles.commentFiles}>
+                                        {comment.files.map(fileId => (
+                                            <a key={fileId} href={`${API_URL}/files/${fileId}`} target="_blank" style={styles.fileLink}>📎 Файл</a>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                    <form onSubmit={handleAddComment} style={styles.commentForm}>
+                        <textarea
+                            value={newComment}
+                            onChange={e => setNewComment(e.target.value)}
+                            placeholder="Добавить комментарий... (Markdown поддерживается)"
+                            style={styles.commentInput}
+                            rows="3"
+                        />
+                        <div style={styles.commentActions}>
+                            <input type="file" multiple style={{display:'none'}} id="comment-files"
+                                   onChange={e => setFiles(Array.from(e.target.files))}/>
+                            <label htmlFor="comment-files" style={styles.fileButton}>📎 Прикрепить файлы</label>
+                            {files.length > 0 && <span style={styles.fileCount}>Выбрано файлов: {files.length}</span>}
+                            <button type="submit" style={styles.sendButton} disabled={loading}>
+                                {loading ? 'Отправка...' : 'Отправить'}
+                            </button>
+                        </div>
+                    </form>
                 </div>
             );
         }

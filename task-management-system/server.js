@@ -12,6 +12,9 @@ const path = require('path');
 const fs = require('fs').promises;
 const crypto = require('crypto');
 
+
+const ChatManager = require('./chat');
+
 // Конфигурация
 const config = {
     port: process.env.PORT || 3000,
@@ -93,19 +96,33 @@ class Database {
             comments: [],
             files: [],
             notifications: [],
-            telegramLinks: []
+            telegramLinks: [],
+             // Новые коллекции для чата
+            chats: [],
+            chatMessages: [],
+            chatMembers: [],
+            calls: []
         };
         this.init();
     }
 
-    async init() {
-        try {
-            const data = await fs.readFile(config.dbPath, 'utf8');
-            this.data = JSON.parse(data);
-        } catch (error) {
-            await this.save();
-        }
+   async init() {
+    try {
+        const data = await fs.readFile(config.dbPath, 'utf8');
+        this.data = JSON.parse(data);
+
+        // Гарантируем, что все коллекции существуют:
+        if (!this.data.users) this.data.users = [];
+        if (!this.data.tasks) this.data.tasks = [];
+        if (!this.data.comments) this.data.comments = [];
+        if (!this.data.files) this.data.files = [];
+        if (!this.data.notifications) this.data.notifications = [];
+        if (!this.data.telegramLinks) this.data.telegramLinks = [];
+        if (!this.data.chats) this.data.chats = [];
+    } catch (error) {
+        await this.save();
     }
+}
 
     async save() {
         await fs.mkdir(path.dirname(config.dbPath), { recursive: true });
@@ -121,11 +138,49 @@ class Database {
             role: userData.role || 'user',
             emailNotifications: true,
             telegramNotifications: false,
-            telegramChatId: null
+            telegramChatId: null,
+            avatar: userData.avatar || null,
+            status: 'offline',
+            lastSeen: new Date().toISOString()
         };
         this.data.users.push(user);
         await this.save();
         return user;
+    }
+
+     async addChatMessage(taskId, userId, userName, text, files = []) {
+        const msg = {
+            id: Date.now(),
+            taskId,
+            userId,
+            userName,
+            text,
+            files,
+            createdAt: new Date().toISOString()
+        };
+        this.data.chats.push(msg);
+        await this.save();
+        return msg;
+    }
+    async getChatMessages(taskId) {
+        return this.data.chats.filter(m => m.taskId === taskId);
+    }
+
+    // --- Файлы задачи ---
+    async addTaskFile(taskId, fileId) {
+        const task = this.data.tasks.find(t => t.id === taskId);
+        if (task) {
+            if (!task.files) task.files = [];
+            if (!task.files.includes(fileId)) task.files.push(fileId);
+            await this.save();
+            return true;
+        }
+        return false;
+    }
+    async getTaskFiles(taskId) {
+        const task = this.data.tasks.find(t => t.id === taskId);
+        if (!task || !task.files) return [];
+        return this.data.files.filter(f => task.files.includes(f.id));
     }
 
     async findUserByEmail(email) {
@@ -134,6 +189,19 @@ class Database {
 
     async findUserById(id) {
         return this.data.users.find(u => u.id === id);
+    }
+
+
+    async updateUserStatus(userId, status) {
+        const user = await this.findUserById(userId);
+        if (user) {
+            user.status = status;
+            if (status === 'offline') {
+                user.lastSeen = new Date().toISOString();
+            }
+            await this.save();
+        }
+        return user;
     }
 
     // Методы для работы с задачами
@@ -174,6 +242,7 @@ class Database {
         );
     }
 
+
     // Методы для комментариев
     async addComment(commentData) {
         const comment = {
@@ -190,7 +259,6 @@ class Database {
         return this.data.comments.filter(c => c.taskId === taskId);
     }
 
-    // Методы для файлов
     async addFile(fileData) {
         const file = {
             id: Date.now(),
@@ -219,7 +287,6 @@ class Database {
         return this.data.notifications.filter(n => n.userId === userId);
     }
 
-    // Telegram связь
     async linkTelegram(userId, chatId) {
         const user = await this.findUserById(userId);
         if (user) {
@@ -230,9 +297,28 @@ class Database {
         }
         return false;
     }
+
+
+    async getAllUsers() {
+        return this.data.users.map(u => ({
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            avatar: u.avatar,
+            status: u.status,
+            lastSeen: u.lastSeen
+        }));
+    }
+
+
+
 }
 
 const db = new Database();
+
+
+
+
 
 // Email сервис
 class EmailService {
@@ -832,6 +918,72 @@ app.put('/api/admin/users/:id', authMiddleware, adminMiddleware, async (req, res
     }
 });
 
+
+
+app.get('/api/tasks/:id/chat', authMiddleware, async (req, res) => {
+    try {
+        const msgs = await db.getChatMessages(parseInt(req.params.id));
+        res.json(msgs);
+    } catch (e) {
+        res.status(400).json({error: e.message});
+    }
+});
+app.post('/api/tasks/:id/chat', authMiddleware, upload.array('files', 5), async (req, res) => {
+    try {
+        const taskId = parseInt(req.params.id);
+        const files = [];
+        if (req.files) {
+            for (const file of req.files) {
+                const fileData = await db.addFile({
+                    originalName: file.originalname,
+                    filename: file.filename,
+                    path: file.path,
+                    size: file.size,
+                    mimetype: file.mimetype,
+                    uploaderId: req.user.id
+                });
+                files.push(fileData.id);
+            }
+        }
+        const msg = await db.addChatMessage(
+            taskId, req.user.id, req.user.name, req.body.text, files
+        );
+        io.to(`task-chat-${taskId}`).emit('chat_message', msg); // WebSocket
+        res.json(msg);
+    } catch (e) {
+        res.status(400).json({error: e.message});
+    }
+});
+
+// --- API для файлов задачи ---
+app.get('/api/tasks/:id/files', authMiddleware, async (req, res) => {
+    try {
+        const files = await db.getTaskFiles(parseInt(req.params.id));
+        res.json(files);
+    } catch (e) {
+        res.status(400).json({error: e.message});
+    }
+});
+app.post('/api/tasks/:id/files', authMiddleware, upload.single('file'), async (req, res) => {
+    try {
+        const taskId = parseInt(req.params.id);
+        if (!req.file) return res.status(400).json({error:'Файл не загружен'});
+        const fileData = await db.addFile({
+            originalName: req.file.originalname,
+            filename: req.file.filename,
+            path: req.file.path,
+            size: req.file.size,
+            mimetype: req.file.mimetype,
+            uploaderId: req.user.id
+        });
+        await db.addTaskFile(taskId, fileData.id);
+        res.json(fileData);
+    } catch (e) {
+        res.status(400).json({error: e.message});
+    }
+});
+
+
 // WebSocket для real-time уведомлений
 io.on('connection', (socket) => {
     console.log('New WebSocket connection');
@@ -849,6 +1001,13 @@ io.on('connection', (socket) => {
         } catch (error) {
             socket.emit('authenticated', { success: false });
         }
+
+        
+    });
+
+
+    socket.on('join_task_chat', (taskId) => {
+        socket.join(`task-chat-${taskId}`);
     });
 
     socket.on('disconnect', () => {
