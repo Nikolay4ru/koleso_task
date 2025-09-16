@@ -1,4 +1,4 @@
-// server.js - Основной файл сервера
+// server.js - Основной файл сервера с полной интеграцией чата
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
@@ -11,7 +11,6 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs').promises;
 const crypto = require('crypto');
-
 
 const ChatManager = require('./chat');
 
@@ -40,7 +39,7 @@ const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
         origin: "*",
-        methods: ["GET", "POST"]
+        methods: ["GET", "POST", "PUT", "DELETE"]
     }
 });
 
@@ -50,44 +49,7 @@ app.use(express.json());
 app.use(express.static('public'));
 app.use('/uploads', express.static('uploads'));
 
-// Инициализация Telegram бота
-let telegramBot = null;
-if (config.telegram.enabled) {
-    telegramBot = new TelegramBot(config.telegram.botToken, { polling: true });
-    setupTelegramBot();
-}
-
-// Настройка загрузки файлов
-const storage = multer.diskStorage({
-    destination: async (req, file, cb) => {
-        const uploadPath = path.join(config.uploadsDir, req.user.id.toString());
-        await fs.mkdir(uploadPath, { recursive: true });
-        cb(null, uploadPath);
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + path.extname(file.originalname));
-    }
-});
-
-const upload = multer({ 
-    storage,
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
-    fileFilter: (req, file, cb) => {
-        // Разрешенные типы файлов
-        const allowedTypes = /jpeg|jpg|png|gif|pdf|doc|docx|xls|xlsx|txt|zip|rar/;
-        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-        const mimetype = allowedTypes.test(file.mimetype);
-        
-        if (mimetype && extname) {
-            return cb(null, true);
-        } else {
-            cb(new Error('Неподдерживаемый тип файла'));
-        }
-    }
-});
-
-// База данных (простая JSON для демо, в продакшене используйте PostgreSQL/MongoDB)
+// База данных
 class Database {
     constructor() {
         this.data = {
@@ -96,93 +58,30 @@ class Database {
             comments: [],
             files: [],
             notifications: [],
-            telegramLinks: [],
-             // Новые коллекции для чата
             chats: [],
             chatMessages: [],
             chatMembers: [],
             calls: []
         };
-        this.init();
+        this.load();
     }
 
-   async init() {
-    try {
-        const data = await fs.readFile(config.dbPath, 'utf8');
-        this.data = JSON.parse(data);
-
-        // Гарантируем, что все коллекции существуют:
-        if (!this.data.users) this.data.users = [];
-        if (!this.data.tasks) this.data.tasks = [];
-        if (!this.data.comments) this.data.comments = [];
-        if (!this.data.files) this.data.files = [];
-        if (!this.data.notifications) this.data.notifications = [];
-        if (!this.data.telegramLinks) this.data.telegramLinks = [];
-        if (!this.data.chats) this.data.chats = [];
-    } catch (error) {
-        await this.save();
+    async load() {
+        try {
+            const data = await fs.readFile(config.dbPath, 'utf8');
+            this.data = JSON.parse(data);
+        } catch (error) {
+            await this.save();
+        }
     }
-}
 
     async save() {
-        await fs.mkdir(path.dirname(config.dbPath), { recursive: true });
+        const dir = path.dirname(config.dbPath);
+        await fs.mkdir(dir, { recursive: true });
         await fs.writeFile(config.dbPath, JSON.stringify(this.data, null, 2));
     }
 
-    // Методы для работы с пользователями
-    async createUser(userData) {
-        const user = {
-            id: Date.now(),
-            ...userData,
-            createdAt: new Date().toISOString(),
-            role: userData.role || 'user',
-            emailNotifications: true,
-            telegramNotifications: false,
-            telegramChatId: null,
-            avatar: userData.avatar || null,
-            status: 'offline',
-            lastSeen: new Date().toISOString()
-        };
-        this.data.users.push(user);
-        await this.save();
-        return user;
-    }
-
-     async addChatMessage(taskId, userId, userName, text, files = []) {
-        const msg = {
-            id: Date.now(),
-            taskId,
-            userId,
-            userName,
-            text,
-            files,
-            createdAt: new Date().toISOString()
-        };
-        this.data.chats.push(msg);
-        await this.save();
-        return msg;
-    }
-    async getChatMessages(taskId) {
-        return this.data.chats.filter(m => m.taskId === taskId);
-    }
-
-    // --- Файлы задачи ---
-    async addTaskFile(taskId, fileId) {
-        const task = this.data.tasks.find(t => t.id === taskId);
-        if (task) {
-            if (!task.files) task.files = [];
-            if (!task.files.includes(fileId)) task.files.push(fileId);
-            await this.save();
-            return true;
-        }
-        return false;
-    }
-    async getTaskFiles(taskId) {
-        const task = this.data.tasks.find(t => t.id === taskId);
-        if (!task || !task.files) return [];
-        return this.data.files.filter(f => task.files.includes(f.id));
-    }
-
+    // User methods
     async findUserByEmail(email) {
         return this.data.users.find(u => u.email === email);
     }
@@ -191,6 +90,16 @@ class Database {
         return this.data.users.find(u => u.id === id);
     }
 
+    async createUser(userData) {
+        const user = {
+            id: Date.now(),
+            ...userData,
+            createdAt: new Date().toISOString()
+        };
+        this.data.users.push(user);
+        await this.save();
+        return user;
+    }
 
     async updateUserStatus(userId, status) {
         const user = await this.findUserById(userId);
@@ -204,7 +113,7 @@ class Database {
         return user;
     }
 
-    // Методы для работы с задачами
+    // Task methods
     async createTask(taskData) {
         const task = {
             id: Date.now(),
@@ -237,13 +146,95 @@ class Database {
         }
         return this.data.tasks.filter(t => 
             t.creatorId === userId || 
-            t.assignees.includes(userId) || 
-            t.watchers.includes(userId)
+            (t.assignees && t.assignees.includes(userId)) ||
+            (t.watchers && t.watchers.includes(userId))
         );
     }
 
+    async getTask(id) {
+        return this.data.tasks.find(t => t.id === id);
+    }
 
-    // Методы для комментариев
+    async deleteTask(id) {
+        const index = this.data.tasks.findIndex(t => t.id === id);
+        if (index !== -1) {
+            this.data.tasks.splice(index, 1);
+            await this.save();
+            return true;
+        }
+        return false;
+    }
+
+    // File methods
+    async addFile(fileData) {
+        const file = {
+            id: Date.now(),
+            ...fileData,
+            uploadedAt: new Date().toISOString()
+        };
+        this.data.files.push(file);
+        await this.save();
+        return file;
+    }
+
+    async addTaskFile(taskId, fileId) {
+        const task = this.data.tasks.find(t => t.id === taskId);
+        if (task) {
+            if (!task.files) task.files = [];
+            if (!task.files.includes(fileId)) task.files.push(fileId);
+            await this.save();
+            return true;
+        }
+        return false;
+    }
+
+    async getTaskFiles(taskId) {
+        const task = this.data.tasks.find(t => t.id === taskId);
+        if (!task || !task.files) return [];
+        return this.data.files.filter(f => task.files.includes(f.id));
+    }
+
+
+
+    async getNotifications(userId) {
+        return this.data.notifications.filter(n => n.userId === userId);
+    }
+
+    async markNotificationRead(notificationId, userId) {
+        const notification = this.data.notifications.find(n => 
+            n.id === notificationId && n.userId === userId
+        );
+        if (notification) {
+            notification.read = true;
+            await this.save();
+            return true;
+        }
+        return false;
+    }
+
+    // Legacy chat methods for task chat compatibility
+    async addChatMessage(taskId, userId, userName, text, files = []) {
+        const message = {
+            id: Date.now(),
+            taskId,
+            userId,
+            userName,
+            text,
+            files,
+            createdAt: new Date().toISOString()
+        };
+        if (!this.data.chats) this.data.chats = [];
+        this.data.chats.push(message);
+        await this.save();
+        return message;
+    }
+
+    async getChatMessages(taskId) {
+        if (!this.data.chats) return [];
+        return this.data.chats.filter(m => m.taskId === taskId);
+    }
+
+    // Comment methods
     async addComment(commentData) {
         const comment = {
             id: Date.now(),
@@ -258,366 +249,111 @@ class Database {
     async getComments(taskId) {
         return this.data.comments.filter(c => c.taskId === taskId);
     }
-
-    async addFile(fileData) {
-        const file = {
-            id: Date.now(),
-            ...fileData,
-            uploadedAt: new Date().toISOString()
-        };
-        this.data.files.push(file);
-        await this.save();
-        return file;
-    }
-
-    // Методы для уведомлений
-    async createNotification(notificationData) {
-        const notification = {
-            id: Date.now(),
-            ...notificationData,
-            createdAt: new Date().toISOString(),
-            read: false
-        };
-        this.data.notifications.push(notification);
-        await this.save();
-        return notification;
-    }
-
-    async getNotifications(userId) {
-        return this.data.notifications.filter(n => n.userId === userId);
-    }
-
-    async linkTelegram(userId, chatId) {
-        const user = await this.findUserById(userId);
-        if (user) {
-            user.telegramChatId = chatId;
-            user.telegramNotifications = true;
-            await this.save();
-            return true;
-        }
-        return false;
-    }
-
-
-    async getAllUsers() {
-        return this.data.users.map(u => ({
-            id: u.id,
-            name: u.name,
-            email: u.email,
-            avatar: u.avatar,
-            status: u.status,
-            lastSeen: u.lastSeen
-        }));
-    }
-
-
-
 }
 
+// Инициализация базы данных
 const db = new Database();
 
+// Инициализация менеджера чата
+const chatManager = new ChatManager(db, io);
 
-
-
-
-// Email сервис
-class EmailService {
-    constructor() {
-        this.transporter = nodemailer.createTransport({
-            host: config.email.host,
-            port: config.email.port,
-            secure: false,
-            auth: {
-                user: config.email.user,
-                pass: config.email.pass
-            }
-        });
+// Настройка загрузки файлов
+const storage = multer.diskStorage({
+    destination: async (req, file, cb) => {
+        const uploadPath = path.join(config.uploadsDir, req.user.id.toString());
+        await fs.mkdir(uploadPath, { recursive: true });
+        cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + path.extname(file.originalname));
     }
+});
 
-    async sendEmail(to, subject, html) {
-        try {
-            await this.transporter.sendMail({
-                from: `"Task Management System" <${config.email.user}>`,
-                to,
-                subject,
-                html
-            });
-            return true;
-        } catch (error) {
-            console.error('Email error:', error);
-            return false;
-        }
-    }
-
-    async sendTaskNotification(user, task, action) {
-        const subject = `Задача "${task.title}" - ${action}`;
-        const html = `
-            <h2>Уведомление о задаче</h2>
-            <p><strong>Задача:</strong> ${task.title}</p>
-            <p><strong>Действие:</strong> ${action}</p>
-            <p><strong>Описание:</strong> ${task.description || 'Нет описания'}</p>
-            <p><strong>Приоритет:</strong> ${task.priority}</p>
-            <p><strong>Статус:</strong> ${task.status}</p>
-            <hr>
-            <p><a href="${process.env.APP_URL || 'http://localhost:3000'}/task/${task.id}">Открыть задачу</a></p>
-        `;
-        return this.sendEmail(user.email, subject, html);
-    }
-
-    async sendCommentNotification(user, task, comment, author) {
-        const subject = `Новый комментарий в задаче "${task.title}"`;
-        const html = `
-            <h2>Новый комментарий</h2>
-            <p><strong>Задача:</strong> ${task.title}</p>
-            <p><strong>Автор:</strong> ${author.name}</p>
-            <p><strong>Комментарий:</strong></p>
-            <blockquote>${comment.text}</blockquote>
-            <hr>
-            <p><a href="${process.env.APP_URL || 'http://localhost:3000'}/task/${task.id}#comment-${comment.id}">Перейти к комментарию</a></p>
-        `;
-        return this.sendEmail(user.email, subject, html);
-    }
-}
-
-const emailService = new EmailService();
-
-// Telegram бот
-function setupTelegramBot() {
-    if (!telegramBot) return;
-
-    // Команда /start
-    telegramBot.onText(/\/start (.+)/, async (msg, match) => {
-        const chatId = msg.chat.id;
-        const token = match[1];
-        
-        // Проверяем токен и связываем с пользователем
-        const user = db.data.users.find(u => u.telegramToken === token);
-        if (user) {
-            await db.linkTelegram(user.id, chatId);
-            telegramBot.sendMessage(chatId, 
-                `✅ Аккаунт успешно привязан!\nТеперь вы будете получать уведомления о задачах.`
-            );
+const upload = multer({ 
+    storage,
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+    fileFilter: (req, file, cb) => {
+        const allowedTypes = /jpeg|jpg|png|gif|pdf|doc|docx|xls|xlsx|zip|rar/;
+        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+        const mimetype = allowedTypes.test(file.mimetype);
+        if (mimetype && extname) {
+            return cb(null, true);
         } else {
-            telegramBot.sendMessage(chatId, 
-                '❌ Неверный токен. Получите новый токен в настройках профиля.'
-            );
-        }
-    });
-
-    // Команда /tasks
-    telegramBot.onText(/\/tasks/, async (msg) => {
-        const chatId = msg.chat.id;
-        const user = db.data.users.find(u => u.telegramChatId === chatId);
-        
-        if (user) {
-            const tasks = await db.getTasks(user.id, user.role);
-            const activeTasks = tasks.filter(t => t.status !== 'done');
-            
-            if (activeTasks.length === 0) {
-                telegramBot.sendMessage(chatId, '📋 У вас нет активных задач');
-            } else {
-                let message = '📋 *Ваши активные задачи:*\n\n';
-                activeTasks.forEach((task, index) => {
-                    const priority = {
-                        low: '🟢',
-                        medium: '🟡',
-                        high: '🟠',
-                        urgent: '🔴'
-                    }[task.priority];
-                    
-                    message += `${index + 1}. ${priority} *${task.title}*\n`;
-                    message += `   Статус: ${task.status}\n`;
-                    message += `   Срок: ${task.deadline || 'Не указан'}\n\n`;
-                });
-                
-                telegramBot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
-            }
-        } else {
-            telegramBot.sendMessage(chatId, 
-                '❌ Аккаунт не привязан. Используйте команду /start с токеном из настроек профиля.'
-            );
-        }
-    });
-}
-
-// Notification сервис
-class NotificationService {
-    async notify(userId, type, data) {
-        const user = await db.findUserById(userId);
-        if (!user) return;
-
-        // Создаем уведомление в БД
-        await db.createNotification({
-            userId,
-            type,
-            data,
-            read: false
-        });
-
-        // Отправляем через WebSocket
-        io.to(`user-${userId}`).emit('notification', {
-            type,
-            data,
-            timestamp: new Date().toISOString()
-        });
-
-        // Email уведомление
-        if (user.emailNotifications) {
-            switch (type) {
-                case 'task_assigned':
-                    await emailService.sendTaskNotification(user, data.task, 'Вам назначена задача');
-                    break;
-                case 'task_updated':
-                    await emailService.sendTaskNotification(user, data.task, 'Задача обновлена');
-                    break;
-                case 'new_comment':
-                    await emailService.sendCommentNotification(user, data.task, data.comment, data.author);
-                    break;
-            }
-        }
-
-        // Telegram уведомление
-        if (user.telegramNotifications && user.telegramChatId && telegramBot) {
-            let message = '';
-            switch (type) {
-                case 'task_assigned':
-                    message = `📌 *Новая задача:* ${data.task.title}\n\nПриоритет: ${data.task.priority}\nСрок: ${data.task.deadline || 'Не указан'}`;
-                    break;
-                case 'task_updated':
-                    message = `📝 *Задача обновлена:* ${data.task.title}\n\nИзменения: ${data.changes}`;
-                    break;
-                case 'new_comment':
-                    message = `💬 *Новый комментарий в задаче:* ${data.task.title}\n\n${data.author.name}: ${data.comment.text}`;
-                    break;
-            }
-            
-            if (message) {
-                telegramBot.sendMessage(user.telegramChatId, message, { parse_mode: 'Markdown' });
-            }
+            cb(new Error('Invalid file type'));
         }
     }
+});
 
-    async notifyMultiple(userIds, type, data) {
-        for (const userId of userIds) {
-            await this.notify(userId, type, data);
-        }
+// Email транспорт
+const emailTransporter = nodemailer.createTransport({
+    host: config.email.host,
+    port: config.email.port,
+    secure: false,
+    auth: {
+        user: config.email.user,
+        pass: config.email.pass
     }
-}
+});
 
-const notificationService = new NotificationService();
-
-// Middleware для проверки токена
+// Middleware для аутентификации
 const authMiddleware = async (req, res, next) => {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    
-    if (!token) {
-        return res.status(401).json({ error: 'Необходима авторизация' });
-    }
-
     try {
+        const token = req.headers.authorization?.split(' ')[1];
+        if (!token) {
+            return res.status(401).json({ error: 'Не авторизован' });
+        }
         const decoded = jwt.verify(token, config.jwtSecret);
         const user = await db.findUserById(decoded.id);
-        
         if (!user) {
-            throw new Error();
+            return res.status(401).json({ error: 'Пользователь не найден' });
         }
-
         req.user = user;
-        req.token = token;
         next();
     } catch (error) {
         res.status(401).json({ error: 'Неверный токен' });
     }
 };
 
-// Middleware для проверки прав администратора
+// Middleware для проверки админа
 const adminMiddleware = (req, res, next) => {
     if (req.user.role !== 'admin') {
-        return res.status(403).json({ error: 'Недостаточно прав' });
+        return res.status(403).json({ error: 'Доступ запрещен' });
     }
     next();
 };
 
-// API Routes
+// ====================== API ROUTES ======================
 
-// Регистрация
+// Аутентификация
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { email, password, name } = req.body;
-
-        // Проверка существующего пользователя
+        
         const existingUser = await db.findUserByEmail(email);
         if (existingUser) {
-            return res.status(400).json({ error: 'Пользователь с таким email уже существует' });
+            return res.status(400).json({ error: 'Пользователь уже существует' });
         }
 
-        // Хеширование пароля
         const hashedPassword = await bcrypt.hash(password, 10);
-
-        // Создание пользователя
         const user = await db.createUser({
             email,
             password: hashedPassword,
             name,
-            role: email === config.adminEmail ? 'admin' : 'user'
+            role: email === config.adminEmail ? 'admin' : 'user',
+            avatar: null,
+            status: 'offline'
         });
 
-        // Генерация токена
         const token = jwt.sign({ id: user.id }, config.jwtSecret, { expiresIn: '7d' });
-
-        // Отправка приветственного письма
-        await emailService.sendEmail(
-            email,
-            'Добро пожаловать в Task Management System',
-            `<h1>Добро пожаловать, ${name}!</h1>
-            <p>Ваш аккаунт успешно создан.</p>
-            <p>Теперь вы можете управлять задачами и получать уведомления.</p>`
-        );
-
-        res.json({
-            token,
-            user: {
-                id: user.id,
-                email: user.email,
-                name: user.name,
-                role: user.role
-            }
-        });
+        
+        const { password: _, ...userWithoutPassword } = user;
+        res.json({ user: userWithoutPassword, token });
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
 });
 
-// Авторизация
-app.post('/api/auth/login', async (req, res) => {
-    try {
-        const { email, password } = req.body;
-
-        const user = await db.findUserByEmail(email);
-        if (!user) {
-            return res.status(401).json({ error: 'Неверный email или пароль' });
-        }
-
-        const isPasswordValid = await bcrypt.compare(password, user.password);
-        if (!isPasswordValid) {
-            return res.status(401).json({ error: 'Неверный email или пароль' });
-        }
-
-        const token = jwt.sign({ id: user.id }, config.jwtSecret, { expiresIn: '7d' });
-
-        res.json({
-            token,
-            user: {
-                id: user.id,
-                email: user.email,
-                name: user.name,
-                role: user.role
-            }
-        });
-    } catch (error) {
-        res.status(400).json({ error: error.message });
-    }
-});
 
 // Получение профиля
 app.get('/api/auth/profile', authMiddleware, async (req, res) => {
@@ -625,44 +361,72 @@ app.get('/api/auth/profile', authMiddleware, async (req, res) => {
     res.json(userWithoutPassword);
 });
 
-// Обновление настроек уведомлений
-app.put('/api/auth/notifications', authMiddleware, async (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
     try {
-        const { emailNotifications, telegramNotifications } = req.body;
+        const { email, password } = req.body;
         
-        const user = await db.findUserById(req.user.id);
-        user.emailNotifications = emailNotifications;
-        user.telegramNotifications = telegramNotifications;
+        const user = await db.findUserByEmail(email);
+        if (!user) {
+            return res.status(401).json({ error: 'Неверный email или пароль' });
+        }
+
+        const isValid = await bcrypt.compare(password, user.password);
+        if (!isValid) {
+            return res.status(401).json({ error: 'Неверный email или пароль' });
+        }
+
+        await db.updateUserStatus(user.id, 'online');
         
-        await db.save();
-        res.json({ success: true });
+        const token = jwt.sign({ id: user.id }, config.jwtSecret, { expiresIn: '7d' });
+        
+        const { password: _, ...userWithoutPassword } = user;
+        res.json({ user: userWithoutPassword, token });
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
 });
 
-// Генерация токена для Telegram
-app.post('/api/auth/telegram-token', authMiddleware, async (req, res) => {
+// Профиль пользователя
+app.get('/api/profile', authMiddleware, async (req, res) => {
+    const { password, ...userWithoutPassword } = req.user;
+    res.json(userWithoutPassword);
+});
+
+app.put('/api/profile', authMiddleware, upload.single('avatar'), async (req, res) => {
     try {
-        const token = crypto.randomBytes(32).toString('hex');
-        const user = await db.findUserById(req.user.id);
-        user.telegramToken = token;
+        const updates = req.body;
+        
+        if (req.file) {
+            updates.avatar = `/uploads/${req.user.id}/${req.file.filename}`;
+        }
+
+        Object.assign(req.user, updates);
         await db.save();
         
-        const botUsername = process.env.TELEGRAM_BOT_USERNAME || 'YourBotUsername';
-        const link = `https://t.me/${botUsername}?start=${token}`;
-        
-        res.json({ token, link });
+        const { password, ...userWithoutPassword } = req.user;
+        res.json(userWithoutPassword);
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
 });
 
-// CRUD для задач
+// Задачи
 app.get('/api/tasks', authMiddleware, async (req, res) => {
     try {
         const tasks = await db.getTasks(req.user.id, req.user.role);
         res.json(tasks);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+app.get('/api/tasks/:id', authMiddleware, async (req, res) => {
+    try {
+        const task = await db.getTask(parseInt(req.params.id));
+        if (!task) {
+            return res.status(404).json({ error: 'Задача не найдена' });
+        }
+        res.json(task);
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
@@ -675,16 +439,8 @@ app.post('/api/tasks', authMiddleware, async (req, res) => {
             creatorId: req.user.id,
             creatorName: req.user.name
         });
-
-        // Уведомляем назначенных
-        if (task.assignees && task.assignees.length > 0) {
-            await notificationService.notifyMultiple(
-                task.assignees,
-                'task_assigned',
-                { task }
-            );
-        }
-
+        
+        io.emit('task_created', task);
         res.json(task);
     } catch (error) {
         res.status(400).json({ error: error.message });
@@ -694,22 +450,11 @@ app.post('/api/tasks', authMiddleware, async (req, res) => {
 app.put('/api/tasks/:id', authMiddleware, async (req, res) => {
     try {
         const task = await db.updateTask(parseInt(req.params.id), req.body);
-        
         if (!task) {
             return res.status(404).json({ error: 'Задача не найдена' });
         }
-
-        // Уведомляем всех участников
-        const participants = [...(task.assignees || []), ...(task.watchers || [])];
-        await notificationService.notifyMultiple(
-            participants,
-            'task_updated',
-            { 
-                task,
-                changes: Object.keys(req.body).join(', ')
-            }
-        );
-
+        
+        io.emit('task_updated', task);
         res.json(task);
     } catch (error) {
         res.status(400).json({ error: error.message });
@@ -718,23 +463,130 @@ app.put('/api/tasks/:id', authMiddleware, async (req, res) => {
 
 app.delete('/api/tasks/:id', authMiddleware, async (req, res) => {
     try {
-        const taskId = parseInt(req.params.id);
-        const index = db.data.tasks.findIndex(t => t.id === taskId);
+        const success = await db.deleteTask(parseInt(req.params.id));
+        if (!success) {
+            return res.status(404).json({ error: 'Задача не найдена' });
+        }
         
-        if (index === -1) {
+        io.emit('task_deleted', { id: parseInt(req.params.id) });
+        res.json({ success: true });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Чат задачи (legacy support + new implementation)
+app.get('/api/tasks/:id/chat', authMiddleware, async (req, res) => {
+    try {
+        const taskId = parseInt(req.params.id);
+        const task = await db.getTask(taskId);
+        
+        if (!task) {
             return res.status(404).json({ error: 'Задача не найдена' });
         }
 
-        // Проверка прав
-        const task = db.data.tasks[index];
-        if (task.creatorId !== req.user.id && req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Недостаточно прав' });
+        // Проверяем доступ к задаче
+        const hasAccess = req.user.role === 'admin' || 
+                         task.creatorId === req.user.id ||
+                         (task.assignees && task.assignees.includes(req.user.id)) ||
+                         (task.watchers && task.watchers.includes(req.user.id));
+
+        if (!hasAccess) {
+            return res.status(403).json({ error: 'Нет доступа к чату задачи' });
         }
 
-        db.data.tasks.splice(index, 1);
-        await db.save();
+        // Получаем сообщения чата задачи
+        const messages = await db.getChatMessages(taskId);
+        res.json(messages);
+    } catch (error) {
+        console.error('Error in /api/tasks/:id/chat:', error);
+        res.status(400).json({ error: error.message });
+    }
+});
+
+app.post('/api/tasks/:id/chat', authMiddleware, upload.array('files', 5), async (req, res) => {
+    try {
+        const taskId = parseInt(req.params.id);
+        const task = await db.getTask(taskId);
         
-        res.json({ success: true });
+        if (!task) {
+            return res.status(404).json({ error: 'Задача не найдена' });
+        }
+
+        // Проверяем доступ
+        const hasAccess = req.user.role === 'admin' || 
+                         task.creatorId === req.user.id ||
+                         (task.assignees && task.assignees.includes(req.user.id)) ||
+                         (task.watchers && task.watchers.includes(req.user.id));
+
+        if (!hasAccess) {
+            return res.status(403).json({ error: 'Нет доступа к чату задачи' });
+        }
+
+        // Обрабатываем файлы
+        const files = [];
+        if (req.files && req.files.length > 0) {
+            for (const file of req.files) {
+                const fileData = await db.addFile({
+                    originalName: file.originalname,
+                    filename: file.filename,
+                    path: file.path,
+                    size: file.size,
+                    mimetype: file.mimetype,
+                    uploaderId: req.user.id
+                });
+                files.push(fileData.id);
+            }
+        }
+
+        // Создаем сообщение
+        const message = await db.addChatMessage(
+            taskId,
+            req.user.id,
+            req.user.name,
+            req.body.text || '',
+            files
+        );
+
+        // Отправляем через WebSocket
+        io.to(`task-chat-${taskId}`).emit('chat_message', message);
+        
+        res.json(message);
+    } catch (error) {
+        console.error('Error in POST /api/tasks/:id/chat:', error);
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Файлы задачи
+app.get('/api/tasks/:id/files', authMiddleware, async (req, res) => {
+    try {
+        const files = await db.getTaskFiles(parseInt(req.params.id));
+        res.json(files);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+app.post('/api/tasks/:id/files', authMiddleware, upload.single('file'), async (req, res) => {
+    try {
+        const taskId = parseInt(req.params.id);
+        
+        if (!req.file) {
+            return res.status(400).json({ error: 'Файл не загружен' });
+        }
+        
+        const fileData = await db.addFile({
+            originalName: req.file.originalname,
+            filename: req.file.filename,
+            path: req.file.path,
+            size: req.file.size,
+            mimetype: req.file.mimetype,
+            uploaderId: req.user.id
+        });
+        
+        await db.addTaskFile(taskId, fileData.id);
+        res.json(fileData);
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
@@ -750,18 +602,112 @@ app.get('/api/tasks/:id/comments', authMiddleware, async (req, res) => {
     }
 });
 
-app.post('/api/tasks/:id/comments', authMiddleware, upload.array('files', 5), async (req, res) => {
+app.post('/api/tasks/:id/comments', authMiddleware, async (req, res) => {
     try {
-        const taskId = parseInt(req.params.id);
-        const task = db.data.tasks.find(t => t.id === taskId);
+        const comment = await db.addComment({
+            taskId: parseInt(req.params.id),
+            userId: req.user.id,
+            userName: req.user.name,
+            text: req.body.text
+        });
         
-        if (!task) {
-            return res.status(404).json({ error: 'Задача не найдена' });
-        }
+        io.to(`task-${req.params.id}`).emit('new_comment', comment);
+        res.json(comment);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
 
-        // Сохраняем информацию о файлах
-        const files = [];
-        if (req.files) {
+// Пользователи
+app.get('/api/users', authMiddleware, async (req, res) => {
+    try {
+        const users = db.data.users.map(u => {
+            const { password, ...userWithoutPassword } = u;
+            return userWithoutPassword;
+        });
+        res.json(users);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// ====================== CHAT API ======================
+
+// Получить список чатов пользователя
+app.get('/api/chats', authMiddleware, async (req, res) => {
+    try {
+        const chats = await chatManager.getUserChats(req.user.id);
+        res.json(chats);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Создать новый чат
+app.post('/api/chats', authMiddleware, async (req, res) => {
+    try {
+        const { type, name, members, avatar } = req.body;
+        
+        let chat;
+        if (type === 'private' && members.length === 1) {
+            chat = await chatManager.createPrivateChat(req.user.id, members[0]);
+        } else if (type === 'group') {
+            chat = await chatManager.createGroupChat(
+                name,
+                [...new Set([req.user.id, ...members])],
+                req.user.id,
+                avatar
+            );
+        } else if (type === 'task' && req.body.taskId) {
+            chat = await chatManager.createTaskChat(
+                req.body.taskId,
+                [...new Set([req.user.id, ...members])],
+                req.user.id
+            );
+        } else {
+            return res.status(400).json({ error: 'Неверный тип чата' });
+        }
+        
+        res.json(chat);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Получить информацию о чате
+app.get('/api/chats/:id', authMiddleware, async (req, res) => {
+    try {
+        const chat = await chatManager.getChatById(req.params.id, req.user.id);
+        if (!chat) {
+            return res.status(404).json({ error: 'Чат не найден' });
+        }
+        res.json(chat);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Получить сообщения чата
+app.get('/api/chats/:id/messages', authMiddleware, async (req, res) => {
+    try {
+        const { limit = 50, before } = req.query;
+        const messages = await chatManager.getChatMessages(
+            req.params.id,
+            req.user.id,
+            parseInt(limit),
+            before
+        );
+        res.json(messages);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Отправить сообщение в чат
+app.post('/api/chats/:id/messages', authMiddleware, upload.array('attachments', 5), async (req, res) => {
+    try {
+        const attachments = [];
+        if (req.files && req.files.length > 0) {
             for (const file of req.files) {
                 const fileData = await db.addFile({
                     originalName: file.originalname,
@@ -771,75 +717,86 @@ app.post('/api/tasks/:id/comments', authMiddleware, upload.array('files', 5), as
                     mimetype: file.mimetype,
                     uploaderId: req.user.id
                 });
-                files.push(fileData);
+                attachments.push(fileData);
             }
         }
-
-        // Создаем комментарий
-        const comment = await db.addComment({
-            taskId,
-            userId: req.user.id,
-            userName: req.user.name,
+        
+        const message = await chatManager.sendMessage({
+            chatId: req.params.id,
+            senderId: req.user.id,
+            senderName: req.user.name,
             text: req.body.text,
-            files: files.map(f => f.id)
+            attachments,
+            replyTo: req.body.replyTo
         });
-
-        // Уведомляем участников
-        const participants = [...(task.assignees || []), ...(task.watchers || []), task.creatorId]
-            .filter(id => id !== req.user.id);
         
-        await notificationService.notifyMultiple(
-            participants,
-            'new_comment',
-            {
-                task,
-                comment,
-                author: req.user
-            }
+        res.json(message);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Редактировать сообщение
+app.put('/api/messages/:id', authMiddleware, async (req, res) => {
+    try {
+        const message = await chatManager.editMessage(
+            req.params.id,
+            req.user.id,
+            req.body.text
         );
-
-        res.json(comment);
-    } catch (error) {
-        res.status(400).json({ error: error.message });
-    }
-});
-
-// Загрузка файлов
-app.post('/api/upload', authMiddleware, upload.single('file'), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'Файл не загружен' });
+        if (!message) {
+            return res.status(404).json({ error: 'Сообщение не найдено' });
         }
-
-        const fileData = await db.addFile({
-            originalName: req.file.originalname,
-            filename: req.file.filename,
-            path: req.file.path,
-            size: req.file.size,
-            mimetype: req.file.mimetype,
-            uploaderId: req.user.id
-        });
-
-        res.json(fileData);
+        res.json(message);
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
 });
 
-// Получение файла
-app.get('/api/files/:id', authMiddleware, async (req, res) => {
+// Удалить сообщение
+app.delete('/api/messages/:id', authMiddleware, async (req, res) => {
     try {
-        const file = db.data.files.find(f => f.id === parseInt(req.params.id));
-        
-        if (!file) {
-            return res.status(404).json({ error: 'Файл не найден' });
+        const success = await chatManager.deleteMessage(req.params.id, req.user.id);
+        if (!success) {
+            return res.status(404).json({ error: 'Сообщение не найдено' });
         }
-
-        res.sendFile(path.resolve(file.path));
+        res.json({ success: true });
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
 });
+
+// Отметить сообщения как прочитанные
+app.post('/api/chats/:id/read', authMiddleware, async (req, res) => {
+    try {
+        await chatManager.markMessagesAsRead(
+            req.params.id,
+            req.user.id,
+            req.body.messageIds
+        );
+        res.json({ success: true });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Поиск по сообщениям
+app.get('/api/chats/search', authMiddleware, async (req, res) => {
+    try {
+        const { query, chatId } = req.query;
+        const results = await chatManager.searchMessages(
+            req.user.id,
+            query,
+            chatId
+        );
+        res.json(results);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+
+
 
 // Уведомления
 app.get('/api/notifications', authMiddleware, async (req, res) => {
@@ -853,16 +810,11 @@ app.get('/api/notifications', authMiddleware, async (req, res) => {
 
 app.put('/api/notifications/:id/read', authMiddleware, async (req, res) => {
     try {
-        const notification = db.data.notifications.find(n => 
-            n.id === parseInt(req.params.id) && n.userId === req.user.id
-        );
+        const success = await db.markNotificationRead(req.params.id, req.user.id);
         
-        if (!notification) {
+        if (!success) {
             return res.status(404).json({ error: 'Уведомление не найдено' });
         }
-
-        notification.read = true;
-        await db.save();
         
         res.json({ success: true });
     } catch (error) {
@@ -870,16 +822,301 @@ app.put('/api/notifications/:id/read', authMiddleware, async (req, res) => {
     }
 });
 
-// Админ панель
+// ====================== WEBSOCKET ======================
+
+io.on('connection', (socket) => {
+    console.log('New WebSocket connection');
+
+    socket.on('authenticate', async (token) => {
+        try {
+            const decoded = jwt.verify(token, config.jwtSecret);
+            const user = await db.findUserById(decoded.id);
+            
+            if (user) {
+                socket.userId = user.id;
+                socket.join(`user-${user.id}`);
+                
+                // Добавляем сокет в менеджер чата
+                chatManager.addUserSocket(user.id, socket.id);
+                
+                // Обновляем статус пользователя
+                await db.updateUserStatus(user.id, 'online');
+                
+                // Присоединяем к чатам пользователя
+                const userChats = await chatManager.getUserChats(user.id);
+                for (const chat of userChats) {
+                    socket.join(`chat-${chat.id}`);
+                }
+                
+                socket.emit('authenticated', { 
+                    success: true,
+                    user: { id: user.id, name: user.name }
+                });
+            }
+        } catch (error) {
+            socket.emit('authenticated', { success: false });
+        }
+    });
+
+    // Присоединение к чату задачи
+    socket.on('join_task_chat', (taskId) => {
+        if (socket.userId) {
+            socket.join(`task-chat-${taskId}`);
+            console.log(`User ${socket.userId} joined task chat ${taskId}`);
+        }
+    });
+
+    // Покидание чата задачи
+    socket.on('leave_task_chat', (taskId) => {
+        socket.leave(`task-chat-${taskId}`);
+    });
+
+    // Присоединение к чату
+    socket.on('join_chat', (chatId) => {
+        if (socket.userId) {
+            socket.join(`chat-${chatId}`);
+        }
+    });
+
+    // Покидание чата
+    socket.on('leave_chat', (chatId) => {
+        socket.leave(`chat-${chatId}`);
+    });
+
+    // Индикатор набора текста
+    socket.on('typing_start', ({ chatId }) => {
+        if (socket.userId) {
+            chatManager.typingStarted(chatId, socket.userId);
+        }
+    });
+
+    socket.on('typing_stop', ({ chatId }) => {
+        if (socket.userId) {
+            chatManager.typingStopped(chatId, socket.userId);
+        }
+    });
+
+    // Видеозвонки
+    socket.on('call_start', async ({ chatId, type }) => {
+        if (socket.userId) {
+            const call = await chatManager.startCall(chatId, socket.userId, type);
+            socket.emit('call_started', call);
+        }
+    });
+
+    socket.on('call_join', async ({ callId }) => {
+        if (socket.userId) {
+            await chatManager.joinCall(callId, socket.userId);
+        }
+    });
+
+    socket.on('call_leave', async ({ callId }) => {
+        if (socket.userId) {
+            await chatManager.leaveCall(callId, socket.userId);
+        }
+    });
+
+    socket.on('call_end', async ({ callId }) => {
+        if (socket.userId) {
+            await chatManager.endCall(callId, socket.userId);
+        }
+    });
+
+    socket.on('call_signal', async ({ callId, signal }) => {
+        if (socket.userId) {
+            await chatManager.handleCallSignal(callId, socket.userId, signal);
+        }
+    });
+
+    // Отключение
+    socket.on('disconnect', async () => {
+        if (socket.userId) {
+            // Удаляем сокет из менеджера чата
+            chatManager.removeUserSocket(socket.userId, socket.id);
+            
+            // Если это был последний сокет пользователя, обновляем статус
+            if (!chatManager.isUserOnline(socket.userId)) {
+                await db.updateUserStatus(socket.userId, 'offline');
+            }
+        }
+        console.log('WebSocket disconnected');
+    });
+});
+
+// Telegram Bot Setup
+function setupTelegramBot() {
+    if (!telegramBot) return;
+
+    telegramBot.onText(/\/start(.*)/, async (msg, match) => {
+        const chatId = msg.chat.id;
+        const token = match[1].trim();
+
+        if (token) {
+            const user = db.data.users.find(u => u.telegramToken === token);
+            if (user) {
+                user.telegramChatId = chatId;
+                user.telegramToken = null;
+                await db.save();
+                
+                telegramBot.sendMessage(chatId, 
+                    `✅ Аккаунт успешно привязан!\nВы будете получать уведомления о задачах.`
+                );
+            } else {
+                telegramBot.sendMessage(chatId, 
+                    `❌ Неверный токен. Получите новый токен в приложении.`
+                );
+            }
+        } else {
+            telegramBot.sendMessage(chatId, 
+                `Добро пожаловать! Для привязки аккаунта используйте токен из приложения.`
+            );
+        }
+    });
+
+    telegramBot.onText(/\/tasks/, async (msg) => {
+        const chatId = msg.chat.id;
+        const user = db.data.users.find(u => u.telegramChatId === chatId);
+        
+        if (!user) {
+            telegramBot.sendMessage(chatId, 
+                `❌ Сначала привяжите аккаунт командой /start`
+            );
+            return;
+        }
+
+        const tasks = await db.getTasks(user.id, user.role);
+        const activeTasks = tasks.filter(t => t.status !== 'done');
+
+        if (activeTasks.length === 0) {
+            telegramBot.sendMessage(chatId, `У вас нет активных задач`);
+        } else {
+            let message = `📋 Ваши активные задачи:\n\n`;
+            activeTasks.forEach(task => {
+                message += `${task.priority === 'high' ? '🔴' : task.priority === 'medium' ? '🟡' : '🟢'} `;
+                message += `*${task.title}*\n`;
+                message += `Статус: ${task.status}\n`;
+                message += `Срок: ${task.dueDate || 'Не указан'}\n\n`;
+            });
+            telegramBot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+        }
+    });
+}
+
+// Notification Service
+class NotificationService {
+    async notify(userId, type, data) {
+        const user = await db.findUserById(userId);
+        if (!user) return;
+
+        // Email уведомление
+        if (user.emailNotifications !== false) {
+            await this.sendEmail(user.email, type, data);
+        }
+
+        // Telegram уведомление
+        if (user.telegramChatId && telegramBot) {
+            await this.sendTelegram(user.telegramChatId, type, data);
+        }
+
+        // WebSocket уведомление
+        io.to(`user-${userId}`).emit('notification', {
+            type,
+            data,
+            timestamp: new Date().toISOString()
+        });
+
+        // Сохраняем в БД
+        await this.saveNotification(userId, type, data);
+    }
+
+    async notifyMultiple(userIds, type, data) {
+        for (const userId of userIds) {
+            await this.notify(userId, type, data);
+        }
+    }
+
+    async sendEmail(email, type, data) {
+        const subjects = {
+            task_assigned: 'Вам назначена новая задача',
+            task_updated: 'Задача обновлена',
+            task_comment: 'Новый комментарий к задаче',
+            task_due: 'Приближается срок задачи'
+        };
+
+        const subject = subjects[type] || 'Уведомление';
+        let html = `<h2>${subject}</h2>`;
+
+        if (data.task) {
+            html += `
+                <p><strong>Задача:</strong> ${data.task.title}</p>
+                <p><strong>Описание:</strong> ${data.task.description || 'Не указано'}</p>
+                <p><strong>Приоритет:</strong> ${data.task.priority}</p>
+                <p><strong>Срок:</strong> ${data.task.dueDate || 'Не указан'}</p>
+            `;
+        }
+
+        try {
+            await emailTransporter.sendMail({
+                from: config.email.user,
+                to: email,
+                subject,
+                html
+            });
+        } catch (error) {
+            console.error('Email send error:', error);
+        }
+    }
+
+    async sendTelegram(chatId, type, data) {
+        const messages = {
+            task_assigned: `📌 Вам назначена новая задача: *${data.task.title}*`,
+            task_updated: `📝 Задача обновлена: *${data.task.title}*`,
+            task_comment: `💬 Новый комментарий к задаче: *${data.task.title}*`,
+            task_due: `⏰ Приближается срок задачи: *${data.task.title}*`
+        };
+
+        const message = messages[type];
+        if (message) {
+            try {
+                await telegramBot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+            } catch (error) {
+                console.error('Telegram send error:', error);
+            }
+        }
+    }
+
+    async saveNotification(userId, type, data) {
+        const notification = {
+            id: Date.now(),
+            userId,
+            type,
+            data,
+            read: false,
+            createdAt: new Date().toISOString()
+        };
+
+        db.data.notifications.push(notification);
+        await db.save();
+        
+        return notification;
+    }
+}
+
+const notificationService = new NotificationService();
+
+// Admin endpoints
 app.get('/api/admin/stats', authMiddleware, adminMiddleware, async (req, res) => {
     try {
         const stats = {
             totalUsers: db.data.users.length,
+            onlineUsers: db.data.users.filter(u => u.status === 'online').length,
             totalTasks: db.data.tasks.length,
             activeTasks: db.data.tasks.filter(t => t.status !== 'done').length,
             completedTasks: db.data.tasks.filter(t => t.status === 'done').length,
             totalComments: db.data.comments.length,
             totalFiles: db.data.files.length,
+            totalChats: db.data.chats.length,
+            totalMessages: db.data.chatMessages.length,
             telegramUsers: db.data.users.filter(u => u.telegramChatId).length
         };
         res.json(stats);
@@ -916,103 +1153,6 @@ app.put('/api/admin/users/:id', authMiddleware, adminMiddleware, async (req, res
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
-});
-
-
-
-app.get('/api/tasks/:id/chat', authMiddleware, async (req, res) => {
-    try {
-        const msgs = await db.getChatMessages(parseInt(req.params.id));
-        res.json(msgs);
-    } catch (e) {
-        res.status(400).json({error: e.message});
-    }
-});
-app.post('/api/tasks/:id/chat', authMiddleware, upload.array('files', 5), async (req, res) => {
-    try {
-        const taskId = parseInt(req.params.id);
-        const files = [];
-        if (req.files) {
-            for (const file of req.files) {
-                const fileData = await db.addFile({
-                    originalName: file.originalname,
-                    filename: file.filename,
-                    path: file.path,
-                    size: file.size,
-                    mimetype: file.mimetype,
-                    uploaderId: req.user.id
-                });
-                files.push(fileData.id);
-            }
-        }
-        const msg = await db.addChatMessage(
-            taskId, req.user.id, req.user.name, req.body.text, files
-        );
-        io.to(`task-chat-${taskId}`).emit('chat_message', msg); // WebSocket
-        res.json(msg);
-    } catch (e) {
-        res.status(400).json({error: e.message});
-    }
-});
-
-// --- API для файлов задачи ---
-app.get('/api/tasks/:id/files', authMiddleware, async (req, res) => {
-    try {
-        const files = await db.getTaskFiles(parseInt(req.params.id));
-        res.json(files);
-    } catch (e) {
-        res.status(400).json({error: e.message});
-    }
-});
-app.post('/api/tasks/:id/files', authMiddleware, upload.single('file'), async (req, res) => {
-    try {
-        const taskId = parseInt(req.params.id);
-        if (!req.file) return res.status(400).json({error:'Файл не загружен'});
-        const fileData = await db.addFile({
-            originalName: req.file.originalname,
-            filename: req.file.filename,
-            path: req.file.path,
-            size: req.file.size,
-            mimetype: req.file.mimetype,
-            uploaderId: req.user.id
-        });
-        await db.addTaskFile(taskId, fileData.id);
-        res.json(fileData);
-    } catch (e) {
-        res.status(400).json({error: e.message});
-    }
-});
-
-
-// WebSocket для real-time уведомлений
-io.on('connection', (socket) => {
-    console.log('New WebSocket connection');
-
-    socket.on('authenticate', async (token) => {
-        try {
-            const decoded = jwt.verify(token, config.jwtSecret);
-            const user = await db.findUserById(decoded.id);
-            
-            if (user) {
-                socket.join(`user-${user.id}`);
-                socket.userId = user.id;
-                socket.emit('authenticated', { success: true });
-            }
-        } catch (error) {
-            socket.emit('authenticated', { success: false });
-        }
-
-        
-    });
-
-
-    socket.on('join_task_chat', (taskId) => {
-        socket.join(`task-chat-${taskId}`);
-    });
-
-    socket.on('disconnect', () => {
-        console.log('WebSocket disconnected');
-    });
 });
 
 // Запуск сервера
