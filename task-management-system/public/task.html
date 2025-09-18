@@ -1,0 +1,1726 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Задача - Система управления</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #667eea;
+            --primary-dark: #5a67d8;
+            --secondary: #764ba2;
+            --success: #48bb78;
+            --warning: #f6ad55;
+            --danger: #f56565;
+            --info: #4299e1;
+            --dark: #2d3748;
+            --gray: #718096;
+            --gray-light: #e2e8f0;
+            --gray-lighter: #f7fafc;
+            --white: #ffffff;
+            --shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+            --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.15);
+            --radius: 8px;
+            --radius-lg: 12px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: var(--dark);
+        }
+
+        /* Header */
+        .header {
+            background: white;
+            box-shadow: var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--gray-lighter);
+            border: none;
+            border-radius: var(--radius);
+            color: var(--dark);
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+        }
+
+        .back-btn:hover {
+            background: var(--gray-light);
+            transform: translateX(-2px);
+        }
+
+        .task-status-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-backlog { background: var(--gray-light); color: var(--gray); }
+        .status-todo { background: #bee3f8; color: #2c5282; }
+        .status-in-progress { background: #fbd38d; color: #744210; }
+        .status-review { background: #c6b2f3; color: #553c9a; }
+        .status-done { background: #9ae6b4; color: #22543d; }
+
+        .header-actions {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .action-btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: var(--radius);
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .btn-secondary {
+            background: var(--gray-lighter);
+            color: var(--dark);
+        }
+
+        .btn-secondary:hover {
+            background: var(--gray-light);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #e53e3e;
+        }
+
+        /* Main Container */
+        .container {
+            max-width: 1400px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2rem;
+        }
+
+        /* Main Content */
+        .main-content {
+            background: white;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+        }
+
+        .task-header {
+            padding: 2rem;
+            border-bottom: 1px solid var(--gray-light);
+        }
+
+        .task-title-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 1rem;
+        }
+
+        .task-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--dark);
+            flex: 1;
+        }
+
+        .task-title-input {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--dark);
+            border: 2px solid var(--gray-light);
+            border-radius: var(--radius);
+            padding: 0.5rem;
+            width: 100%;
+        }
+
+        .priority-badge {
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius);
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .priority-low { background: #c6f6d5; color: #22543d; }
+        .priority-medium { background: #bee3f8; color: #2c5282; }
+        .priority-high { background: #fed7d7; color: #742a2a; }
+        .priority-urgent { background: #f56565; color: white; }
+
+        .task-meta {
+            display: flex;
+            gap: 2rem;
+            color: var(--gray);
+            font-size: 0.875rem;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--gray-light);
+            padding: 0 2rem;
+        }
+
+        .tab {
+            padding: 1rem 1.5rem;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            color: var(--gray);
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .tab:hover {
+            color: var(--dark);
+        }
+
+        .tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        .tab-content {
+            padding: 2rem;
+            min-height: 400px;
+        }
+
+        /* Description Tab */
+        .description-content {
+            line-height: 1.6;
+        }
+
+        .description-editor {
+            width: 100%;
+            min-height: 300px;
+            padding: 1rem;
+            border: 2px solid var(--gray-light);
+            border-radius: var(--radius);
+            font-family: inherit;
+            font-size: 1rem;
+            resize: vertical;
+        }
+
+        .edit-controls {
+            margin-top: 1rem;
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+        }
+
+        /* Comments Tab */
+        .comments-section {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .comment {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .comment-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .comment-content {
+            flex: 1;
+            background: var(--gray-lighter);
+            border-radius: var(--radius);
+            padding: 1rem;
+        }
+
+        .comment-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+
+        .comment-author {
+            font-weight: 600;
+            color: var(--dark);
+        }
+
+        .comment-time {
+            font-size: 0.875rem;
+            color: var(--gray);
+        }
+
+        .comment-text {
+            color: var(--dark);
+            line-height: 1.5;
+        }
+
+        .comment-form {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--gray-light);
+        }
+
+        .comment-input {
+            flex: 1;
+            padding: 0.75rem;
+            border: 2px solid var(--gray-light);
+            border-radius: var(--radius);
+            font-family: inherit;
+            font-size: 0.95rem;
+            resize: none;
+        }
+
+        .comment-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        /* Files Tab */
+        .files-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .file-card {
+            border: 2px solid var(--gray-light);
+            border-radius: var(--radius);
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .file-card:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .file-icon {
+            font-size: 2rem;
+        }
+
+        .file-name {
+            font-size: 0.875rem;
+            text-align: center;
+            word-break: break-all;
+        }
+
+        .file-size {
+            font-size: 0.75rem;
+            color: var(--gray);
+        }
+
+        .upload-zone {
+            border: 2px dashed var(--gray-light);
+            border-radius: var(--radius);
+            padding: 3rem;
+            text-align: center;
+            margin-bottom: 2rem;
+            transition: all 0.3s;
+        }
+
+        .upload-zone.dragging {
+            border-color: var(--primary);
+            background: var(--gray-lighter);
+        }
+
+        .upload-input {
+            display: none;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .sidebar-card {
+            background: white;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+            padding: 1.5rem;
+        }
+
+        .sidebar-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--dark);
+        }
+
+        /* People Section */
+        .people-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .people-label {
+            font-size: 0.875rem;
+            color: var(--gray);
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .people-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .person-chip {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            background: var(--gray-lighter);
+            border-radius: 20px;
+            font-size: 0.875rem;
+        }
+
+        .person-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .person-remove {
+            cursor: pointer;
+            color: var(--gray);
+            margin-left: 0.25rem;
+        }
+
+        .person-remove:hover {
+            color: var(--danger);
+        }
+
+        .add-person-btn {
+            width: 100%;
+            padding: 0.5rem;
+            border: 2px dashed var(--gray-light);
+            border-radius: var(--radius);
+            background: none;
+            color: var(--gray);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .add-person-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            background: var(--gray-lighter);
+        }
+
+        /* User Select Dropdown */
+        .user-select-dropdown {
+            position: relative;
+            margin-top: 0.5rem;
+        }
+
+        .user-search {
+            width: 100%;
+            padding: 0.5rem;
+            border: 2px solid var(--gray-light);
+            border-radius: var(--radius);
+            font-size: 0.875rem;
+        }
+
+        .user-options {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid var(--gray-light);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 10;
+            margin-top: 0.25rem;
+        }
+
+        .user-option {
+            padding: 0.75rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            transition: background 0.2s;
+        }
+
+        .user-option:hover {
+            background: var(--gray-lighter);
+        }
+
+        .user-option-info {
+            flex: 1;
+        }
+
+        .user-option-name {
+            font-weight: 500;
+            color: var(--dark);
+        }
+
+        .user-option-email {
+            font-size: 0.75rem;
+            color: var(--gray);
+        }
+
+        /* Dates Section */
+        .date-field {
+            margin-bottom: 1rem;
+        }
+
+        .date-label {
+            font-size: 0.875rem;
+            color: var(--gray);
+            margin-bottom: 0.5rem;
+        }
+
+        .date-input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 2px solid var(--gray-light);
+            border-radius: var(--radius);
+            font-size: 0.875rem;
+        }
+
+        .date-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        /* Activity Feed */
+        .activity-feed {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .activity-item {
+            display: flex;
+            gap: 0.75rem;
+            font-size: 0.875rem;
+        }
+
+        .activity-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--gray-lighter);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .activity-content {
+            flex: 1;
+        }
+
+        .activity-text {
+            color: var(--dark);
+            margin-bottom: 0.25rem;
+        }
+
+        .activity-time {
+            font-size: 0.75rem;
+            color: var(--gray);
+        }
+
+        /* Chat Button */
+        .chat-button {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            border: none;
+            box-shadow: var(--shadow-lg);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            transition: all 0.3s;
+        }
+
+        .chat-button:hover {
+            transform: scale(1.1);
+            background: var(--primary-dark);
+        }
+
+        /* Loading & Empty States */
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 3rem;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--gray-light);
+            border-top: 3px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--gray);
+        }
+
+        .empty-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                order: -1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 1rem;
+                padding: 1rem;
+            }
+
+            .container {
+                padding: 0 1rem;
+            }
+
+            .task-title {
+                font-size: 1.5rem;
+            }
+
+            .tabs {
+                overflow-x: auto;
+                padding: 0 1rem;
+            }
+
+            .tab-content {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="header-left">
+                <a href="/tasks" class="back-btn">
+                    ← Назад к задачам
+                </a>
+                <span class="task-status-badge status-in-progress" id="taskStatus">В работе</span>
+            </div>
+            <div class="header-actions">
+                <button class="action-btn btn-secondary" onclick="editTask()">
+                    ✏️ Редактировать
+                </button>
+                <button class="action-btn btn-secondary" onclick="duplicateTask()">
+                    📋 Дублировать
+                </button>
+                <button class="action-btn btn-danger" onclick="deleteTask()">
+                    🗑️ Удалить
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Task Header -->
+            <div class="task-header">
+                <div class="task-title-section">
+                    <h1 class="task-title" id="taskTitle">Загрузка...</h1>
+                    <span class="priority-badge priority-high" id="taskPriority">Высокий</span>
+                </div>
+                <div class="task-meta">
+                    <div class="meta-item">
+                        <span>📅</span>
+                        <span id="createdDate">Создана: -</span>
+                    </div>
+                    <div class="meta-item">
+                        <span>👤</span>
+                        <span id="creatorName">Создал: -</span>
+                    </div>
+                    <div class="meta-item">
+                        <span>🔄</span>
+                        <span id="updatedDate">Обновлена: -</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" data-tab="description" onclick="switchTab('description')">
+                    📝 Описание
+                </button>
+                <button class="tab" data-tab="comments" onclick="switchTab('comments')">
+                    💬 Комментарии <span id="commentsCount">(0)</span>
+                </button>
+                <button class="tab" data-tab="files" onclick="switchTab('files')">
+                    📁 Файлы <span id="filesCount">(0)</span>
+                </button>
+                <button class="tab" data-tab="activity" onclick="switchTab('activity')">
+                    📊 Активность
+                </button>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="tab-content">
+                <!-- Description Tab -->
+                <div id="descriptionTab" class="tab-pane active">
+                    <div id="descriptionView" class="description-content">
+                        <p>Нет описания</p>
+                    </div>
+                    <div id="descriptionEdit" style="display: none;">
+                        <textarea id="descriptionEditor" class="description-editor"></textarea>
+                        <div class="edit-controls">
+                            <button class="action-btn btn-secondary" onclick="cancelEdit()">Отмена</button>
+                            <button class="action-btn btn-primary" onclick="saveDescription()">Сохранить</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Comments Tab -->
+                <div id="commentsTab" class="tab-pane" style="display: none;">
+                    <div id="commentsList" class="comments-section">
+                        <!-- Comments will be loaded here -->
+                    </div>
+                    <form class="comment-form" onsubmit="addComment(event)">
+                        <div class="comment-avatar" id="currentUserAvatar">U</div>
+                        <textarea 
+                            id="commentInput" 
+                            class="comment-input" 
+                            placeholder="Написать комментарий..." 
+                            rows="3"
+                            required
+                        ></textarea>
+                        <button type="submit" class="action-btn btn-primary">Отправить</button>
+                    </form>
+                </div>
+
+                <!-- Files Tab -->
+                <div id="filesTab" class="tab-pane" style="display: none;">
+                    <div class="upload-zone" id="uploadZone" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+                        <div class="empty-icon">📁</div>
+                        <p>Перетащите файлы сюда или</p>
+                        <button class="action-btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                            Выберите файлы
+                        </button>
+                        <input type="file" id="fileInput" class="upload-input" multiple onchange="handleFileSelect(event)">
+                    </div>
+                    <div id="filesList" class="files-grid">
+                        <!-- Files will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Activity Tab -->
+                <div id="activityTab" class="tab-pane" style="display: none;">
+                    <div id="activityFeed" class="activity-feed">
+                        <!-- Activity will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <!-- Assignees & Watchers -->
+            <div class="sidebar-card">
+                <h3 class="sidebar-title">Участники</h3>
+                
+                <!-- Assignees -->
+                <div class="people-section">
+                    <div class="people-label">Исполнители</div>
+                    <div id="assigneesList" class="people-list">
+                        <!-- Assignees will be loaded here -->
+                    </div>
+                    <button class="add-person-btn" onclick="showAddAssignee()">
+                        + Добавить исполнителя
+                    </button>
+                    <div id="assigneeDropdown" style="display: none;"></div>
+                </div>
+
+                <!-- Watchers -->
+                <div class="people-section">
+                    <div class="people-label">Наблюдатели</div>
+                    <div id="watchersList" class="people-list">
+                        <!-- Watchers will be loaded here -->
+                    </div>
+                    <button class="add-person-btn" onclick="showAddWatcher()">
+                        + Добавить наблюдателя
+                    </button>
+                    <div id="watcherDropdown" style="display: none;"></div>
+                </div>
+            </div>
+
+            <!-- Dates -->
+            <div class="sidebar-card">
+                <h3 class="sidebar-title">Сроки</h3>
+                
+                <div class="date-field">
+                    <div class="date-label">Срок выполнения</div>
+                    <input type="date" id="dueDateInput" class="date-input" onchange="updateDueDate()">
+                </div>
+                
+                <div class="date-field">
+                    <div class="date-label">Начало работы</div>
+                    <input type="date" id="startDateInput" class="date-input" onchange="updateStartDate()">
+                </div>
+            </div>
+
+            <!-- Status -->
+            <div class="sidebar-card">
+                <h3 class="sidebar-title">Статус</h3>
+                <select id="statusSelect" class="date-input" onchange="updateStatus()">
+                    <option value="backlog">Бэклог</option>
+                    <option value="todo">К выполнению</option>
+                    <option value="in-progress">В работе</option>
+                    <option value="review">На проверке</option>
+                    <option value="done">Выполнено</option>
+                </select>
+            </div>
+
+            <!-- Priority -->
+            <div class="sidebar-card">
+                <h3 class="sidebar-title">Приоритет</h3>
+                <select id="prioritySelect" class="date-input" onchange="updatePriority()">
+                    <option value="low">Низкий</option>
+                    <option value="medium">Средний</option>
+                    <option value="high">Высокий</option>
+                    <option value="urgent">Срочный</option>
+                </select>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Chat Button -->
+    <button class="chat-button" onclick="openChat()" title="Открыть чат">
+        💬
+    </button>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // Глобальные переменные
+        const API_URL = window.location.origin + '/api';
+        const taskId = window.location.pathname.split('/').pop() || new URLSearchParams(window.location.search).get('id');
+        let currentTask = null;
+        let currentUser = null;
+        let allUsers = [];
+        let socket = null;
+        let isEditing = false;
+
+        // Инициализация
+        async function init() {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    window.location.href = '/login.html';
+                    return;
+                }
+
+                // Загружаем текущего пользователя
+                const userResponse = await fetch(`${API_URL}/profile`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!userResponse.ok) {
+                    throw new Error('Ошибка аутентификации');
+                }
+                
+                currentUser = await userResponse.json();
+                document.getElementById('currentUserAvatar').textContent = 
+                    currentUser.name ? currentUser.name[0].toUpperCase() : 'U';
+
+                // Загружаем список всех пользователей
+                const usersResponse = await fetch(`${API_URL}/users`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (usersResponse.ok) {
+                    allUsers = await usersResponse.json();
+                }
+
+                // Подключаемся к WebSocket
+                connectWebSocket();
+
+                // Загружаем данные задачи
+                await loadTask();
+                await loadComments();
+                await loadFiles();
+                await loadActivity();
+
+            } catch (error) {
+                console.error('Ошибка инициализации:', error);
+                alert('Ошибка загрузки страницы');
+            }
+        }
+
+        // WebSocket подключение
+        function connectWebSocket() {
+            socket = io();
+            
+            socket.on('connect', () => {
+                const token = localStorage.getItem('token');
+                socket.emit('authenticate', token);
+            });
+
+            socket.on('task_updated', (task) => {
+                if (task.id === parseInt(taskId)) {
+                    currentTask = task;
+                    updateTaskDisplay();
+                }
+            });
+
+            socket.on('new_comment', (comment) => {
+                if (comment.taskId === parseInt(taskId)) {
+                    addCommentToUI(comment);
+                }
+            });
+        }
+
+        // Загрузка задачи
+        async function loadTask() {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`${API_URL}/tasks/${taskId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Задача не найдена');
+                }
+
+                currentTask = await response.json();
+                updateTaskDisplay();
+
+            } catch (error) {
+                console.error('Ошибка загрузки задачи:', error);
+                document.getElementById('taskTitle').textContent = 'Ошибка загрузки';
+            }
+        }
+
+        // Обновление отображения задачи
+        function updateTaskDisplay() {
+            if (!currentTask) return;
+
+            // Заголовок и мета
+            document.getElementById('taskTitle').textContent = currentTask.title;
+            document.getElementById('createdDate').textContent = 
+                `Создана: ${new Date(currentTask.createdAt).toLocaleDateString('ru')}`;
+            document.getElementById('creatorName').textContent = 
+                `Создал: ${currentTask.creatorName || 'Неизвестно'}`;
+            document.getElementById('updatedDate').textContent = 
+                `Обновлена: ${new Date(currentTask.updatedAt).toLocaleDateString('ru')}`;
+
+            // Статус
+            const statusBadge = document.getElementById('taskStatus');
+            statusBadge.textContent = getStatusText(currentTask.status);
+            statusBadge.className = `task-status-badge status-${currentTask.status}`;
+            document.getElementById('statusSelect').value = currentTask.status;
+
+            // Приоритет
+            const priorityBadge = document.getElementById('taskPriority');
+            priorityBadge.textContent = getPriorityText(currentTask.priority);
+            priorityBadge.className = `priority-badge priority-${currentTask.priority}`;
+            document.getElementById('prioritySelect').value = currentTask.priority;
+
+            // Описание
+            const descView = document.getElementById('descriptionView');
+            descView.innerHTML = currentTask.description ? 
+                markdown2html(currentTask.description) : 
+                '<p style="color: var(--gray);">Нет описания</p>';
+
+            // Даты
+            if (currentTask.dueDate) {
+                document.getElementById('dueDateInput').value = currentTask.dueDate.split('T')[0];
+            }
+            if (currentTask.startDate) {
+                document.getElementById('startDateInput').value = currentTask.startDate.split('T')[0];
+            }
+
+            // Исполнители
+            updateAssigneesList();
+
+            // Наблюдатели
+            updateWatchersList();
+        }
+
+        // Обновление списка исполнителей
+        function updateAssigneesList() {
+            const container = document.getElementById('assigneesList');
+            container.innerHTML = '';
+
+            if (currentTask.assignees && currentTask.assignees.length > 0) {
+                currentTask.assignees.forEach(userId => {
+                    const user = allUsers.find(u => u.id === userId);
+                    if (user) {
+                        container.innerHTML += createPersonChip(user, 'assignee');
+                    }
+                });
+            } else {
+                container.innerHTML = '<p style="color: var(--gray); font-size: 0.875rem;">Нет исполнителей</p>';
+            }
+        }
+
+        // Обновление списка наблюдателей
+        function updateWatchersList() {
+            const container = document.getElementById('watchersList');
+            container.innerHTML = '';
+
+            if (currentTask.watchers && currentTask.watchers.length > 0) {
+                currentTask.watchers.forEach(userId => {
+                    const user = allUsers.find(u => u.id === userId);
+                    if (user) {
+                        container.innerHTML += createPersonChip(user, 'watcher');
+                    }
+                });
+            } else {
+                container.innerHTML = '<p style="color: var(--gray); font-size: 0.875rem;">Нет наблюдателей</p>';
+            }
+        }
+
+        // Создание чипа пользователя
+        function createPersonChip(user, type) {
+            return `
+                <div class="person-chip">
+                    <div class="person-avatar">
+                        ${user.name ? user.name[0].toUpperCase() : 'U'}
+                    </div>
+                    <span>${user.name}</span>
+                    <span class="person-remove" onclick="removePerson(${user.id}, '${type}')" title="Удалить">
+                        ✕
+                    </span>
+                </div>
+            `;
+        }
+
+        // Показать выбор исполнителя
+        function showAddAssignee() {
+            const dropdown = document.getElementById('assigneeDropdown');
+            dropdown.innerHTML = createUserDropdown('assignee');
+            dropdown.style.display = 'block';
+            dropdown.querySelector('.user-search').focus();
+        }
+
+        // Показать выбор наблюдателя
+        function showAddWatcher() {
+            const dropdown = document.getElementById('watcherDropdown');
+            dropdown.innerHTML = createUserDropdown('watcher');
+            dropdown.style.display = 'block';
+            dropdown.querySelector('.user-search').focus();
+        }
+
+        // Создание выпадающего списка пользователей
+        function createUserDropdown(type) {
+            const existingIds = type === 'assignee' ? 
+                (currentTask.assignees || []) : 
+                (currentTask.watchers || []);
+
+            const availableUsers = allUsers.filter(u => !existingIds.includes(u.id));
+
+            return `
+                <div class="user-select-dropdown">
+                    <input 
+                        type="text" 
+                        class="user-search" 
+                        placeholder="Начните вводить имя..."
+                        onkeyup="filterUsers(event, '${type}')"
+                        onblur="setTimeout(() => hideDropdown('${type}'), 200)"
+                    >
+                    <div class="user-options" id="${type}Options">
+                        ${availableUsers.map(user => `
+                            <div class="user-option" onclick="addPerson(${user.id}, '${type}')">
+                                <div class="person-avatar">
+                                    ${user.name ? user.name[0].toUpperCase() : 'U'}
+                                </div>
+                                <div class="user-option-info">
+                                    <div class="user-option-name">${user.name}</div>
+                                    <div class="user-option-email">${user.email}</div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Фильтрация пользователей
+        function filterUsers(event, type) {
+            const query = event.target.value.toLowerCase();
+            const options = document.getElementById(`${type}Options`);
+            const existingIds = type === 'assignee' ? 
+                (currentTask.assignees || []) : 
+                (currentTask.watchers || []);
+
+            const filtered = allUsers.filter(u => 
+                !existingIds.includes(u.id) && 
+                (u.name.toLowerCase().includes(query) || u.email.toLowerCase().includes(query))
+            );
+
+            options.innerHTML = filtered.map(user => `
+                <div class="user-option" onclick="addPerson(${user.id}, '${type}')">
+                    <div class="person-avatar">
+                        ${user.name ? user.name[0].toUpperCase() : 'U'}
+                    </div>
+                    <div class="user-option-info">
+                        <div class="user-option-name">${user.name}</div>
+                        <div class="user-option-email">${user.email}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Скрыть выпадающий список
+        function hideDropdown(type) {
+            document.getElementById(`${type}Dropdown`).style.display = 'none';
+        }
+
+        // Добавить человека
+        async function addPerson(userId, type) {
+            try {
+                const token = localStorage.getItem('token');
+                const field = type === 'assignee' ? 'assignees' : 'watchers';
+                const current = currentTask[field] || [];
+                
+                const response = await fetch(`${API_URL}/tasks/${taskId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        [field]: [...current, userId]
+                    })
+                });
+
+                if (!response.ok) throw new Error('Ошибка обновления');
+
+                currentTask = await response.json();
+                updateTaskDisplay();
+                hideDropdown(type);
+
+            } catch (error) {
+                console.error('Ошибка добавления:', error);
+                alert('Не удалось добавить пользователя');
+            }
+        }
+
+        // Удалить человека
+        async function removePerson(userId, type) {
+            try {
+                const token = localStorage.getItem('token');
+                const field = type === 'assignee' ? 'assignees' : 'watchers';
+                const current = currentTask[field] || [];
+                
+                const response = await fetch(`${API_URL}/tasks/${taskId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        [field]: current.filter(id => id !== userId)
+                    })
+                });
+
+                if (!response.ok) throw new Error('Ошибка обновления');
+
+                currentTask = await response.json();
+                updateTaskDisplay();
+
+            } catch (error) {
+                console.error('Ошибка удаления:', error);
+                alert('Не удалось удалить пользователя');
+            }
+        }
+
+        // Переключение вкладок
+        function switchTab(tabName) {
+            // Обновляем кнопки вкладок
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+                if (tab.dataset.tab === tabName) {
+                    tab.classList.add('active');
+                }
+            });
+
+            // Обновляем содержимое вкладок
+            document.querySelectorAll('.tab-pane').forEach(pane => {
+                pane.style.display = 'none';
+            });
+            document.getElementById(`${tabName}Tab`).style.display = 'block';
+        }
+
+        // Редактирование задачи
+        function editTask() {
+            if (!isEditing) {
+                isEditing = true;
+                
+                // Переключаем на редактирование описания
+                const descView = document.getElementById('descriptionView');
+                const descEdit = document.getElementById('descriptionEdit');
+                const editor = document.getElementById('descriptionEditor');
+                
+                editor.value = currentTask.description || '';
+                descView.style.display = 'none';
+                descEdit.style.display = 'block';
+                editor.focus();
+            }
+        }
+
+        // Отмена редактирования
+        function cancelEdit() {
+            isEditing = false;
+            document.getElementById('descriptionView').style.display = 'block';
+            document.getElementById('descriptionEdit').style.display = 'none';
+        }
+
+        // Сохранение описания
+        async function saveDescription() {
+            try {
+                const token = localStorage.getItem('token');
+                const description = document.getElementById('descriptionEditor').value;
+                
+                const response = await fetch(`${API_URL}/tasks/${taskId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ description })
+                });
+
+                if (!response.ok) throw new Error('Ошибка сохранения');
+
+                currentTask = await response.json();
+                updateTaskDisplay();
+                cancelEdit();
+
+            } catch (error) {
+                console.error('Ошибка сохранения:', error);
+                alert('Не удалось сохранить описание');
+            }
+        }
+
+        // Обновление статуса
+        async function updateStatus() {
+            const status = document.getElementById('statusSelect').value;
+            await updateTask({ status });
+        }
+
+        // Обновление приоритета
+        async function updatePriority() {
+            const priority = document.getElementById('prioritySelect').value;
+            await updateTask({ priority });
+        }
+
+        // Обновление даты выполнения
+        async function updateDueDate() {
+            const dueDate = document.getElementById('dueDateInput').value;
+            await updateTask({ dueDate });
+        }
+
+        // Обновление даты начала
+        async function updateStartDate() {
+            const startDate = document.getElementById('startDateInput').value;
+            await updateTask({ startDate });
+        }
+
+        // Общая функция обновления задачи
+        async function updateTask(data) {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`${API_URL}/tasks/${taskId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (!response.ok) throw new Error('Ошибка обновления');
+
+                currentTask = await response.json();
+                updateTaskDisplay();
+
+            } catch (error) {
+                console.error('Ошибка обновления:', error);
+                alert('Не удалось обновить задачу');
+            }
+        }
+
+        // Загрузка комментариев
+        async function loadComments() {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`${API_URL}/tasks/${taskId}/comments`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    const comments = await response.json();
+                    displayComments(comments);
+                    document.getElementById('commentsCount').textContent = `(${comments.length})`;
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки комментариев:', error);
+            }
+        }
+
+        // Отображение комментариев
+        function displayComments(comments) {
+            const container = document.getElementById('commentsList');
+            
+            if (comments.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">💬</div>
+                        <p>Нет комментариев</p>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = comments.map(comment => createCommentHTML(comment)).join('');
+            }
+        }
+
+        // Создание HTML комментария
+        function createCommentHTML(comment) {
+            const time = new Date(comment.createdAt).toLocaleString('ru');
+            return `
+                <div class="comment">
+                    <div class="comment-avatar">
+                        ${comment.userName ? comment.userName[0].toUpperCase() : 'U'}
+                    </div>
+                    <div class="comment-content">
+                        <div class="comment-header">
+                            <span class="comment-author">${comment.userName}</span>
+                            <span class="comment-time">${time}</span>
+                        </div>
+                        <div class="comment-text">${escapeHtml(comment.text)}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Добавление комментария
+        async function addComment(event) {
+            event.preventDefault();
+            
+            const input = document.getElementById('commentInput');
+            const text = input.value.trim();
+            
+            if (!text) return;
+
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`${API_URL}/tasks/${taskId}/comments`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text })
+                });
+
+                if (!response.ok) throw new Error('Ошибка отправки');
+
+                const comment = await response.json();
+                addCommentToUI(comment);
+                input.value = '';
+
+            } catch (error) {
+                console.error('Ошибка отправки комментария:', error);
+                alert('Не удалось отправить комментарий');
+            }
+        }
+
+        // Добавление комментария в UI
+        function addCommentToUI(comment) {
+            const container = document.getElementById('commentsList');
+            
+            // Удаляем empty state если есть
+            const emptyState = container.querySelector('.empty-state');
+            if (emptyState) {
+                emptyState.remove();
+            }
+
+            // Добавляем новый комментарий
+            container.insertAdjacentHTML('beforeend', createCommentHTML(comment));
+            
+            // Обновляем счетчик
+            const count = container.querySelectorAll('.comment').length;
+            document.getElementById('commentsCount').textContent = `(${count})`;
+        }
+
+        // Загрузка файлов
+        async function loadFiles() {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`${API_URL}/tasks/${taskId}/files`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    const files = await response.json();
+                    displayFiles(files);
+                    document.getElementById('filesCount').textContent = `(${files.length})`;
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки файлов:', error);
+            }
+        }
+
+        // Отображение файлов
+        function displayFiles(files) {
+            const container = document.getElementById('filesList');
+            
+            if (files.length === 0) {
+                container.innerHTML = '';
+            } else {
+                container.innerHTML = files.map(file => `
+                    <div class="file-card" onclick="downloadFile('${file.id}')">
+                        <div class="file-icon">${getFileIcon(file.mimetype)}</div>
+                        <div class="file-name">${file.originalName}</div>
+                        <div class="file-size">${formatFileSize(file.size)}</div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // Обработка перетаскивания файлов
+        function handleDragOver(event) {
+            event.preventDefault();
+            document.getElementById('uploadZone').classList.add('dragging');
+        }
+
+        function handleDragLeave(event) {
+            event.preventDefault();
+            document.getElementById('uploadZone').classList.remove('dragging');
+        }
+
+        function handleDrop(event) {
+            event.preventDefault();
+            document.getElementById('uploadZone').classList.remove('dragging');
+            
+            const files = Array.from(event.dataTransfer.files);
+            uploadFiles(files);
+        }
+
+        // Выбор файлов
+        function handleFileSelect(event) {
+            const files = Array.from(event.target.files);
+            uploadFiles(files);
+        }
+
+        // Загрузка файлов
+        async function uploadFiles(files) {
+            for (const file of files) {
+                try {
+                    const token = localStorage.getItem('token');
+                    const formData = new FormData();
+                    formData.append('file', file);
+
+                    const response = await fetch(`${API_URL}/tasks/${taskId}/files`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: formData
+                    });
+
+                    if (!response.ok) throw new Error('Ошибка загрузки');
+
+                    await loadFiles(); // Перезагружаем список файлов
+
+                } catch (error) {
+                    console.error('Ошибка загрузки файла:', error);
+                    alert(`Не удалось загрузить файл: ${file.name}`);
+                }
+            }
+        }
+
+        // Загрузка активности
+        async function loadActivity() {
+            // В реальном приложении здесь будет загрузка истории активности
+            const activities = [
+                {
+                    type: 'created',
+                    user: currentTask?.creatorName || 'Пользователь',
+                    time: currentTask?.createdAt || new Date().toISOString(),
+                    text: 'создал задачу'
+                }
+            ];
+
+            displayActivity(activities);
+        }
+
+        // Отображение активности
+        function displayActivity(activities) {
+            const container = document.getElementById('activityFeed');
+            
+            container.innerHTML = activities.map(activity => `
+                <div class="activity-item">
+                    <div class="activity-icon">
+                        ${getActivityIcon(activity.type)}
+                    </div>
+                    <div class="activity-content">
+                        <div class="activity-text">
+                            <strong>${activity.user}</strong> ${activity.text}
+                        </div>
+                        <div class="activity-time">
+                            ${new Date(activity.time).toLocaleString('ru')}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Дублирование задачи
+        async function duplicateTask() {
+            if (!confirm('Создать копию задачи?')) return;
+            
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`${API_URL}/tasks`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        ...currentTask,
+                        title: currentTask.title + ' (копия)',
+                        id: undefined,
+                        createdAt: undefined,
+                        updatedAt: undefined
+                    })
+                });
+
+                if (!response.ok) throw new Error('Ошибка создания');
+
+                const newTask = await response.json();
+                window.location.href = `/task/${newTask.id}`;
+
+            } catch (error) {
+                console.error('Ошибка дублирования:', error);
+                alert('Не удалось создать копию задачи');
+            }
+        }
+
+        // Удаление задачи
+        async function deleteTask() {
+            if (!confirm('Удалить задачу? Это действие нельзя отменить.')) return;
+            
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`${API_URL}/tasks/${taskId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) throw new Error('Ошибка удаления');
+
+                window.location.href = '/tasks';
+
+            } catch (error) {
+                console.error('Ошибка удаления:', error);
+                alert('Не удалось удалить задачу');
+            }
+        }
+
+        // Открыть чат
+        function openChat() {
+            window.open(`/task-chat.html?taskId=${taskId}`, '_blank', 
+                'width=900,height=600,resizable=yes,scrollbars=yes');
+        }
+
+        // Вспомогательные функции
+        function getStatusText(status) {
+            const statuses = {
+                'backlog': 'Бэклог',
+                'todo': 'К выполнению',
+                'in-progress': 'В работе',
+                'review': 'На проверке',
+                'done': 'Выполнено'
+            };
+            return statuses[status] || status;
+        }
+
+        function getPriorityText(priority) {
+            const priorities = {
+                'low': 'Низкий',
+                'medium': 'Средний',
+                'high': 'Высокий',
+                'urgent': 'Срочный'
+            };
+            return priorities[priority] || priority;
+        }
+
+        function getFileIcon(mimetype) {
+            if (mimetype.startsWith('image/')) return '🖼️';
+            if (mimetype.startsWith('video/')) return '🎥';
+            if (mimetype.includes('pdf')) return '📄';
+            if (mimetype.includes('word')) return '📝';
+            if (mimetype.includes('excel') || mimetype.includes('sheet')) return '📊';
+            if (mimetype.includes('zip') || mimetype.includes('rar')) return '📦';
+            return '📎';
+        }
+
+        function getActivityIcon(type) {
+            const icons = {
+                'created': '✨',
+                'updated': '✏️',
+                'commented': '💬',
+                'assigned': '👤',
+                'status_changed': '🔄',
+                'file_added': '📎'
+            };
+            return icons[type] || '📌';
+        }
+
+        function formatFileSize(bytes) {
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            if (bytes === 0) return '0 B';
+            const i = Math.floor(Math.log(bytes) / Math.log(1024));
+            return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        // Простой Markdown парсер
+        function markdown2html(text) {
+            return text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/\n/g, '<br>')
+                .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+                .replace(/`(.*?)`/g, '<code>$1</code>');
+        }
+
+        // Запуск при загрузке
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

@@ -49,6 +49,27 @@ app.use(express.json());
 app.use(express.static('public'));
 app.use('/uploads', express.static('uploads'));
 
+// HTML маршруты (должны быть перед API маршрутами)
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'tasks.html'));
+});
+
+app.get('/login', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+app.get('/tasks', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'tasks.html'));
+});
+
+app.get('/task/new', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'task-new.html'));
+});
+
+app.get('/task/:id', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'task.html'));
+});
+
 // База данных
 class Database {
     constructor() {
@@ -118,6 +139,10 @@ class Database {
         const task = {
             id: Date.now(),
             ...taskData,
+            assignees: taskData.assignees || [],
+            watchers: taskData.watchers || [],
+            commentsCount: 0,
+            filesCount: 0,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
@@ -129,6 +154,14 @@ class Database {
     async updateTask(id, updates) {
         const index = this.data.tasks.findIndex(t => t.id === id);
         if (index !== -1) {
+            // Если обновляются исполнители или наблюдатели, убедимся что это массивы
+            if (updates.assignees !== undefined && !Array.isArray(updates.assignees)) {
+                updates.assignees = [];
+            }
+            if (updates.watchers !== undefined && !Array.isArray(updates.watchers)) {
+                updates.watchers = [];
+            }
+            
             this.data.tasks[index] = {
                 ...this.data.tasks[index],
                 ...updates,
@@ -141,10 +174,27 @@ class Database {
     }
 
     async getTasks(userId, role) {
+        // Добавляем дополнительную информацию к каждой задаче
+        const tasksWithCounts = this.data.tasks.map(task => {
+            // Подсчитываем комментарии
+            const commentsCount = this.data.comments ? 
+                this.data.comments.filter(c => c.taskId === task.id).length : 0;
+            
+            // Подсчитываем файлы
+            const filesCount = task.files ? task.files.length : 0;
+            
+            return {
+                ...task,
+                commentsCount,
+                filesCount
+            };
+        });
+
         if (role === 'admin') {
-            return this.data.tasks;
+            return tasksWithCounts;
         }
-        return this.data.tasks.filter(t => 
+        
+        return tasksWithCounts.filter(t => 
             t.creatorId === userId || 
             (t.assignees && t.assignees.includes(userId)) ||
             (t.watchers && t.watchers.includes(userId))
@@ -192,24 +242,6 @@ class Database {
         const task = this.data.tasks.find(t => t.id === taskId);
         if (!task || !task.files) return [];
         return this.data.files.filter(f => task.files.includes(f.id));
-    }
-
-
-
-    async getNotifications(userId) {
-        return this.data.notifications.filter(n => n.userId === userId);
-    }
-
-    async markNotificationRead(notificationId, userId) {
-        const notification = this.data.notifications.find(n => 
-            n.id === notificationId && n.userId === userId
-        );
-        if (notification) {
-            notification.read = true;
-            await this.save();
-            return true;
-        }
-        return false;
     }
 
     // Legacy chat methods for task chat compatibility
@@ -352,13 +384,6 @@ app.post('/api/auth/register', async (req, res) => {
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
-});
-
-
-// Получение профиля
-app.get('/api/auth/profile', authMiddleware, async (req, res) => {
-    const { password, ...userWithoutPassword } = req.user;
-    res.json(userWithoutPassword);
 });
 
 app.post('/api/auth/login', async (req, res) => {
@@ -790,33 +815,6 @@ app.get('/api/chats/search', authMiddleware, async (req, res) => {
             chatId
         );
         res.json(results);
-    } catch (error) {
-        res.status(400).json({ error: error.message });
-    }
-});
-
-
-
-
-// Уведомления
-app.get('/api/notifications', authMiddleware, async (req, res) => {
-    try {
-        const notifications = await db.getNotifications(req.user.id);
-        res.json(notifications);
-    } catch (error) {
-        res.status(400).json({ error: error.message });
-    }
-});
-
-app.put('/api/notifications/:id/read', authMiddleware, async (req, res) => {
-    try {
-        const success = await db.markNotificationRead(req.params.id, req.user.id);
-        
-        if (!success) {
-            return res.status(404).json({ error: 'Уведомление не найдено' });
-        }
-        
-        res.json({ success: true });
     } catch (error) {
         res.status(400).json({ error: error.message });
     }

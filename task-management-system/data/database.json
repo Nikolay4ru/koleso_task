@@ -10,7 +10,9 @@
       "emailNotifications": true,
       "telegramNotifications": false,
       "telegramChatId": null,
-      "telegramToken": "0f62da9fe9fae3fb2a4326e06443477e20fc296550ec7fe4a0a6e59f73f51e7b"
+      "telegramToken": "0f62da9fe9fae3fb2a4326e06443477e20fc296550ec7fe4a0a6e59f73f51e7b",
+      "status": "online",
+      "lastSeen": "2025-09-18T06:12:08.026Z"
     },
     {
       "id": 1757942012106,
@@ -21,7 +23,9 @@
       "createdAt": "2025-09-15T13:13:32.106Z",
       "emailNotifications": true,
       "telegramNotifications": false,
-      "telegramChatId": null
+      "telegramChatId": null,
+      "status": "online",
+      "lastSeen": "2025-09-18T05:27:30.873Z"
     }
   ],
   "tasks": [
@@ -40,22 +44,57 @@
       "updatedAt": "2025-09-15T13:16:56.748Z"
     },
     {
-      "id": 1757965003144,
-      "title": "4324234",
-      "description": "4324234234",
+      "id": 1758175855503,
+      "title": "Тест",
+      "description": "Тест",
       "priority": "medium",
-      "status": "backlog",
-      "deadline": "",
-      "assignees": [],
+      "status": "todo",
+      "startDate": null,
+      "dueDate": null,
+      "assignees": [
+        1757939057221,
+        1757942012106
+      ],
       "watchers": [],
       "creatorId": 1757939057221,
       "creatorName": "Nikolay",
-      "createdAt": "2025-09-15T19:36:43.144Z",
-      "updatedAt": "2025-09-15T19:36:43.144Z"
+      "commentsCount": 0,
+      "filesCount": 0,
+      "createdAt": "2025-09-18T06:10:55.503Z",
+      "updatedAt": "2025-09-18T06:10:55.503Z"
     }
   ],
   "comments": [],
   "files": [],
   "notifications": [],
-  "telegramLinks": []
+  "telegramLinks": [],
+  "chats": [
+    {
+      "id": 1758002658017,
+      "taskId": 1757965003144,
+      "userId": 1757939057221,
+      "userName": "Nikolay",
+      "text": "пук",
+      "files": [],
+      "createdAt": "2025-09-16T06:04:18.017Z"
+    },
+    {
+      "id": 1758175893901,
+      "taskId": 1758175855503,
+      "userId": 1757939057221,
+      "userName": "Nikolay",
+      "text": "пук",
+      "files": [],
+      "createdAt": "2025-09-18T06:11:33.901Z"
+    },
+    {
+      "id": 1758175898717,
+      "taskId": 1758175855503,
+      "userId": 1757939057221,
+      "userName": "Nikolay",
+      "text": "пук",
+      "files": [],
+      "createdAt": "2025-09-18T06:11:38.717Z"
+    }
+  ]
 }
