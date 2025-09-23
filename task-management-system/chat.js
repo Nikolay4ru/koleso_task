@@ -104,6 +104,14 @@ class ChatManager {
     }
 
     async getUserChats(userId) {
+        // Убеждаемся, что структура существует
+        if (!this.db.data.chatMembers) {
+            this.db.data.chatMembers = [];
+        }
+        if (!this.db.data.chats) {
+            this.db.data.chats = [];
+        }
+
         const userChatIds = this.db.data.chatMembers
             .filter(m => m.userId === userId && m.status === 'active')
             .map(m => m.chatId);
@@ -112,18 +120,20 @@ class ChatManager {
         
         // Добавляем информацию о непрочитанных сообщениях
         for (const chat of chats) {
-            chat.unreadCount = chat.unreadCounts[userId] || 0;
+            chat.unreadCount = chat.unreadCounts && chat.unreadCounts[userId] || 0;
             
             // Для приватных чатов добавляем информацию о собеседнике
             if (chat.type === 'private') {
                 const otherUserId = chat.members.find(id => id !== userId);
                 const otherUser = await this.db.findUserById(otherUserId);
-                chat.otherUser = {
-                    id: otherUser.id,
-                    name: otherUser.name,
-                    avatar: otherUser.avatar,
-                    online: this.isUserOnline(otherUser.id)
-                };
+                if (otherUser) {
+                    chat.otherUser = {
+                        id: otherUser.id,
+                        name: otherUser.name,
+                        avatar: otherUser.avatar,
+                        online: this.isUserOnline(otherUser.id)
+                    };
+                }
             }
         }
 
@@ -154,7 +164,7 @@ class ChatManager {
                     id: user.id,
                     name: user.name,
                     avatar: user.avatar,
-                    role: member.role,
+                    role: member ? member.role : 'member',
                     online: this.isUserOnline(user.id),
                     lastSeen: user.lastSeen
                 };
@@ -251,6 +261,11 @@ class ChatManager {
             chat.lastMessageAt = message.createdAt;
             chat.updatedAt = message.createdAt;
 
+            // Инициализируем unreadCounts если его нет
+            if (!chat.unreadCounts) {
+                chat.unreadCounts = {};
+            }
+
             // Увеличиваем счетчики непрочитанных для всех, кроме отправителя
             for (const memberId of chat.members) {
                 if (memberId !== message.senderId) {
@@ -268,6 +283,14 @@ class ChatManager {
     }
 
     async getChatMessages(chatId, userId, limit = 50, before = null) {
+        // Убеждаемся, что структура существует
+        if (!this.db.data.chatMessages) {
+            this.db.data.chatMessages = [];
+        }
+        if (!this.db.data.chatMembers) {
+            this.db.data.chatMembers = [];
+        }
+
         // Проверяем доступ
         const isMember = this.db.data.chatMembers.some(
             m => m.chatId === chatId && m.userId === userId && m.status === 'active'
@@ -288,14 +311,25 @@ class ChatManager {
 
         messages = messages.slice(0, limit);
 
-        // Добавляем информацию об отправителях
+        // Добавляем информацию об отправителях и инициализируем readBy
         for (const message of messages) {
+            // Инициализируем readBy если его нет
+            if (!message.readBy) {
+                message.readBy = [];
+                // Если сообщение от текущего пользователя, помечаем как прочитанное им
+                if (message.senderId === userId) {
+                    message.readBy.push(userId);
+                }
+            }
+
             const sender = await this.db.findUserById(message.senderId);
-            message.sender = {
-                id: sender.id,
-                name: sender.name,
-                avatar: sender.avatar
-            };
+            if (sender) {
+                message.sender = {
+                    id: sender.id,
+                    name: sender.name,
+                    avatar: sender.avatar
+                };
+            }
         }
 
         return messages.reverse();
@@ -348,14 +382,26 @@ class ChatManager {
         const chat = this.db.data.chats.find(c => c.id === chatId);
         if (!chat) return;
 
+        // Инициализируем unreadCounts если его нет
+        if (!chat.unreadCounts) {
+            chat.unreadCounts = {};
+        }
+
         // Сбрасываем счетчик непрочитанных
         chat.unreadCounts[userId] = 0;
 
         // Отмечаем сообщения как прочитанные
         for (const messageId of messageIds) {
             const message = this.db.data.chatMessages.find(m => m.id === messageId);
-            if (message && !message.readBy.includes(userId)) {
-                message.readBy.push(userId);
+            if (message) {
+                // Инициализируем readBy если его нет
+                if (!message.readBy) {
+                    message.readBy = [];
+                }
+                // Добавляем пользователя если его еще нет в списке прочитавших
+                if (!message.readBy.includes(userId)) {
+                    message.readBy.push(userId);
+                }
             }
         }
 
@@ -634,6 +680,14 @@ class ChatManager {
     // ==================== ПОИСК ====================
 
     async searchMessages(userId, query, chatId = null) {
+        // Убеждаемся, что структура существует
+        if (!this.db.data.chatMessages) {
+            this.db.data.chatMessages = [];
+        }
+        if (!this.db.data.chatMembers) {
+            this.db.data.chatMembers = [];
+        }
+
         let messages = this.db.data.chatMessages.filter(m => !m.deleted);
 
         // Фильтруем по доступным чатам пользователя
@@ -651,8 +705,8 @@ class ChatManager {
         // Поиск по тексту
         const searchQuery = query.toLowerCase();
         messages = messages.filter(m => 
-            m.text.toLowerCase().includes(searchQuery) ||
-            m.senderName.toLowerCase().includes(searchQuery)
+            m.text && m.text.toLowerCase().includes(searchQuery) ||
+            m.senderName && m.senderName.toLowerCase().includes(searchQuery)
         );
 
         // Сортируем по дате
@@ -678,7 +732,7 @@ class ChatManager {
             }
 
             // Поиск по последнему сообщению
-            if (chat.lastMessage && chat.lastMessage.text.toLowerCase().includes(searchQuery)) {
+            if (chat.lastMessage && chat.lastMessage.text && chat.lastMessage.text.toLowerCase().includes(searchQuery)) {
                 return true;
             }
 
