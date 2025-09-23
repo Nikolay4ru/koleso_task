@@ -70,6 +70,14 @@ app.get('/task/:id', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'task.html'));
 });
 
+app.get('/messenger', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'messenger.html'));
+});
+
+app.get('/chat', (req, res) => {
+    res.redirect('/messenger');
+});
+
 // База данных
 class Database {
     constructor() {
