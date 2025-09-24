@@ -1148,6 +1148,12 @@
                 }
             });
 
+            
+            socket.on('call_started', (call) => {
+    currentCallId = call.id;
+    console.log('Call started:', call);
+});
+
             socket.on('new_message', (message) => {
                 if (message.chatId === currentChatId) {
                     addMessageToUI(message);
@@ -1206,27 +1212,35 @@
             });
 
             socket.on('call_accepted', async (data) => {
-                if (data.callId === currentCallId) {
-                    // Create offer
-                    const offer = await peerConnection.createOffer();
-                    await peerConnection.setLocalDescription(offer);
-                    
-                    socket.emit('call_signal', {
-                        callId: currentCallId,
-                        signal: {
-                            type: 'offer',
-                            offer
-                        }
-                    });
-                }
-            });
+    if (data.callId === currentCallId) {
+        // Инициализируем WebRTC после принятия звонка
+        await initializePeerConnection();
+        
+        // Create offer
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        
+        socket.emit('call_signal', {
+            callId: currentCallId,
+            signal: {
+                type: 'offer',
+                offer
+            }
+        });
+    }
+});
 
             socket.on('call_declined', (data) => {
-                if (data.callId === currentCallId) {
-                    endCall();
-                    alert('Звонок отклонен');
-                }
-            });
+    if (data.callId === currentCallId) {
+        endCall();
+        alert('Звонок отклонен');
+    }
+});
+
+
+socket.on('participant_joined', (data) => {
+    console.log('Participant joined:', data.userId);
+});
 
             socket.on('call_ended', (data) => {
                 if (data.callId === currentCallId) {
@@ -1775,43 +1789,199 @@ function displayChats() {
         }
 
         async function startCall() {
-            try {
-                // Check if browser supports getUserMedia
-                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                    alert('Ваш браузер не поддерживает видео/аудио звонки. Используйте современный браузер (Chrome, Firefox, Safari).');
-                    return;
-                }
-
-                // Get media stream
-                localStream = await navigator.mediaDevices.getUserMedia({
-                    video: isVideoCall,
-                    audio: true
-                });
-
-                // Show video overlay
-                if (isVideoCall) {
-                    document.getElementById('videoCallOverlay').classList.add('active');
-                    document.getElementById('localVideo').srcObject = null;
-            document.getElementById('remoteVideo').srcObject = null;
-
-            // Notify other party
-            if (currentCallId) {
-                socket.emit('call_ended', { callId: currentCallId });
-                currentCallId = null;
-            }
+    try {
+        // Check if browser supports getUserMedia
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            alert('Ваш браузер не поддерживает видео/аудио звонки. Используйте современный браузер (Chrome, Firefox, Safari).');
+            return;
         }
 
-        } catch (error) {
-                console.error('Error starting call:', error);
-                if (error.name === 'NotAllowedError') {
-                    alert('Необходимо разрешить доступ к камере/микрофону для совершения звонков');
-                } else if (error.name === 'NotFoundError') {
-                    alert('Камера или микрофон не найдены');
-                } else {
-                    alert('Не удалось начать звонок: ' + error.message);
-                }
-            }
+        // Get media stream
+        localStream = await navigator.mediaDevices.getUserMedia({
+            video: isVideoCall,
+            audio: true
+        });
+
+        // Show video overlay if video call
+        if (isVideoCall) {
+            document.getElementById('videoCallOverlay').classList.add('active');
+            document.getElementById('localVideo').srcObject = localStream;
         }
+
+        // Initialize peer connection
+        await initializePeerConnection();
+
+        // Start the call via WebSocket
+        socket.emit('call_start', {
+            chatId: currentChatId,
+            type: isVideoCall ? 'video' : 'audio'
+        });
+
+    } catch (error) {
+        console.error('Error starting call:', error);
+        if (error.name === 'NotAllowedError') {
+            alert('Необходимо разрешить доступ к камере/микрофону для совершения звонков');
+        } else if (error.name === 'NotFoundError') {
+            alert('Камера или микрофон не найдены');
+        } else {
+            alert('Не удалось начать звонок: ' + error.message);
+        }
+    }
+}
+
+
+
+
+async function initializePeerConnection() {
+    peerConnection = new RTCPeerConnection(configuration);
+
+    // Add local stream
+    if (localStream) {
+        localStream.getTracks().forEach(track => {
+            peerConnection.addTrack(track, localStream);
+        });
+    }
+
+    // Handle incoming streams
+    peerConnection.ontrack = (event) => {
+        const remoteVideo = document.getElementById('remoteVideo');
+        if (remoteVideo) {
+            remoteVideo.srcObject = event.streams[0];
+        }
+    };
+
+    // Handle ICE candidates
+    peerConnection.onicecandidate = (event) => {
+        if (event.candidate && currentCallId) {
+            socket.emit('call_signal', {
+                callId: currentCallId,
+                signal: {
+                    type: 'ice-candidate',
+                    candidate: event.candidate
+                }
+            });
+        }
+    };
+}
+
+async function handleSDPOffer(offer) {
+    if (!peerConnection) {
+        await initializePeerConnection();
+    }
+
+    try {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+        
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        
+        socket.emit('call_signal', {
+            callId: currentCallId,
+            signal: {
+                type: 'answer',
+                answer,
+                targetUserId: offer.userId
+            }
+        });
+    } catch (error) {
+        console.error('Error handling SDP offer:', error);
+    }
+}
+
+// 4. Добавьте функции для принятия и отклонения звонков:
+
+async function acceptCall() {
+    document.getElementById('incomingCall').classList.remove('active');
+    
+    try {
+        // Get media stream
+        localStream = await navigator.mediaDevices.getUserMedia({
+            video: isVideoCall,
+            audio: true
+        });
+
+        if (isVideoCall) {
+            document.getElementById('videoCallOverlay').classList.add('active');
+            document.getElementById('localVideo').srcObject = localStream;
+        }
+
+        // Initialize peer connection
+        await initializePeerConnection();
+
+        // Join the call
+        socket.emit('call_join', { callId: currentCallId });
+        
+        // Send acceptance
+        socket.emit('call_accepted', { callId: currentCallId });
+
+    } catch (error) {
+        console.error('Error accepting call:', error);
+        alert('Не удалось принять звонок: ' + error.message);
+    }
+}
+
+function declineCall() {
+    document.getElementById('incomingCall').classList.remove('active');
+    
+    if (currentCallId) {
+        socket.emit('call_declined', { callId: currentCallId });
+        currentCallId = null;
+    }
+}
+
+
+
+function endCall() {
+    // Clean up peer connection
+    if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+    }
+
+    // Clean up streams
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+    }
+
+    // Hide video overlay
+    document.getElementById('videoCallOverlay').classList.remove('active');
+    
+    // Clear video elements
+    document.getElementById('localVideo').srcObject = null;
+    document.getElementById('remoteVideo').srcObject = null;
+
+    // End call on server
+    if (currentCallId) {
+        socket.emit('call_end', { callId: currentCallId });
+        currentCallId = null;
+    }
+}
+
+
+
+
+function toggleMute() {
+    if (localStream) {
+        const audioTrack = localStream.getAudioTracks()[0];
+        if (audioTrack) {
+            audioTrack.enabled = !audioTrack.enabled;
+            const muteBtn = document.getElementById('muteBtn');
+            muteBtn.classList.toggle('active', !audioTrack.enabled);
+        }
+    }
+}
+
+function toggleVideo() {
+    if (localStream) {
+        const videoTrack = localStream.getVideoTracks()[0];
+        if (videoTrack) {
+            videoTrack.enabled = !videoTrack.enabled;
+            const videoBtn = document.getElementById('videoBtn');
+            videoBtn.classList.toggle('active', !videoTrack.enabled);
+        }
+    }
+}
   
 
         // Show chat info

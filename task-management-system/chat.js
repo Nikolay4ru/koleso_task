@@ -570,38 +570,41 @@ async createTaskChat(taskId, members, creatorId) {
 
     // WebRTC сигналинг
     async handleSignaling(callId, userId, signal) {
-        const call = this.activeCalls.get(callId);
-        if (!call || !call.participants.includes(userId)) return;
+    const call = this.activeCalls.get(callId);
+    if (!call || !call.participants.includes(userId)) return;
 
-        switch (signal.type) {
-            case 'offer':
-                call.sdpOffers[userId] = signal.offer;
-                this.broadcastToCall(callId, 'sdp_offer', {
-                    userId,
-                    offer: signal.offer
-                }, userId);
-                break;
+    switch (signal.type) {
+        case 'offer':
+            call.sdpOffers[userId] = signal.offer;
+            this.broadcastToCall(callId, 'sdp_offer', {
+                callId,
+                userId,
+                offer: signal.offer
+            }, userId);
+            break;
 
-            case 'answer':
-                this.sendToUser(signal.targetUserId, 'sdp_answer', {
-                    userId,
-                    answer: signal.answer
-                });
-                break;
-
-            case 'ice-candidate':
-                if (!call.iceCandiates[userId]) {
-                    call.iceCandiates[userId] = [];
-                }
-                call.iceCandiates[userId].push(signal.candidate);
-                
-                this.broadcastToCall(callId, 'ice_candidate', {
-                    userId,
-                    candidate: signal.candidate
-                }, userId);
-                break;
-        }
+        case 'answer':
+            this.broadcastToCall(callId, 'sdp_answer', {
+                callId,
+                userId,
+                answer: signal.answer
+            }, userId);
+            break;
+            
+        case 'ice-candidate':
+            if (!call.iceCandiates[userId]) {
+                call.iceCandiates[userId] = [];
+            }
+            call.iceCandiates[userId].push(signal.candidate);
+            
+            this.broadcastToCall(callId, 'ice_candidate', {
+                callId,
+                userId,
+                candidate: signal.candidate
+            }, userId);
+            break;
     }
+}
 
     // ==================== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ====================
 

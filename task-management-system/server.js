@@ -904,35 +904,71 @@ io.on('connection', (socket) => {
 
     // Видеозвонки
     socket.on('call_start', async ({ chatId, type }) => {
-        if (socket.userId) {
+    if (socket.userId) {
+        try {
             const call = await chatManager.startCall(chatId, socket.userId, type);
             socket.emit('call_started', call);
+        } catch (error) {
+            socket.emit('call_error', { error: error.message });
         }
-    });
+    }
+});
 
     socket.on('call_join', async ({ callId }) => {
-        if (socket.userId) {
-            await chatManager.joinCall(callId, socket.userId);
+    if (socket.userId) {
+        try {
+            const call = await chatManager.joinCall(callId, socket.userId);
+            if (call) {
+                socket.emit('call_joined', call);
+            }
+        } catch (error) {
+            socket.emit('call_error', { error: error.message });
         }
-    });
+    }
+});
+
+
+socket.on('call_accepted', ({ callId }) => {
+    if (socket.userId) {
+        // Уведомляем инициатора звонка
+        chatManager.broadcastToCall(callId, 'call_accepted', {
+            callId,
+            userId: socket.userId
+        }, socket.userId);
+    }
+});
+
+
+socket.on('call_declined', ({ callId }) => {
+    if (socket.userId) {
+        // Уведомляем инициатора звонка
+        chatManager.broadcastToCall(callId, 'call_declined', {
+            callId,
+            userId: socket.userId
+        }, socket.userId);
+        
+        // Завершаем звонок
+        chatManager.endCall(callId);
+    }
+});
 
     socket.on('call_leave', async ({ callId }) => {
         if (socket.userId) {
             await chatManager.leaveCall(callId, socket.userId);
         }
     });
-
+    
     socket.on('call_end', async ({ callId }) => {
-        if (socket.userId) {
-            await chatManager.endCall(callId, socket.userId);
-        }
-    });
+    if (socket.userId) {
+        await chatManager.endCall(callId);
+    }
+});
 
     socket.on('call_signal', async ({ callId, signal }) => {
-        if (socket.userId) {
-            await chatManager.handleCallSignal(callId, socket.userId, signal);
-        }
-    });
+    if (socket.userId) {
+        await chatManager.handleSignaling(callId, socket.userId, signal);
+    }
+});
 
     // Отключение
     socket.on('disconnect', async () => {
