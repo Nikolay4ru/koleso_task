@@ -3,60 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Управление задачами</title>
+    <title>Задачи - Task Management System</title>
     <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-dark: #4338ca;
+            --primary-light: #818cf8;
+            --secondary: #06b6d4;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --info: #3b82f6;
+            --dark: #1f2937;
+            --gray: #6b7280;
+            --gray-light: #e5e7eb;
+            --gray-lighter: #f3f4f6;
+            --white: #ffffff;
+            --radius: 8px;
+            --radius-lg: 12px;
+            --radius-xl: 16px;
+            --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+            --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.1);
+            --transition: all 0.3s ease;
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
 
-        :root {
-            --primary: #667eea;
-            --primary-dark: #5a67d8; 
-            --secondary: #764ba2;
-            --success: #48bb78;
-            --warning: #f6ad55;
-            --danger: #f56565;
-            --info: #4299e1;
-            --dark: #2d3748;
-            --gray: #718096;
-            --gray-light: #e2e8f0;
-            --gray-lighter: #f7fafc;
-            --white: #ffffff;
-            --shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
-            --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.15);
-            --radius: 8px;
-            --radius-lg: 12px;
-            --transition: all 0.3s ease;
-        }
-
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, var(--gray-lighter) 0%, #ddd6fe 100%);
             min-height: 100vh;
-            padding: 2rem;
-        }
-
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
+            line-height: 1.6;
         }
 
         /* Header */
         .header {
-            background: white;
-            border-radius: var(--radius-lg);
-            padding: 2rem;
-            margin-bottom: 2rem;
-            box-shadow: var(--shadow-lg);
+            background: var(--white);
+            box-shadow: var(--shadow-md);
+            padding: 1rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.95);
         }
 
-        .header-top {
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 2rem;
         }
 
         .header-left {
@@ -65,17 +68,18 @@
             gap: 2rem;
         }
 
-        .header h1 {
-            font-size: 2rem;
-            color: var(--dark);
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+            text-decoration: none;
         }
 
-        .nav-menu {
+        .nav-links {
             display: flex;
-            gap: 1rem;
+            gap: 0.5rem;
         }
 
         .nav-link {
@@ -83,10 +87,8 @@
             color: var(--gray);
             text-decoration: none;
             border-radius: var(--radius);
-            transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
+            transition: var(--transition);
+            font-weight: 500;
         }
 
         .nav-link:hover {
@@ -95,109 +97,130 @@
         }
 
         .nav-link.active {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            color: white;
+            background: var(--primary);
+            color: var(--white);
         }
 
-        .header-actions {
+        .header-right {
             display: flex;
+            align-items: center;
             gap: 1rem;
         }
 
-        .btn {
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: var(--radius);
-            font-size: 0.95rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: var(--transition);
+        .user-info {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.75rem;
+            padding: 0.5rem 1rem;
+            background: var(--gray-lighter);
+            border-radius: var(--radius-lg);
         }
 
-        .btn-primary {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn-secondary {
-            background: white;
-            color: var(--primary);
-            border: 2px solid var(--primary);
-        }
-
-        .btn-secondary:hover {
-            background: var(--primary);
-            color: white;
-        }
-
-        /* Filters */
-        .filters {
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: var(--white);
             display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        /* Container */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Toolbar */
+        .toolbar {
+            background: var(--white);
+            border-radius: var(--radius-xl);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-md);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .toolbar-left {
+            display: flex;
+            align-items: center;
             gap: 1rem;
             flex-wrap: wrap;
         }
 
-        .filter-group {
-            display: flex;
-            gap: 0.5rem;
-        }
-
-        .filter-btn {
-            padding: 0.5rem 1rem;
-            background: var(--gray-lighter);
-            border: none;
-            border-radius: 20px;
-            font-size: 0.875rem;
-            cursor: pointer;
-            transition: var(--transition);
-        }
-
-        .filter-btn:hover {
-            background: var(--gray-light);
-        }
-
-        .filter-btn.active {
-            background: var(--primary);
-            color: white;
-        }
-
         .search-box {
-            flex: 1;
-            min-width: 250px;
             position: relative;
+            min-width: 300px;
         }
 
         .search-input {
             width: 100%;
-            padding: 0.5rem 2.5rem 0.5rem 1rem;
+            padding: 0.75rem 1rem 0.75rem 2.5rem;
             border: 2px solid var(--gray-light);
-            border-radius: 20px;
-            font-size: 0.875rem;
+            border-radius: var(--radius-lg);
+            font-size: 0.95rem;
             transition: var(--transition);
         }
 
         .search-input:focus {
             outline: none;
             border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
         }
 
         .search-icon {
             position: absolute;
-            right: 1rem;
+            left: 1rem;
             top: 50%;
             transform: translateY(-50%);
             color: var(--gray);
         }
 
-        /* View Toggle */
+        .filter-group {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .filter-btn {
+            padding: 0.5rem 1rem;
+            background: var(--white);
+            border: 2px solid var(--gray-light);
+            border-radius: var(--radius);
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--gray);
+        }
+
+        .filter-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            background: var(--gray-lighter);
+        }
+
+        .filter-btn.active {
+            background: var(--primary);
+            color: var(--white);
+            border-color: var(--primary);
+        }
+
+        .toolbar-right {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
         .view-toggle {
             display: flex;
             background: var(--gray-lighter);
@@ -212,39 +235,145 @@
             border-radius: var(--radius);
             cursor: pointer;
             transition: var(--transition);
+            color: var(--gray);
+            font-weight: 500;
         }
 
         .view-btn.active {
-            background: white;
+            background: var(--white);
+            color: var(--primary);
             box-shadow: var(--shadow);
         }
 
-        /* Kanban View */
-        .kanban-board {
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: var(--radius);
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 600;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: var(--white);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        /* Stats Cards */
+        .stats-container {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
             gap: 1.5rem;
             margin-bottom: 2rem;
         }
 
-        .kanban-column {
-            background: white;
-            border-radius: var(--radius-lg);
+        .stat-card {
+            background: var(--white);
+            border-radius: var(--radius-xl);
             padding: 1.5rem;
-            box-shadow: var(--shadow);
-            min-height: 500px;
+            box-shadow: var(--shadow-md);
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-xl);
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: var(--radius-lg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .stat-icon.primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: var(--white);
+        }
+
+        .stat-icon.success {
+            background: linear-gradient(135deg, var(--success) 0%, #34d399 100%);
+            color: var(--white);
+        }
+
+        .stat-icon.warning {
+            background: linear-gradient(135deg, var(--warning) 0%, #fbbf24 100%);
+            color: var(--white);
+        }
+
+        .stat-icon.danger {
+            background: linear-gradient(135deg, var(--danger) 0%, #f87171 100%);
+            color: var(--white);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--dark);
+            line-height: 1;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: var(--gray);
+            font-size: 0.9rem;
+        }
+
+        /* Kanban Board */
+        .kanban-board {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .kanban-column {
+            background: var(--white);
+            border-radius: var(--radius-xl);
+            padding: 1.5rem;
+            box-shadow: var(--shadow-md);
+            min-height: 600px;
+            display: flex;
+            flex-direction: column;
         }
 
         .column-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
             padding-bottom: 1rem;
-            border-bottom: 2px solid var(--gray-light);
+            border-bottom: 2px solid var(--gray-lighter);
         }
 
         .column-title {
+            font-size: 1.1rem;
             font-weight: 600;
             color: var(--dark);
             display: flex;
@@ -253,85 +382,63 @@
         }
 
         .column-count {
-            background: var(--gray-lighter);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: var(--white);
             padding: 0.25rem 0.75rem;
             border-radius: 20px;
-            font-size: 0.875rem;
-            color: var(--gray);
+            font-size: 0.85rem;
+            font-weight: 600;
         }
 
         .column-content {
+            flex: 1;
             display: flex;
             flex-direction: column;
             gap: 1rem;
+            padding: 0.5rem;
+            border-radius: var(--radius);
+            transition: var(--transition);
+            min-height: 200px;
+        }
+
+        .column-content.drag-over {
+            background: rgba(79, 70, 229, 0.05);
+            border: 2px dashed var(--primary-light);
         }
 
         /* Task Card */
         .task-card {
-            background: var(--gray-lighter);
-            border-radius: var(--radius);
-            padding: 1rem;
-            cursor: pointer;
+            background: var(--white);
+            border: 2px solid var(--gray-light);
+            border-radius: var(--radius-lg);
+            padding: 1.25rem;
+            cursor: move;
             transition: var(--transition);
             position: relative;
-            text-decoration: none;
-            color: inherit;
-            display: block;
+            user-select: none;
         }
 
         .task-card:hover {
             transform: translateY(-2px);
-            box-shadow: var(--shadow);
-            background: white;
+            box-shadow: var(--shadow-lg);
+            border-color: var(--primary-light);
         }
 
         .task-card.dragging {
             opacity: 0.5;
-        }
-
-        .task-header-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: start;
-            margin-bottom: 0.75rem;
+            transform: rotate(5deg);
         }
 
         .task-title {
             font-weight: 600;
             color: var(--dark);
             margin-bottom: 0.5rem;
-            flex: 1;
-        }
-
-        .task-actions {
-            display: flex;
-            gap: 0.5rem;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-
-        .task-card:hover .task-actions {
-            opacity: 1;
-        }
-
-        .task-action-btn {
-            background: white;
-            border: none;
-            border-radius: 4px;
-            padding: 0.25rem 0.5rem;
-            cursor: pointer;
-            font-size: 0.875rem;
-            transition: var(--transition);
-        }
-
-        .task-action-btn:hover {
-            background: var(--primary);
-            color: white;
+            font-size: 1rem;
         }
 
         .task-description {
-            font-size: 0.875rem;
             color: var(--gray);
+            font-size: 0.9rem;
             margin-bottom: 1rem;
             display: -webkit-box;
             -webkit-line-clamp: 2;
@@ -339,11 +446,80 @@
             overflow: hidden;
         }
 
+        .task-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .task-meta-left {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .priority-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .priority-urgent {
+            background: linear-gradient(135deg, var(--danger) 0%, #f87171 100%);
+            color: var(--white);
+        }
+
+        .priority-high {
+            background: linear-gradient(135deg, var(--warning) 0%, #fbbf24 100%);
+            color: var(--white);
+        }
+
+        .priority-medium {
+            background: linear-gradient(135deg, var(--info) 0%, #60a5fa 100%);
+            color: var(--white);
+        }
+
+        .priority-low {
+            background: var(--gray-lighter);
+            color: var(--gray);
+        }
+
+        .task-deadline {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            color: var(--gray);
+            font-size: 0.85rem;
+        }
+
+        .task-deadline.overdue {
+            color: var(--danger);
+            font-weight: 600;
+        }
+
+        .task-stats {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .task-stat {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            color: var(--gray);
+            font-size: 0.85rem;
+        }
+
         .task-people {
             display: flex;
+            align-items: center;
             gap: 0.5rem;
-            margin-bottom: 0.75rem;
-            flex-wrap: wrap;
+            margin-bottom: 1rem;
         }
 
         .task-person {
@@ -351,170 +527,81 @@
             align-items: center;
             gap: 0.25rem;
             padding: 0.25rem 0.5rem;
-            background: white;
-            border-radius: 12px;
-            font-size: 0.75rem;
+            background: var(--gray-lighter);
+            border-radius: 20px;
+            font-size: 0.8rem;
         }
 
         .person-avatar {
             width: 20px;
             height: 20px;
             border-radius: 50%;
-            background: var(--primary);
-            color: white;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: var(--white);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.6rem;
-            font-weight: 600;
-        }
-
-        .task-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        .task-meta-left {
-            display: flex;
-            gap: 0.75rem;
-            align-items: center;
-        }
-
-        .priority-badge {
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-
-        .priority-low { background: #c6f6d5; color: #22543d; }
-        .priority-medium { background: #bee3f8; color: #2c5282; }
-        .priority-high { background: #fed7d7; color: #742a2a; }
-        .priority-urgent { background: #f56565; color: white; }
-
-        .task-deadline {
-            font-size: 0.75rem;
-            color: var(--gray);
-            display: flex;
-            align-items: center;
-            gap: 0.25rem;
-        }
-
-        .task-stats {
-            display: flex;
-            gap: 1rem;
-            font-size: 0.75rem;
-            color: var(--gray);
-        }
-
-        .task-stat {
-            display: flex;
-            align-items: center;
-            gap: 0.25rem;
+            font-size: 0.7rem;
+            font-weight: bold;
         }
 
         /* List View */
         .list-view {
-            background: white;
-            border-radius: var(--radius-lg);
-            box-shadow: var(--shadow-lg);
+            background: var(--white);
+            border-radius: var(--radius-xl);
             overflow: hidden;
+            box-shadow: var(--shadow-md);
         }
 
         .list-header {
             display: grid;
-            grid-template-columns: 2fr 1fr 150px 150px 120px 150px 100px;
+            grid-template-columns: 2fr 1fr 0.8fr 0.8fr 1fr 1fr 0.5fr;
             gap: 1rem;
             padding: 1rem 1.5rem;
             background: var(--gray-lighter);
             font-weight: 600;
             color: var(--gray);
-            font-size: 0.875rem;
+            font-size: 0.9rem;
+            text-transform: uppercase;
         }
 
         .list-item {
             display: grid;
-            grid-template-columns: 2fr 1fr 150px 150px 120px 150px 100px;
+            grid-template-columns: 2fr 1fr 0.8fr 0.8fr 1fr 1fr 0.5fr;
             gap: 1rem;
             padding: 1rem 1.5rem;
-            border-bottom: 1px solid var(--gray-light);
+            border-bottom: 1px solid var(--gray-lighter);
             align-items: center;
             transition: var(--transition);
-            text-decoration: none;
-            color: inherit;
+            cursor: pointer;
         }
 
         .list-item:hover {
             background: var(--gray-lighter);
         }
 
-        .list-title {
-            font-weight: 500;
-            color: var(--dark);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .list-people {
-            display: flex;
-            gap: -0.5rem;
-        }
-
-        .list-avatar {
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            background: var(--primary);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.75rem;
+        .list-item-title {
             font-weight: 600;
-            border: 2px solid white;
-        }
-
-        .list-status {
-            padding: 0.25rem 0.75rem;
-            border-radius: 12px;
-            font-size: 0.875rem;
-            font-weight: 500;
-            text-align: center;
-        }
-
-        .status-backlog { background: var(--gray-light); color: var(--gray); }
-        .status-todo { background: #bee3f8; color: #2c5282; }
-        .status-in-progress { background: #fbd38d; color: #744210; }
-        .status-review { background: #c6b2f3; color: #553c9a; }
-        .status-done { background: #9ae6b4; color: #22543d; }
-
-        .list-actions {
-            display: flex;
-            gap: 0.5rem;
-            justify-content: flex-end;
+            color: var(--dark);
         }
 
         /* Empty State */
         .empty-state {
             text-align: center;
             padding: 4rem 2rem;
-            background: white;
-            border-radius: var(--radius-lg);
-            box-shadow: var(--shadow);
+            background: var(--white);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-md);
         }
 
         .empty-icon {
             font-size: 4rem;
             margin-bottom: 1rem;
-            opacity: 0.3;
         }
 
         .empty-title {
             font-size: 1.5rem;
+            font-weight: bold;
             color: var(--dark);
             margin-bottom: 0.5rem;
         }
@@ -524,248 +611,441 @@
             margin-bottom: 2rem;
         }
 
-        /* Stats */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
+        /* Chat Button */
+        .chat-fab {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: var(--white);
+            border: none;
+            box-shadow: var(--shadow-xl);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            transition: var(--transition);
+            z-index: 50;
+        }
+
+        .chat-fab:hover {
+            transform: scale(1.1);
+            box-shadow: 0 20px 40px rgba(79, 70, 229, 0.4);
+        }
+
+        /* Modal */
+        .modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            visibility: hidden;
+            opacity: 0;
+            transition: var(--transition);
+            backdrop-filter: blur(5px);
+        }
+
+        .modal.active {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .modal-content {
+            background: var(--white);
+            border-radius: var(--radius-xl);
+            padding: 2rem;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            transform: scale(0.9);
+            transition: var(--transition);
+        }
+
+        .modal.active .modal-content {
+            transform: scale(1);
+        }
+
+        .modal-header {
             margin-bottom: 2rem;
         }
 
-        .stat-card {
-            background: white;
-            border-radius: var(--radius);
-            padding: 1.5rem;
-            box-shadow: var(--shadow);
-        }
-
-        .stat-label {
-            font-size: 0.875rem;
-            color: var(--gray);
-            margin-bottom: 0.5rem;
-        }
-
-        .stat-value {
-            font-size: 2rem;
-            font-weight: 700;
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: bold;
             color: var(--dark);
         }
 
-        .stat-change {
-            font-size: 0.875rem;
-            margin-top: 0.5rem;
+        .form-group {
+            margin-bottom: 1.5rem;
         }
 
-        .stat-up { color: var(--success); }
-        .stat-down { color: var(--danger); }
+        .form-label {
+            display: block;
+            font-weight: 600;
+            color: var(--dark);
+            margin-bottom: 0.5rem;
+        }
 
-        /* Loading */
-        .loading {
+        .form-input,
+        .form-select,
+        .form-textarea {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 2px solid var(--gray-light);
+            border-radius: var(--radius);
+            font-size: 0.95rem;
+            transition: var(--transition);
+        }
+
+        .form-input:focus,
+        .form-select:focus,
+        .form-textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .form-textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .modal-footer {
             display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 4rem;
-            background: white;
-            border-radius: var(--radius-lg);
-            box-shadow: var(--shadow);
+            gap: 1rem;
+            justify-content: flex-end;
+            margin-top: 2rem;
         }
 
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 4px solid var(--gray-light);
-            border-top: 4px solid var(--primary);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
+        .btn-secondary {
+            background: var(--gray-lighter);
+            color: var(--dark);
         }
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        .btn-secondary:hover {
+            background: var(--gray-light);
+        }
+
+        /* Notifications */
+        .notification {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            padding: 1rem 1.5rem;
+            background: var(--white);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-xl);
+            z-index: 2000;
+            transform: translateX(400px);
+            transition: var(--transition);
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        .notification.success {
+            border-left: 4px solid var(--success);
+        }
+
+        .notification.error {
+            border-left: 4px solid var(--danger);
+        }
+
+        .notification-title {
+            font-weight: 600;
+            color: var(--dark);
+            margin-bottom: 0.25rem;
+        }
+
+        .notification-message {
+            color: var(--gray);
+            font-size: 0.9rem;
         }
 
         /* Responsive */
-        @media (max-width: 1024px) {
-            .kanban-board {
-                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            }
-
-            .list-header,
-            .list-item {
-                grid-template-columns: 2fr 1fr 100px 100px 80px;
-            }
-
-            .list-header > *:nth-child(6),
-            .list-header > *:nth-child(7),
-            .list-item > *:nth-child(6),
-            .list-item > *:nth-child(7) {
-                display: none;
-            }
-        }
-
         @media (max-width: 768px) {
-            body {
-                padding: 1rem;
-            }
-
-            .header-top {
-                flex-direction: column;
-                gap: 1rem;
-            }
-
-            .filters {
-                flex-direction: column;
-            }
-
             .kanban-board {
                 grid-template-columns: 1fr;
             }
 
-            .list-header,
-            .list-item {
+            .stats-container {
                 grid-template-columns: 1fr;
-                gap: 0.5rem;
             }
 
-            .list-item > * {
-                padding: 0.25rem 0;
+            .toolbar {
+                flex-direction: column;
+            }
+
+            .toolbar-left,
+            .toolbar-right {
+                width: 100%;
+            }
+
+            .search-box {
+                min-width: 100%;
+            }
+
+            .list-header,
+            .list-item {
+                display: block;
+            }
+
+            .list-header > div,
+            .list-item > div {
+                padding: 0.5rem 0;
             }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <div class="header">
-            <div class="header-top">
-                <div class="header-left">
-                    <h1>📋 Система управления</h1>
-                    <nav class="nav-menu">
-                        <a href="/tasks" class="nav-link active">
-                            📋 Задачи
-                        </a>
-                        <a href="/messenger" class="nav-link">
-                            💬 Чат
-                        </a>
-                        <a href="/profile" class="nav-link">
-                            👤 Профиль
-                        </a>
-                    </nav>
-                </div>
-                <div class="header-actions">
-                    <div class="view-toggle">
-                        <button class="view-btn active" onclick="setView('kanban')">
-                            Канбан
-                        </button>
-                        <button class="view-btn" onclick="setView('list')">
-                            Список
-                        </button>
-                    </div>
-                    <button class="btn btn-primary" onclick="createNewTask()">
-                        ➕ Новая задача
-                    </button>
-                </div>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="header-left">
+                <a href="/" class="logo">Task Manager</a>
+                <nav class="nav-links">
+                    <a href="/tasks" class="nav-link active">Задачи</a>
+                    <a href="/messenger" class="nav-link">Мессенджер</a>
+                </nav>
             </div>
+            <div class="header-right">
+                <div class="user-info">
+                    <div class="user-avatar" id="userAvatar">U</div>
+                    <span id="userName">User</span>
+                </div>
+                <button class="btn btn-primary" onclick="logout()">
+                    <span>Выйти</span>
+                </button>
+            </div>
+        </div>
+    </header>
 
-            <div class="filters">
-                <div class="search-box">
-                    <input type="text" class="search-input" placeholder="Поиск задач..." onkeyup="searchTasks(event)">
-                    <span class="search-icon">🔍</span>
-                </div>
-                
-                <div class="filter-group">
-                    <button class="filter-btn active" onclick="filterByStatus('all')">Все</button>
-                    <button class="filter-btn" onclick="filterByStatus('backlog')">Бэклог</button>
-                    <button class="filter-btn" onclick="filterByStatus('todo')">К выполнению</button>
-                    <button class="filter-btn" onclick="filterByStatus('in-progress')">В работе</button>
-                    <button class="filter-btn" onclick="filterByStatus('done')">Выполнено</button>
-                </div>
-
-                <div class="filter-group">
-                    <button class="filter-btn" onclick="filterByPriority('urgent')">🔴 Срочные</button>
-                    <button class="filter-btn" onclick="filterByPriority('high')">🟡 Высокий</button>
-                    <button class="filter-btn" onclick="filterByAssignee()">👤 Мои задачи</button>
-                </div>
+    <!-- Container -->
+    <div class="container">
+        <!-- Stats -->
+        <div class="stats-container">
+            <div class="stat-card">
+                <div class="stat-icon primary">📋</div>
+                <div class="stat-value" id="totalTasks">0</div>
+                <div class="stat-label">Всего задач</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon warning">⚡</div>
+                <div class="stat-value" id="inProgressTasks">0</div>
+                <div class="stat-label">В работе</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon success">✅</div>
+                <div class="stat-value" id="completedWeek">0</div>
+                <div class="stat-label">Выполнено за неделю</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon danger">⏰</div>
+                <div class="stat-value" id="overdueTasks">0</div>
+                <div class="stat-label">Просрочено</div>
             </div>
         </div>
 
-        <!-- Stats -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-label">Всего задач</div>
-                <div class="stat-value" id="totalTasks">0</div>
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <div class="toolbar-left">
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" class="search-input" placeholder="Поиск задач..." onkeyup="searchTasks(event)">
+                </div>
+                <div class="filter-group">
+                    <button class="filter-btn active" onclick="filterByStatus(null, event)">Все</button>
+                    <button class="filter-btn" onclick="filterByStatus('backlog', event)">Бэклог</button>
+                    <button class="filter-btn" onclick="filterByStatus('todo', event)">К выполнению</button>
+                    <button class="filter-btn" onclick="filterByStatus('in-progress', event)">В работе</button>
+                    <button class="filter-btn" onclick="filterByStatus('review', event)">На проверке</button>
+                    <button class="filter-btn" onclick="filterByStatus('done', event)">Выполнено</button>
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-label">В работе</div>
-                <div class="stat-value" id="inProgressTasks">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Выполнено за неделю</div>
-                <div class="stat-value" id="completedWeek">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Просроченные</div>
-                <div class="stat-value" id="overdueTasks" style="color: var(--danger);">0</div>
+            <div class="toolbar-right">
+                <div class="view-toggle">
+                    <button class="view-btn active" onclick="setView('kanban', event)">Канбан</button>
+                    <button class="view-btn" onclick="setView('list', event)">Список</button>
+                </div>
+                <button class="btn btn-primary" onclick="createNewTask()">
+                    <span>➕ Новая задача</span>
+                </button>
             </div>
         </div>
 
         <!-- Content Area -->
         <div id="contentArea">
-            <div class="loading">
-                <div class="spinner"></div>
+            <!-- Kanban or List view will be rendered here -->
+        </div>
+    </div>
+
+    <!-- Chat FAB -->
+    <button class="chat-fab" onclick="openMessenger()">
+        💬
+    </button>
+
+    <!-- New Task Modal -->
+    <div id="newTaskModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Новая задача</h2>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Название задачи *</label>
+                    <input type="text" id="taskTitle" class="form-input" placeholder="Введите название задачи">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Описание</label>
+                    <textarea id="taskDescription" class="form-textarea" placeholder="Введите описание задачи"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Приоритет</label>
+                    <select id="taskPriority" class="form-select">
+                        <option value="low">Низкий</option>
+                        <option value="medium" selected>Средний</option>
+                        <option value="high">Высокий</option>
+                        <option value="urgent">Срочный</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Срок выполнения</label>
+                    <input type="date" id="taskDueDate" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Исполнители</label>
+                    <select id="taskAssignees" class="form-select" multiple style="height: 100px;">
+                        <!-- Users will be loaded here -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Создать чат задачи</label>
+                    <input type="checkbox" id="createTaskChat" checked> Создать чат для обсуждения задачи
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('newTaskModal')">Отмена</button>
+                <button class="btn btn-primary" onclick="saveNewTask()">Создать</button>
             </div>
         </div>
     </div>
 
+    <!-- Notification -->
+    <div id="notification" class="notification">
+        <div class="notification-title" id="notificationTitle"></div>
+        <div class="notification-message" id="notificationMessage"></div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
     <script>
-        // Глобальные переменные
+        // Global variables
         const API_URL = window.location.origin + '/api';
-        let currentView = 'kanban';
+        let currentUser = null;
         let tasks = [];
         let filteredTasks = [];
-        let currentUser = null;
         let users = [];
-        let currentFilter = { status: 'all', priority: null, assignee: null, search: '' };
+        let socket = null;
+        let currentView = 'kanban';
+        let currentFilter = {
+            status: null,
+            priority: null,
+            assignee: null,
+            search: ''
+        };
 
-        // Инициализация
+        // Drag & Drop variables
+        let draggedTaskId = null;
+        let draggedElement = null;
+
+        // Initialize
         async function init() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/login';
+                return;
+            }
+
+            const userStr = localStorage.getItem('user');
+            if (userStr) {
+                currentUser = JSON.parse(userStr);
+                document.getElementById('userName').textContent = currentUser.name;
+                document.getElementById('userAvatar').textContent = 
+                    currentUser.name ? currentUser.name[0].toUpperCase() : 'U';
+            }
+
+            // Initialize WebSocket
+            socket = io();
+            socket.emit('authenticate', token);
+            setupSocketHandlers();
+
+            // Load data
+            await loadUsers();
+            await loadTasks();
+        }
+
+        // Setup socket handlers
+        function setupSocketHandlers() {
+            socket.on('task_created', (task) => {
+                tasks.push(task);
+                applyFilters();
+                renderTasks();
+                updateStats();
+                showNotification('Новая задача', `Создана задача "${task.title}"`);
+            });
+
+            socket.on('task_updated', (updatedTask) => {
+                const index = tasks.findIndex(t => t.id === updatedTask.id);
+                if (index !== -1) {
+                    tasks[index] = updatedTask;
+                    applyFilters();
+                    renderTasks();
+                    updateStats();
+                }
+            });
+
+            socket.on('task_deleted', (data) => {
+                tasks = tasks.filter(t => t.id !== data.id);
+                applyFilters();
+                renderTasks();
+                updateStats();
+            });
+        }
+
+        // Load users
+        async function loadUsers() {
             try {
                 const token = localStorage.getItem('token');
-                if (!token) {
-                    window.location.href = '/login.html';
-                    return;
-                }
-
-                // Загружаем текущего пользователя
-                const userResponse = await fetch(`${API_URL}/profile`, {
+                const response = await fetch(`${API_URL}/users`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
-                if (!userResponse.ok) {
-                    throw new Error('Ошибка аутентификации');
+                if (response.ok) {
+                    users = await response.json();
+                    populateAssignees();
                 }
-
-                currentUser = await userResponse.json();
-
-                // Загружаем пользователей
-                const usersResponse = await fetch(`${API_URL}/users`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (usersResponse.ok) {
-                    users = await usersResponse.json();
-                }
-
-                // Загружаем задачи
-                await loadTasks();
-
             } catch (error) {
-                console.error('Ошибка инициализации:', error);
-                showError('Ошибка загрузки данных');
+                console.error('Error loading users:', error);
             }
         }
 
-        // Загрузка задач
+        // Populate assignees select
+        function populateAssignees() {
+            const select = document.getElementById('taskAssignees');
+            select.innerHTML = users.map(user => 
+                `<option value="${user.id}">${user.name} (${user.email})</option>`
+            ).join('');
+        }
+
+        // Load tasks
         async function loadTasks() {
             try {
                 const token = localStorage.getItem('token');
@@ -773,58 +1053,45 @@
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
-                if (!response.ok) {
-                    throw new Error('Ошибка загрузки задач');
+                if (response.ok) {
+                    tasks = await response.json();
+                    applyFilters();
+                    renderTasks();
+                    updateStats();
                 }
-
-                tasks = await response.json();
-                applyFilters();
-                updateStats();
-                renderTasks();
-
             } catch (error) {
-                console.error('Ошибка загрузки задач:', error);
-                showError('Не удалось загрузить задачи');
+                console.error('Error loading tasks:', error);
             }
         }
 
-        // Применение фильтров
+        // Apply filters
         function applyFilters() {
             filteredTasks = tasks.filter(task => {
-                // Фильтр по статусу
-                if (currentFilter.status !== 'all' && task.status !== currentFilter.status) {
+                if (currentFilter.status && task.status !== currentFilter.status) {
                     return false;
                 }
-
-                // Фильтр по приоритету
                 if (currentFilter.priority && task.priority !== currentFilter.priority) {
                     return false;
                 }
-
-                // Фильтр по исполнителю
                 if (currentFilter.assignee === 'me' && 
                     (!task.assignees || !task.assignees.includes(currentUser.id))) {
                     return false;
                 }
-
-                // Поиск
                 if (currentFilter.search) {
                     const search = currentFilter.search.toLowerCase();
                     return task.title.toLowerCase().includes(search) ||
                            (task.description && task.description.toLowerCase().includes(search));
                 }
-
                 return true;
             });
         }
 
-        // Обновление статистики
+        // Update stats
         function updateStats() {
             document.getElementById('totalTasks').textContent = tasks.length;
             document.getElementById('inProgressTasks').textContent = 
                 tasks.filter(t => t.status === 'in-progress').length;
             
-            // Выполнено за неделю
             const weekAgo = new Date();
             weekAgo.setDate(weekAgo.getDate() - 7);
             document.getElementById('completedWeek').textContent = 
@@ -833,7 +1100,6 @@
                     new Date(t.updatedAt) > weekAgo
                 ).length;
             
-            // Просроченные
             const today = new Date();
             document.getElementById('overdueTasks').textContent = 
                 tasks.filter(t => 
@@ -843,7 +1109,7 @@
                 ).length;
         }
 
-        // Отрисовка задач
+        // Render tasks
         function renderTasks() {
             const contentArea = document.getElementById('contentArea');
             
@@ -870,14 +1136,14 @@
             }
         }
 
-        // Канбан представление
+        // Render Kanban view
         function renderKanbanView() {
             const columns = {
-                'backlog': { title: '📋 Бэклог', tasks: [] },
-                'todo': { title: '📝 К выполнению', tasks: [] },
-                'in-progress': { title: '⚡ В работе', tasks: [] },
-                'review': { title: '👀 На проверке', tasks: [] },
-                'done': { title: '✅ Выполнено', tasks: [] }
+                'backlog': { title: '📋 Бэклог', color: '#6b7280', tasks: [] },
+                'todo': { title: '📝 К выполнению', color: '#3b82f6', tasks: [] },
+                'in-progress': { title: '⚡ В работе', color: '#f59e0b', tasks: [] },
+                'review': { title: '👀 На проверке', color: '#8b5cf6', tasks: [] },
+                'done': { title: '✅ Выполнено', color: '#10b981', tasks: [] }
             };
 
             filteredTasks.forEach(task => {
@@ -890,14 +1156,13 @@
             contentArea.innerHTML = `
                 <div class="kanban-board">
                     ${Object.entries(columns).map(([status, column]) => `
-                        <div class="kanban-column" data-status="${status}">
+                        <div class="kanban-column">
                             <div class="column-header">
-                                <div class="column-title">
-                                    ${column.title}
-                                </div>
+                                <div class="column-title">${column.title}</div>
                                 <span class="column-count">${column.tasks.length}</span>
                             </div>
                             <div class="column-content" 
+                                data-status="${status}"
                                 ondrop="handleDrop(event, '${status}')" 
                                 ondragover="handleDragOver(event)"
                                 ondragenter="handleDragEnter(event)"
@@ -910,7 +1175,65 @@
             `;
         }
 
-        // Список представление
+        // Create task card
+        function createTaskCard(task) {
+            const assignees = task.assignees || [];
+            const dueDate = task.dueDate ? new Date(task.dueDate) : null;
+            const isOverdue = dueDate && dueDate < new Date() && task.status !== 'done';
+
+            return `
+                <div class="task-card" 
+                    draggable="true" 
+                    data-task-id="${task.id}"
+                    ondragstart="handleDragStart(event, ${task.id})"
+                    ondragend="handleDragEnd(event)"
+                    onclick="openTask(${task.id})">
+                    <div class="task-title">${escapeHtml(task.title)}</div>
+                    ${task.description ? `
+                        <div class="task-description">${escapeHtml(task.description)}</div>
+                    ` : ''}
+                    ${assignees.length > 0 ? `
+                        <div class="task-people">
+                            ${assignees.slice(0, 3).map(userId => {
+                                const user = users.find(u => u.id === userId);
+                                return user ? `
+                                    <div class="task-person">
+                                        <div class="person-avatar">
+                                            ${user.name ? user.name[0].toUpperCase() : 'U'}
+                                        </div>
+                                        <span>${user.name.split(' ')[0]}</span>
+                                    </div>
+                                ` : '';
+                            }).join('')}
+                            ${assignees.length > 3 ? `
+                                <div class="task-person">
+                                    <span>+${assignees.length - 3}</span>
+                                </div>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+                    <div class="task-meta">
+                        <div class="task-meta-left">
+                            <span class="priority-badge priority-${task.priority}">
+                                ${getPriorityText(task.priority)}
+                            </span>
+                            ${dueDate ? `
+                                <div class="task-deadline ${isOverdue ? 'overdue' : ''}">
+                                    📅 ${dueDate.toLocaleDateString('ru')}
+                                </div>
+                            ` : ''}
+                        </div>
+                        <div class="task-stats">
+                            ${task.hasChat ? '<div class="task-stat">💬</div>' : ''}
+                            ${task.commentsCount > 0 ? `<div class="task-stat">💭 ${task.commentsCount}</div>` : ''}
+                            ${task.filesCount > 0 ? `<div class="task-stat">📎 ${task.filesCount}</div>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Render List view
         function renderListView() {
             const contentArea = document.getElementById('contentArea');
             contentArea.innerHTML = `
@@ -929,169 +1252,42 @@
             `;
         }
 
-        // Создание карточки задачи
-        function createTaskCard(task) {
-            const assignees = task.assignees || [];
-            const watchers = task.watchers || [];
-            const dueDate = task.dueDate ? new Date(task.dueDate) : null;
-            const isOverdue = dueDate && dueDate < new Date() && task.status !== 'done';
-
-            return `
-                <div class="task-card" 
-                    draggable="true" 
-                    ondragstart="handleDragStart(event, ${task.id})"
-                    ondragend="handleDragEnd(event)"
-                    onclick="openTask(${task.id})">
-                    <div class="task-header-row">
-                        <div class="task-title">${escapeHtml(task.title)}</div>
-                    </div>
-                    ${task.description ? `
-                        <div class="task-description">${escapeHtml(task.description)}</div>
-                    ` : ''}
-                    ${assignees.length > 0 || watchers.length > 0 ? `
-                        <div class="task-people">
-                            ${assignees.map(userId => {
-                                const user = users.find(u => u.id === userId);
-                                return user ? `
-                                    <div class="task-person">
-                                        <div class="person-avatar">
-                                            ${user.name ? user.name[0].toUpperCase() : 'U'}
-                                        </div>
-                                        <span>${user.name}</span>
-                                    </div>
-                                ` : '';
-                            }).join('')}
-                            ${watchers.length > 0 ? `
-                                <div class="task-person" style="background: var(--gray-lighter);">
-                                    <span>👁️ ${watchers.length}</span>
-                                </div>
-                            ` : ''}
-                        </div>
-                    ` : ''}
-                    <div class="task-meta">
-                        <div class="task-meta-left">
-                            <span class="priority-badge priority-${task.priority}">
-                                ${getPriorityText(task.priority)}
-                            </span>
-                            ${dueDate ? `
-                                <div class="task-deadline ${isOverdue ? 'overdue' : ''}">
-                                    📅 ${dueDate.toLocaleDateString('ru')}
-                                </div>
-                            ` : ''}
-                        </div>
-                        <div class="task-stats">
-                            <div class="task-stat">💬 ${task.commentsCount || 0}</div>
-                            <div class="task-stat">📎 ${task.filesCount || 0}</div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-        // Создание элемента списка
+        // Create list item
         function createListItem(task) {
             const assignees = task.assignees || [];
-            const dueDate = task.dueDate ? new Date(task.dueDate) : null;
+            const dueDate = task.dueDate ? new Date(task.dueDate).toLocaleDateString('ru') : '-';
+            const createdDate = new Date(task.createdAt).toLocaleDateString('ru');
 
             return `
                 <div class="list-item" onclick="openTask(${task.id})">
-                    <div class="list-title">
-                        ${escapeHtml(task.title)}
-                    </div>
-                    <div class="list-people">
-                        ${assignees.slice(0, 3).map(userId => {
-                            const user = users.find(u => u.id === userId);
-                            return user ? `
-                                <div class="list-avatar" title="${user.name}">
-                                    ${user.name ? user.name[0].toUpperCase() : 'U'}
-                                </div>
-                            ` : '';
-                        }).join('')}
-                        ${assignees.length > 3 ? `
-                            <div class="list-avatar">+${assignees.length - 3}</div>
-                        ` : ''}
-                    </div>
+                    <div class="list-item-title">${escapeHtml(task.title)}</div>
                     <div>
-                        <span class="list-status status-${task.status}">
-                            ${getStatusText(task.status)}
-                        </span>
+                        ${assignees.map(userId => {
+                            const user = users.find(u => u.id === userId);
+                            return user ? user.name : '';
+                        }).join(', ') || '-'}
                     </div>
+                    <div>${getStatusText(task.status)}</div>
                     <div>
                         <span class="priority-badge priority-${task.priority}">
                             ${getPriorityText(task.priority)}
                         </span>
                     </div>
+                    <div>${dueDate}</div>
+                    <div>${createdDate}</div>
                     <div>
-                        ${dueDate ? dueDate.toLocaleDateString('ru') : '-'}
-                    </div>
-                    <div>
-                        ${new Date(task.createdAt).toLocaleDateString('ru')}
-                    </div>
-                    <div class="list-actions">
-                        <button class="task-action-btn" onclick="event.stopPropagation(); duplicateTask(${task.id})">
-                            📋
-                        </button>
+                        ${task.hasChat ? '💬' : ''}
                     </div>
                 </div>
             `;
         }
 
-        // Создание новой задачи
-        function createNewTask() {
-            window.location.href = '/task/new';
-        }
-
-        // Открыть задачу
-        function openTask(taskId) {
-            window.location.href = `/task/${taskId}`;
-        }
-
-        // Дублировать задачу
-        async function duplicateTask(taskId) {
-            if (!confirm('Создать копию задачи?')) return;
-
-            try {
-                const token = localStorage.getItem('token');
-                const task = tasks.find(t => t.id === taskId);
-                
-                const response = await fetch(`${API_URL}/tasks`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        ...task,
-                        title: task.title + ' (копия)',
-                        id: undefined,
-                        createdAt: undefined,
-                        updatedAt: undefined,
-                        status: 'backlog'
-                    })
-                });
-
-                if (!response.ok) throw new Error('Ошибка создания');
-
-                const newTask = await response.json();
-                await loadTasks();
-                alert('Задача успешно скопирована');
-
-            } catch (error) {
-                console.error('Ошибка дублирования:', error);
-                alert('Не удалось создать копию задачи');
-            }
-        }
-
-        // Drag & Drop для Канбан
-        let draggedTaskId = null;
-        let draggedElement = null;
-
+        // Drag & Drop handlers
         function handleDragStart(event, taskId) {
             draggedTaskId = taskId;
             draggedElement = event.target;
             event.dataTransfer.effectAllowed = 'move';
             event.target.classList.add('dragging');
-            event.dataTransfer.setData('text/html', event.target.innerHTML);
         }
 
         function handleDragOver(event) {
@@ -1099,13 +1295,6 @@
                 event.preventDefault();
             }
             event.dataTransfer.dropEffect = 'move';
-            
-            // Add visual feedback
-            const column = event.target.closest('.column-content');
-            if (column) {
-                column.style.background = 'rgba(102, 126, 234, 0.05)';
-            }
-            
             return false;
         }
 
@@ -1116,10 +1305,8 @@
         }
 
         function handleDragLeave(event) {
-            const column = event.target.closest('.column-content');
-            if (column) {
-                column.style.background = '';
-                column.classList.remove('drag-over');
+            if (event.target.classList && event.target.classList.contains('column-content')) {
+                event.target.classList.remove('drag-over');
             }
         }
 
@@ -1131,7 +1318,6 @@
             
             const column = event.target.closest('.column-content');
             if (column) {
-                column.style.background = '';
                 column.classList.remove('drag-over');
             }
             
@@ -1150,21 +1336,19 @@
 
                 if (!response.ok) throw new Error('Ошибка обновления');
 
-                // Обновляем локальные данные
                 const task = tasks.find(t => t.id === draggedTaskId);
                 if (task) {
                     task.status = newStatus;
                     task.updatedAt = new Date().toISOString();
-                    
-                    // Показываем уведомление
-                    showNotification('Статус обновлен', `Задача "${task.title}" перемещена в ${getStatusText(newStatus)}`);
+                    showNotification('Статус обновлен', `Задача "${task.title}" перемещена`);
                 }
 
+                applyFilters();
                 renderTasks();
                 updateStats();
 
             } catch (error) {
-                console.error('Ошибка обновления статуса:', error);
+                console.error('Error updating task status:', error);
                 showNotification('Ошибка', 'Не удалось обновить статус задачи', 'error');
             } finally {
                 draggedTaskId = null;
@@ -1179,55 +1363,29 @@
 
         function handleDragEnd(event) {
             event.target.classList.remove('dragging');
-            
-            // Clean up all columns
             document.querySelectorAll('.column-content').forEach(column => {
-                column.style.background = '';
                 column.classList.remove('drag-over');
             });
-            
             draggedTaskId = null;
             draggedElement = null;
         }
 
-        // Фильтры
-        function setView(view) {
+        // Filters
+        function setView(view, event) {
             currentView = view;
-            
-            // Обновляем кнопки
             document.querySelectorAll('.view-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
             event.target.classList.add('active');
-            
             renderTasks();
         }
 
-        function filterByStatus(status) {
+        function filterByStatus(status, event) {
             currentFilter.status = status;
-            
-            // Обновляем кнопки
             document.querySelectorAll('.filter-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
             event.target.classList.add('active');
-            
-            applyFilters();
-            renderTasks();
-        }
-
-        function filterByPriority(priority) {
-            currentFilter.priority = currentFilter.priority === priority ? null : priority;
-            event.target.classList.toggle('active');
-            
-            applyFilters();
-            renderTasks();
-        }
-
-        function filterByAssignee() {
-            currentFilter.assignee = currentFilter.assignee === 'me' ? null : 'me';
-            event.target.classList.toggle('active');
-            
             applyFilters();
             renderTasks();
         }
@@ -1238,7 +1396,122 @@
             renderTasks();
         }
 
-        // Вспомогательные функции
+        // Task operations
+        function createNewTask() {
+            document.getElementById('newTaskModal').classList.add('active');
+        }
+
+        async function saveNewTask() {
+            const title = document.getElementById('taskTitle').value.trim();
+            if (!title) {
+                showNotification('Ошибка', 'Введите название задачи', 'error');
+                return;
+            }
+
+            const assigneesSelect = document.getElementById('taskAssignees');
+            const selectedAssignees = Array.from(assigneesSelect.selectedOptions)
+                .map(option => parseInt(option.value));
+
+            const taskData = {
+                title,
+                description: document.getElementById('taskDescription').value,
+                priority: document.getElementById('taskPriority').value,
+                dueDate: document.getElementById('taskDueDate').value || null,
+                assignees: selectedAssignees,
+                status: 'backlog'
+            };
+
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`${API_URL}/tasks`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(taskData)
+                });
+
+                if (!response.ok) throw new Error('Ошибка создания');
+
+                const newTask = await response.json();
+
+                // Create task chat if checkbox is checked
+                if (document.getElementById('createTaskChat').checked) {
+                    await createTaskChat(newTask.id, selectedAssignees);
+                }
+
+                closeModal('newTaskModal');
+                document.getElementById('taskTitle').value = '';
+                document.getElementById('taskDescription').value = '';
+                document.getElementById('taskDueDate').value = '';
+                
+                await loadTasks();
+                showNotification('Успех', `Задача "${title}" создана`);
+
+            } catch (error) {
+                console.error('Error creating task:', error);
+                showNotification('Ошибка', 'Не удалось создать задачу', 'error');
+            }
+        }
+
+        async function createTaskChat(taskId, members) {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`${API_URL}/chats`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        type: 'task',
+                        taskId: taskId,
+                        members: members
+                    })
+                });
+
+                if (!response.ok) throw new Error('Ошибка создания чата');
+
+                const task = tasks.find(t => t.id === taskId);
+                if (task) {
+                    task.hasChat = true;
+                }
+
+            } catch (error) {
+                console.error('Error creating task chat:', error);
+            }
+        }
+
+        function openTask(taskId) {
+            window.location.href = `/task.html?id=${taskId}`;
+        }
+
+        function openMessenger() {
+            window.location.href = '/messenger';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        // Notifications
+        function showNotification(title, message, type = 'success') {
+            const notification = document.getElementById('notification');
+            const notificationTitle = document.getElementById('notificationTitle');
+            const notificationMessage = document.getElementById('notificationMessage');
+            
+            notificationTitle.textContent = title;
+            notificationMessage.textContent = message;
+            notification.className = `notification ${type}`;
+            notification.classList.add('show');
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // Utility functions
         function getStatusText(status) {
             const statuses = {
                 'backlog': 'Бэклог',
@@ -1272,271 +1545,16 @@
             return text.replace(/[&<>"']/g, m => map[m]);
         }
 
-        function showError(message) {
-            const contentArea = document.getElementById('contentArea');
-            contentArea.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon">⚠️</div>
-                    <div class="empty-title">Ошибка</div>
-                    <div class="empty-description">${message}</div>
-                    <button class="btn btn-primary" onclick="location.reload()">
-                        Обновить страницу
-                    </button>
-                </div>
-            `;
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/login';
         }
 
-        // WebSocket для real-time обновлений
-        function connectWebSocket() {
-            const socket = io();
-            
-            socket.on('connect', () => {
-                console.log('WebSocket connected');
-                const token = localStorage.getItem('token');
-                socket.emit('authenticate', token);
-            });
-
-            socket.on('authenticated', (data) => {
-                if (data.success) {
-                    console.log('WebSocket authenticated');
-                    // Запрос разрешения на уведомления
-                    if (Notification.permission === 'default') {
-                        Notification.requestPermission();
-                    }
-                }
-            });
-
-            socket.on('task_created', (task) => {
-                // Добавляем новую задачу в список
-                tasks.unshift(task);
-                applyFilters();
-                updateStats();
-                renderTasks();
-                
-                // Показываем уведомление
-                if (task.creatorId !== currentUser.id) {
-                    showNotification('Новая задача', `${task.creatorName} создал задачу: ${task.title}`, 'info');
-                }
-            });
-
-            socket.on('task_updated', (updatedTask) => {
-                const index = tasks.findIndex(t => t.id === updatedTask.id);
-                if (index !== -1) {
-                    const oldTask = tasks[index];
-                    tasks[index] = updatedTask;
-                    applyFilters();
-                    updateStats();
-                    renderTasks();
-                    
-                    // Показываем уведомление об изменениях
-                    if (updatedTask.updatedBy !== currentUser.id) {
-                        // Проверяем, что изменилось
-                        if (oldTask.status !== updatedTask.status) {
-                            showNotification(
-                                'Статус изменен', 
-                                `Задача "${updatedTask.title}" перемещена в ${getStatusText(updatedTask.status)}`,
-                                'info'
-                            );
-                        } else if (oldTask.assignees?.length !== updatedTask.assignees?.length) {
-                            showNotification(
-                                'Изменение исполнителей',
-                                `Обновлены исполнители задачи "${updatedTask.title}"`,
-                                'info'
-                            );
-                        } else {
-                            showNotification(
-                                'Задача обновлена',
-                                `Изменена задача: ${updatedTask.title}`,
-                                'info'
-                            );
-                        }
-                    }
-                }
-            });
-
-            socket.on('task_deleted', ({ id }) => {
-                const task = tasks.find(t => t.id === id);
-                if (task) {
-                    tasks = tasks.filter(t => t.id !== id);
-                    applyFilters();
-                    updateStats();
-                    renderTasks();
-                    
-                    showNotification('Задача удалена', `Удалена задача: ${task.title}`, 'warning');
-                }
-            });
-
-            socket.on('task_assigned', (data) => {
-                // Уведомление о назначении задачи
-                if (data.assigneeId === currentUser.id) {
-                    showNotification(
-                        'Новое назначение',
-                        `Вам назначена задача: ${data.taskTitle}`,
-                        'success'
-                    );
-                    
-                    // Обновляем список задач
-                    loadTasks();
-                }
-            });
-
-            socket.on('task_comment', (data) => {
-                // Уведомление о новом комментарии
-                const task = tasks.find(t => t.id === data.taskId);
-                if (task && (task.assignees?.includes(currentUser.id) || task.watchers?.includes(currentUser.id))) {
-                    showNotification(
-                        'Новый комментарий',
-                        `${data.userName} прокомментировал: ${data.taskTitle}`,
-                        'info'
-                    );
-                    
-                    // Обновляем счетчик комментариев
-                    if (task.commentsCount !== undefined) {
-                        task.commentsCount++;
-                        renderTasks();
-                    }
-                }
-            });
-
-            socket.on('task_due_soon', (data) => {
-                // Уведомление о приближающемся сроке
-                showNotification(
-                    '⏰ Приближается срок',
-                    `Задача "${data.taskTitle}" должна быть выполнена ${data.dueDate}`,
-                    'warning'
-                );
-            });
-
-            socket.on('disconnect', () => {
-                console.log('WebSocket disconnected');
-                showNotification('Соединение потеряно', 'Подключение к серверу прервано', 'error');
-            });
-
-            socket.on('reconnect', () => {
-                console.log('WebSocket reconnected');
-                showNotification('Соединение восстановлено', 'Подключение к серверу восстановлено', 'success');
-                loadTasks(); // Перезагружаем задачи
-            });
-
-            return socket;
-        }
-
-        // Система уведомлений
-        let notificationContainer = null;
-
-        function createNotificationContainer() {
-            if (!notificationContainer) {
-                notificationContainer = document.createElement('div');
-                notificationContainer.className = 'notification-container';
-                document.body.appendChild(notificationContainer);
-            }
-            return notificationContainer;
-        }
-
-        function showNotification(title, message, type = 'info') {
-            // Показываем уведомление в UI
-            const container = createNotificationContainer();
-            
-            const notification = document.createElement('div');
-            notification.className = `notification ${type}`;
-            
-            const icons = {
-                success: '✅',
-                error: '❌',
-                warning: '⚠️',
-                info: 'ℹ️'
-            };
-            
-            notification.innerHTML = `
-                <div class="notification-icon">${icons[type]}</div>
-                <div class="notification-content">
-                    <div class="notification-title">${escapeHtml(title)}</div>
-                    <div class="notification-message">${escapeHtml(message)}</div>
-                </div>
-                <button class="notification-close" onclick="closeNotification(this)">×</button>
-            `;
-            
-            container.appendChild(notification);
-            
-            // Автоматически скрываем через 5 секунд
-            setTimeout(() => {
-                notification.classList.add('hiding');
-                setTimeout(() => {
-                    if (notification.parentNode) {
-                        notification.remove();
-                    }
-                }, 300);
-            }, 5000);
-            
-            // Показываем браузерное уведомление если разрешено
-            if (Notification.permission === 'granted' && document.hidden) {
-                const browserNotification = new Notification(title, {
-                    body: message,
-                    icon: '/icon.png',
-                    badge: '/badge.png'
-                });
-                
-                browserNotification.onclick = () => {
-                    window.focus();
-                    browserNotification.close();
-                };
-            }
-        }
-
-        function closeNotification(button) {
-            const notification = button.closest('.notification');
-            notification.classList.add('hiding');
-            setTimeout(() => {
-                notification.remove();
-            }, 300);
-        }
-
-        // Запуск при загрузке
+        // Initialize on load
         document.addEventListener('DOMContentLoaded', () => {
             init();
-            const socket = connectWebSocket();
-            
-            // Делаем функцию доступной глобально для onclick
-            window.closeNotification = closeNotification;
-            
-            // Периодическая проверка сроков
-            setInterval(() => {
-                checkDeadlines();
-            }, 60000); // Каждую минуту
         });
-
-        // Проверка приближающихся сроков
-        function checkDeadlines() {
-            const now = new Date();
-            const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-            
-            tasks.forEach(task => {
-                if (task.dueDate && task.status !== 'done') {
-                    const dueDate = new Date(task.dueDate);
-                    
-                    if (dueDate < tomorrow && dueDate > now) {
-                        // Задача должна быть выполнена в течение 24 часов
-                        if (task.assignees?.includes(currentUser.id)) {
-                            showNotification(
-                                '⏰ Приближается срок',
-                                `Задача "${task.title}" должна быть выполнена завтра`,
-                                'warning'
-                            );
-                        }
-                    } else if (dueDate < now) {
-                        // Задача просрочена
-                        if (task.assignees?.includes(currentUser.id)) {
-                            showNotification(
-                                '🔴 Просрочена задача',
-                                `Задача "${task.title}" просрочена!`,
-                                'error'
-                            );
-                        }
-                    }
-                }
-            });
-        }
     </script>
-    <script src="/socket.io/socket.io.js"></script>
 </body>
 </html>

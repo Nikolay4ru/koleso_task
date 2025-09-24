@@ -87,21 +87,21 @@ class ChatManager {
         });
     }
 
-    async createTaskChat(taskId, members, creatorId) {
-        const task = this.db.data.tasks.find(t => t.id === taskId);
-        if (!task) {
-            throw new Error('Task not found');
-        }
-
-        return this.createChat({
-            type: 'task',
-            name: `Задача: ${task.title}`,
-            members,
-            creatorId,
-            avatar: null,
-            metadata: { taskId, taskTitle: task.title }
-        });
+async createTaskChat(taskId, members, creatorId) {
+    const task = this.db.data.tasks.find(t => t.id === taskId);
+    if (!task) {
+        throw new Error('Task not found');
     }
+
+    return this.createChat({
+        type: 'task',
+        name: `Задача: ${task.title}`,
+        members,
+        creatorId,
+        avatar: null,
+        metadata: { taskId, taskTitle: task.title }
+    });
+}
 
     async getUserChats(userId) {
         // Убеждаемся, что структура существует

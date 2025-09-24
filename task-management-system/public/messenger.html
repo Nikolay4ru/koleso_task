@@ -229,6 +229,10 @@
             position: relative;
         }
 
+        .chat-avatar.task {
+    background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+}
+
         .chat-avatar.group {
             background: var(--secondary);
         }
@@ -1037,7 +1041,7 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        const API_URL = 'http://192.168.0.69:3000/api';
+        const API_URL = 'https://task2.koleso.app/api';
         let socket;
         let currentUser = null;
         let currentChatId = null;
@@ -1275,99 +1279,123 @@
         }
 
         // Display chats
-        function displayChats() {
-            const chatList = document.getElementById('chatList');
-            
-            if (chats.length === 0) {
-                chatList.innerHTML = `
-                    <div style="padding: 2rem; text-align: center; color: var(--gray);">
-                        <p>Нет чатов</p>
-                        <p style="font-size: 0.875rem; margin-top: 0.5rem;">
-                            Создайте личный или групповой чат
-                        </p>
-                    </div>
-                `;
-                return;
-            }
+        // Обновите функцию displayChats() в messenger.html
+function displayChats() {
+    const chatList = document.getElementById('chatList');
+    
+    if (chats.length === 0) {
+        chatList.innerHTML = `
+            <div style="padding: 2rem; text-align: center; color: var(--gray);">
+                <p>Нет чатов</p>
+                <p style="font-size: 0.875rem; margin-top: 0.5rem;">
+                    Создайте личный или групповой чат
+                </p>
+            </div>
+        `;
+        return;
+    }
 
-            chatList.innerHTML = chats.map(chat => {
-                const isActive = chat.id === currentChatId;
-                const chatName = chat.type === 'private' ? 
-                    (chat.otherUser ? chat.otherUser.name : 'Пользователь') : 
-                    chat.name;
-                
-                const lastMessage = chat.lastMessage ? chat.lastMessage.text : 'Нет сообщений';
-                const lastTime = chat.lastMessageAt ? 
-                    new Date(chat.lastMessageAt).toLocaleTimeString('ru', { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                    }) : '';
-
-                const isOnline = chat.type === 'private' && chat.otherUser && chat.otherUser.online;
-                const avatar = chat.type === 'private' ? 
-                    (chat.otherUser && chat.otherUser.name ? chat.otherUser.name[0].toUpperCase() : 'U') :
-                    '👥';
-
-                return `
-                    <div class="chat-item ${isActive ? 'active' : ''}" onclick="selectChat('${chat.id}')">
-                        <div class="chat-avatar ${chat.type === 'group' ? 'group' : ''}">
-                            ${avatar}
-                            ${isOnline ? '<span class="online-indicator"></span>' : ''}
-                        </div>
-                        <div class="chat-info">
-                            <div class="chat-name">${escapeHtml(chatName)}</div>
-                            <div class="chat-last-message">${escapeHtml(lastMessage)}</div>
-                        </div>
-                        <div class="chat-meta">
-                            <div class="chat-time">${lastTime}</div>
-                            ${chat.unreadCount > 0 ? `
-                                <div class="unread-badge">${chat.unreadCount}</div>
-                            ` : ''}
-                        </div>
-                    </div>
-                `;
-            }).join('');
+    chatList.innerHTML = chats.map(chat => {
+        const isActive = chat.id === currentChatId;
+        let chatName, avatar, chatType;
+        
+        // Определяем тип чата и его отображение
+        if (chat.type === 'private') {
+            chatName = chat.otherUser ? chat.otherUser.name : 'Пользователь';
+            avatar = chat.otherUser && chat.otherUser.name ? 
+                chat.otherUser.name[0].toUpperCase() : 'U';
+            chatType = '';
+        } else if (chat.type === 'task') {
+            // Обработка чатов задач
+            chatName = chat.name || 'Чат задачи';
+            avatar = '📋';  // Иконка для чата задачи
+            chatType = 'task';
+        } else {
+            // Групповые чаты
+            chatName = chat.name || 'Группа';
+            avatar = '👥';
+            chatType = 'group';
         }
+        
+        const lastMessage = chat.lastMessage ? chat.lastMessage.text : 'Нет сообщений';
+        const lastTime = chat.lastMessageAt ? 
+            new Date(chat.lastMessageAt).toLocaleTimeString('ru', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            }) : '';
+
+        const isOnline = chat.type === 'private' && chat.otherUser && chat.otherUser.online;
+
+        return `
+            <div class="chat-item ${isActive ? 'active' : ''}" onclick="selectChat('${chat.id}')">
+                <div class="chat-avatar ${chatType}">
+                    ${avatar}
+                    ${isOnline ? '<span class="online-indicator"></span>' : ''}
+                </div>
+                <div class="chat-info">
+                    <div class="chat-name">${escapeHtml(chatName)}</div>
+                    <div class="chat-last-message">${escapeHtml(lastMessage)}</div>
+                </div>
+                <div class="chat-meta">
+                    <div class="chat-time">${lastTime}</div>
+                    ${chat.unreadCount > 0 ? `
+                        <div class="unread-badge">${chat.unreadCount}</div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
 
         // Select chat
         async function selectChat(chatId) {
-            currentChatId = chatId;
-            
-            // Update UI
-            document.getElementById('emptyChatState').style.display = 'none';
-            document.getElementById('activeChatArea').style.display = 'flex';
-            
-            // Update chat list
-            displayChats();
-            
-            // Load chat info
-            const chat = chats.find(c => c.id === chatId);
-            if (chat) {
-                const chatName = chat.type === 'private' ? 
-                    (chat.otherUser ? chat.otherUser.name : 'Пользователь') : 
-                    chat.name;
-                
-                document.getElementById('chatHeaderName').textContent = chatName;
-                document.getElementById('chatHeaderAvatar').textContent = 
-                    chat.type === 'private' ? 
-                        (chat.otherUser && chat.otherUser.name ? chat.otherUser.name[0].toUpperCase() : 'U') :
-                        '👥';
-                
-                if (chat.type === 'private' && chat.otherUser) {
-                    document.getElementById('chatHeaderStatus').textContent = 
-                        chat.otherUser.online ? 'В сети' : 'Не в сети';
-                } else {
-                    document.getElementById('chatHeaderStatus').textContent = 
-                        `${chat.members.length} участников`;
-                }
-            }
-            
-            // Join chat room
-            socket.emit('join_chat', chatId);
-            
-            // Load messages
-            await loadMessages();
+    currentChatId = chatId;
+    
+    // Update UI
+    document.getElementById('emptyChatState').style.display = 'none';
+    document.getElementById('activeChatArea').style.display = 'flex';
+    
+    // Update chat list
+    displayChats();
+    
+    // Load chat info
+    const chat = chats.find(c => c.id === chatId);
+    if (chat) {
+        let chatName, chatAvatar;
+        
+        if (chat.type === 'private') {
+            chatName = chat.otherUser ? chat.otherUser.name : 'Пользователь';
+            chatAvatar = chat.otherUser && chat.otherUser.name ? 
+                chat.otherUser.name[0].toUpperCase() : 'U';
+        } else if (chat.type === 'task') {
+            chatName = chat.name || 'Чат задачи';
+            chatAvatar = '📋';
+        } else {
+            chatName = chat.name || 'Группа';
+            chatAvatar = '👥';
         }
+        
+        document.getElementById('chatHeaderName').textContent = chatName;
+        document.getElementById('chatHeaderAvatar').textContent = chatAvatar;
+        
+        if (chat.type === 'private' && chat.otherUser) {
+            document.getElementById('chatHeaderStatus').textContent = 
+                chat.otherUser.online ? 'В сети' : 'Не в сети';
+        } else if (chat.type === 'task') {
+            document.getElementById('chatHeaderStatus').textContent = 
+                `Задача #${chat.metadata?.taskId || ''}`;
+        } else {
+            document.getElementById('chatHeaderStatus').textContent = 
+                `${chat.members.length} участников`;
+        }
+    }
+    
+    // Join chat room
+    socket.emit('join_chat', chatId);
+    
+    // Load messages
+    await loadMessages();
+}
 
         // Load messages
         async function loadMessages() {
