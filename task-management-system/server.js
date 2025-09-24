@@ -1,3 +1,4 @@
+
 // server.js - Основной файл сервера с полной интеграцией чата
 const express = require('express');
 const cors = require('cors');
@@ -11,8 +12,18 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs').promises;
 const crypto = require('crypto');
+const webpush = require('web-push');
+require('dotenv').config();
 
 const ChatManager = require('./chat');
+
+
+// Настройка VAPID ключей
+webpush.setVapidDetails(
+    'mailto:admin@koleso.app',
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+);
 
 // Конфигурация
 const config = {
@@ -30,8 +41,27 @@ const config = {
         botToken: process.env.TELEGRAM_BOT_TOKEN || 'YOUR_BOT_TOKEN',
         enabled: process.env.TELEGRAM_ENABLED === 'true'
     },
-    adminEmail: process.env.ADMIN_EMAIL || 'admin@example.com'
+    adminEmail: process.env.ADMIN_EMAIL || 'admin@example.com',
+    vapid: {
+        publicKey: process.env.VAPID_PUBLIC_KEY,
+        privateKey: process.env.VAPID_PRIVATE_KEY,
+        subject: process.env.APP_URL || 'https://task2.koleso.app'
+    }
 };
+
+
+// Настройка VAPID ключей для web-push (ТОЛЬКО если ключи существуют)
+if (config.vapid.publicKey && config.vapid.privateKey) {
+    console.log('Настройка VAPID ключей...');
+    webpush.setVapidDetails(
+        `mailto:${process.env.EMAIL_USER || 'admin@example.com'}`,
+        config.vapid.publicKey,
+        config.vapid.privateKey
+    );
+    console.log('VAPID ключи настроены успешно');
+} else {
+    console.warn('VAPID ключи не найдены. Push уведомления будут отключены.');
+}
 
 // Инициализация Express
 const app = express();
@@ -77,6 +107,60 @@ app.get('/messenger', (req, res) => {
 app.get('/chat', (req, res) => {
     res.redirect('/messenger');
 });
+
+
+// Отправка push уведомления о звонке
+async function sendCallPushNotification(userId, callData) {
+    try {
+        const user = await db.findUserById(userId);
+        if (!user || !user.pushSubscription) return;
+        
+        const caller = await db.findUserById(callData.initiatorId);
+        const callerName = caller ? caller.name : 'Пользователь';
+        
+        const payload = JSON.stringify({
+            title: 'Входящий звонок',
+            body: `${callerName} звонит вам`,
+            callId: callData.id,
+            callType: callData.type,
+            token: generateTempToken(userId) // Временный токен для API вызовов
+        });
+        
+        await webpush.sendNotification(
+            user.pushSubscription,
+            payload,
+            {
+                TTL: 30, // Время жизни уведомления 30 секунд
+                urgency: 'high'
+            }
+        );
+        
+        console.log('Push уведомление отправлено пользователю:', userId);
+    } catch (error) {
+        console.error('Ошибка отправки push уведомления:', error);
+        
+        // Если подписка недействительна, удаляем её
+        if (error.statusCode === 410) {
+            const user = await db.findUserById(userId);
+            if (user) {
+                user.pushSubscription = null;
+                await db.save();
+            }
+        }
+    }
+}
+
+
+// Функция генерации временного токена для push действий
+function generateTempToken(userId) {
+    return jwt.sign(
+        { userId, temp: true },
+        config.jwtSecret,
+        { expiresIn: '1m' } // Токен действует 1 минуту
+    );
+}
+
+
 
 // База данных
 class Database {
@@ -1194,6 +1278,48 @@ app.put('/api/admin/users/:id', authMiddleware, adminMiddleware, async (req, res
         res.json(userWithoutPassword);
     } catch (error) {
         res.status(400).json({ error: error.message });
+    }
+});
+
+
+// Сохранение push подписки
+app.post('/api/push-subscribe', authMiddleware, async (req, res) => {
+    try {
+        const { subscription, userId } = req.body;
+        
+        // Сохраняем подписку в БД
+        const user = await db.findUserById(userId);
+        if (user) {
+            user.pushSubscription = subscription;
+            await db.save();
+        }
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Ошибка сохранения push подписки:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+
+// API для отклонения звонка через push уведомление
+app.post('/api/calls/:callId/decline', authMiddleware, async (req, res) => {
+    try {
+        const callId = req.params.callId;
+        const call = await chatManager.endCall(callId);
+        
+        if (call) {
+            // Уведомляем инициатора звонка об отклонении
+            chatManager.broadcastToCall(callId, 'call_declined', {
+                callId,
+                userId: req.user.id
+            });
+        }
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Ошибка отклонения звонка:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
 

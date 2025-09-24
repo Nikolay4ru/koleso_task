@@ -470,39 +470,54 @@ async createTaskChat(taskId, members, creatorId) {
         return message;
     }
 
+
+    
+
     // ==================== ВИДЕО/АУДИО ЗВОНКИ ====================
 
-    async startCall(chatId, initiatorId, callType = 'video') {
-        const chat = this.db.data.chats.find(c => c.id === chatId);
-        if (!chat) return null;
+    async startCall(chatId, initiatorId, callType) {
+    const chat = await this.getChatById(chatId, initiatorId);
+    if (!chat) throw new Error('Чат не найден');
 
-        const call = {
-            id: Date.now().toString(),
-            chatId,
-            initiatorId,
-            type: callType,
-            status: 'pending',
-            participants: [initiatorId],
-            startedAt: new Date().toISOString(),
-            endedAt: null,
-            sdpOffers: {},
-            iceCandiates: {}
-        };
+    const call = {
+        id: Date.now().toString(),
+        chatId,
+        initiatorId,
+        type: callType,
+        status: 'pending',
+        participants: [initiatorId],
+        createdAt: new Date().toISOString(),
+        sdpOffers: {},
+        sdpAnswers: {},
+        iceCandidates: {}
+    };
 
-        this.db.data.calls.push(call);
-        this.activeCalls.set(call.id, call);
-        await this.db.save();
+    this.activeCalls.set(call.id, call);
 
-        // Уведомляем всех участников чата о звонке
-        this.broadcastToChat(chatId, 'incoming_call', {
-            callId: call.id,
-            initiatorId,
-            callType,
-            chatName: chat.name || 'Приватный чат'
-        }, initiatorId);
+    // Сохраняем в БД
+    this.db.data.calls = this.db.data.calls || [];
+    this.db.data.calls.push(call);
+    await this.db.save();
 
-        return call;
+    // Уведомляем участников чата о звонке
+    const chatMembers = chat.members.filter(id => id !== initiatorId);
+    
+    // WebSocket уведомления для онлайн пользователей
+    this.broadcastToChat(chatId, 'incoming_call', {
+        callId: call.id,
+        initiatorId,
+        callType,
+        chatName: chat.name || 'Приватный чат'
+    }, initiatorId);
+    
+    // Push уведомления для всех участников
+    for (const memberId of chatMembers) {
+        await sendCallPushNotification(memberId, call);
     }
+
+    return call;
+}
+
 
     async joinCall(callId, userId) {
         const call = this.activeCalls.get(callId);

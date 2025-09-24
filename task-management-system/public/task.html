@@ -912,7 +912,14 @@
     <script>
         // Глобальные переменные
         const API_URL = window.location.origin + '/api';
-        const taskId = window.location.pathname.split('/').pop() || new URLSearchParams(window.location.search).get('id');
+        const taskId = getTaskId();
+
+if (!taskId) {
+    console.error('Task ID not found in URL');
+    document.getElementById('taskTitle').textContent = 'Ошибка: ID задачи не найден';
+    alert('Неверный URL задачи');
+    window.location.href = '/tasks';
+}
         let currentTask = null;
         let currentUser = null;
         let allUsers = [];
@@ -964,6 +971,30 @@
                 alert('Ошибка загрузки страницы');
             }
         }
+
+
+
+        function getTaskId() {
+    // Сначала пробуем получить ID из pathname (для URLs вида /task/123)
+    const pathParts = window.location.pathname.split('/');
+    const pathId = pathParts[pathParts.length - 1];
+    
+    // Проверяем, является ли последняя часть пути числом
+    if (pathId && /^\d+$/.test(pathId)) {
+        return pathId;
+    }
+    
+    // Если не получилось из pathname, пробуем из query параметров
+    const urlParams = new URLSearchParams(window.location.search);
+    const queryId = urlParams.get('id');
+    
+    if (queryId && /^\d+$/.test(queryId)) {
+        return queryId;
+    }
+    
+    // Если ничего не нашли, возвращаем null
+    return null;
+}
 
         // WebSocket подключение
         function connectWebSocket() {
