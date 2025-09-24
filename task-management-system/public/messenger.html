@@ -790,23 +790,42 @@
 
         // Инициализация
         async function init() {
+            // Проверяем наличие токена
             const token = localStorage.getItem('token');
             if (!token) {
+                console.log('❌ Токен не найден, редирект на страницу входа');
                 window.location.href = '/login';
                 return;
             }
 
             try {
-                // Получаем данные текущего пользователя
+                console.log('🔄 Проверка токена и загрузка пользователя...');
+                
+                // Получаем данные текущего пользователя с проверкой токена
                 const userResponse = await fetch(`${API_URL}/profile`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
                 });
 
                 if (!userResponse.ok) {
-                    throw new Error('Ошибка аутентификации');
+                    console.error('❌ Ошибка проверки токена:', userResponse.status, userResponse.statusText);
+                    
+                    // Если токен невалиден, очищаем localStorage и перенаправляем
+                    if (userResponse.status === 401) {
+                        localStorage.removeItem('token');
+                        localStorage.removeItem('user');
+                        console.log('🔄 Токен недействителен, редирект на страницу входа');
+                        window.location.href = '/login';
+                        return;
+                    }
+                    
+                    throw new Error(`HTTP ${userResponse.status}: ${userResponse.statusText}`);
                 }
 
                 currentUser = await userResponse.json();
+                console.log('✅ Пользователь загружен:', currentUser.name);
                 
                 // Обновляем UI с данными пользователя
                 document.getElementById('userName').textContent = currentUser.name || 'User';
@@ -814,15 +833,32 @@
                     (currentUser.name && currentUser.name[0]) ? currentUser.name[0].toUpperCase() : 'U';
                 
                 // Загружаем пользователей и чаты
+                console.log('🔄 Загрузка пользователей...');
                 await loadUsers();
+                
+                console.log('🔄 Загрузка чатов...');
                 await loadChats();
+                
+                // Инициализируем WebSocket только после успешной аутентификации
+                console.log('🔄 Инициализация WebSocket...');
+                setupWebSocket();
                 
                 console.log('✅ Инициализация завершена успешно');
                 
             } catch (error) {
-                console.error('Ошибка инициализации:', error);
+                console.error('❌ Критическая ошибка инициализации:', error);
+                
+                // При любой ошибке очищаем данные и перенаправляем
                 localStorage.removeItem('token');
-                window.location.href = '/login';
+                localStorage.removeItem('user');
+                
+                // Показываем пользователю сообщение об ошибке
+                showError('Ошибка загрузки мессенджера. Попробуйте войти заново.');
+                
+                // Перенаправляем через небольшую задержку
+                setTimeout(() => {
+                    window.location.href = '/login';
+                }, 2000);
             }
         }
 
@@ -846,9 +882,6 @@
                 allUsers = [];
             }
         }
-
-
-
 
         // Отображение сообщений
         function displayMessages() {
@@ -899,16 +932,38 @@
 
                 if (response.ok) {
                     const newMessage = await response.json();
+                    
+                    // Добавляем сообщение в локальный массив
                     messages.push(newMessage);
                     displayMessages();
+                    
+                    // Отправляем через WebSocket для реального времени
+                    if (socket && socket.connected) {
+                        socket.emit('send_message', {
+                            chatId: currentChatId,
+                            message: newMessage
+                        });
+                    }
+                    
+                    // Очищаем поле ввода
                     input.value = '';
                     autoResizeTextarea();
+                    
+                    // Обновляем превью чата
+                    updateChatPreview(currentChatId, newMessage);
+                    
+                } else if (response.status === 401) {
+                    // Токен истек
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    window.location.href = '/login';
                 } else {
-                    throw new Error('Не удалось отправить сообщение');
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || 'Не удалось отправить сообщение');
                 }
             } catch (error) {
                 console.error('Ошибка отправки сообщения:', error);
-                showError('Не удалось отправить сообщение');
+                showError(error.message || 'Не удалось отправить сообщение');
             }
         }
 
@@ -968,6 +1023,116 @@
 
         function startVideoCallFromChat(chatId) {
             showStatus('Функция видеозвонков будет доступна в следующей версии');
+        }
+
+        // Настройка WebSocket
+        function setupWebSocket() {
+            console.log('🔄 Подключение к WebSocket...');
+            
+            // Проверяем наличие socket.io
+            if (typeof io === 'undefined') {
+                console.warn('⚠️ Socket.IO не доступен, WebSocket функции отключены');
+                return;
+            }
+
+            try {
+                socket = io();
+                
+                socket.on('connect', () => {
+                    console.log('✅ WebSocket подключен:', socket.id);
+                    const token = localStorage.getItem('token');
+                    if (token) {
+                        socket.emit('authenticate', token);
+                    }
+                });
+
+                socket.on('authenticated', (data) => {
+                    if (data.success) {
+                        console.log('✅ WebSocket аутентификация успешна');
+                    } else {
+                        console.error('❌ Ошибка WebSocket аутентификации:', data.error);
+                        showError('Ошибка подключения к серверу реального времени');
+                    }
+                });
+
+                socket.on('disconnect', (reason) => {
+                    console.log('🔌 WebSocket отключен:', reason);
+                    if (reason === 'io server disconnect') {
+                        showStatus('Соединение разорвано сервером', 'warning');
+                    } else {
+                        showStatus('Соединение потеряно', 'warning');
+                    }
+                });
+
+                socket.on('connect_error', (error) => {
+                    console.error('❌ Ошибка подключения WebSocket:', error);
+                    showError('Не удалось подключиться к серверу');
+                });
+
+                // Обработчики сообщений чата
+                socket.on('new_message', (message) => {
+                    console.log('📨 Новое сообщение:', message);
+                    if (message.chatId === currentChatId) {
+                        messages.push(message);
+                        displayMessages();
+                    }
+                    // Обновляем список чатов
+                    updateChatPreview(message.chatId, message);
+                });
+
+                socket.on('user_typing', (data) => {
+                    if (data.chatId === currentChatId && data.userId !== currentUser.id) {
+                        showTypingIndicator(data.userName);
+                    }
+                });
+
+                socket.on('user_stopped_typing', (data) => {
+                    if (data.chatId === currentChatId) {
+                        hideTypingIndicator();
+                    }
+                });
+
+            } catch (error) {
+                console.error('❌ Ошибка настройки WebSocket:', error);
+                showError('Ошибка настройки соединения');
+            }
+        }
+
+        // Функции для работы с индикатором набора текста
+        function showTypingIndicator(userName) {
+            const indicator = document.getElementById('typingIndicator');
+            const userSpan = document.getElementById('typingUser');
+            if (indicator && userSpan) {
+                userSpan.textContent = userName;
+                indicator.classList.add('active');
+            }
+        }
+
+        function hideTypingIndicator() {
+            const indicator = document.getElementById('typingIndicator');
+            if (indicator) {
+                indicator.classList.remove('active');
+            }
+        }
+
+        // Обновление превью чата с последним сообщением
+        function updateChatPreview(chatId, message) {
+            const chat = chats.find(c => c.id === chatId);
+            if (chat) {
+                chat.lastMessage = {
+                    text: message.text,
+                    time: message.createdAt,
+                    senderId: message.senderId
+                };
+                chat.lastMessageAt = message.createdAt;
+                
+                // Если это не текущий чат, увеличиваем счетчик непрочитанных
+                if (chatId !== currentChatId) {
+                    chat.unreadCount = (chat.unreadCount || 0) + 1;
+                }
+                
+                displayChats();
+            }
         }
 
         // Утилиты
@@ -1072,3 +1237,5 @@
     </script>
 </body>
 </html>
+
+      
