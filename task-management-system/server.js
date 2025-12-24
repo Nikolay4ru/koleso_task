@@ -30,7 +30,7 @@ if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
 
 // Конфигурация
 const config = {
-    port: process.env.PORT || 3000,
+    port: process.env.PORT || 3010,
     jwtSecret: process.env.JWT_SECRET || 'your-secret-key-change-in-production',
     dbPath: './data/database.json',
     uploadsDir: './uploads',

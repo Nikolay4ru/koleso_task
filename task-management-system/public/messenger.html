@@ -790,98 +790,348 @@
 
         // Инициализация
         async function init() {
-            // Проверяем наличие токена
-            const token = localStorage.getItem('token');
-            if (!token) {
-                console.log('❌ Токен не найден, редирект на страницу входа');
+    // Проверяем наличие токена в localStorage или sessionStorage
+    let token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    
+    if (!token) {
+        console.log('❌ Токен не найден, редирект на страницу входа');
+        window.location.href = '/login';
+        return;
+    }
+
+    try {
+        console.log('🔄 Проверка токена и загрузка пользователя...');
+        
+        // Получаем данные текущего пользователя с проверкой токена
+        const userResponse = await fetch(`${API_URL}/profile`, {
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!userResponse.ok) {
+            console.error('❌ Ошибка проверки токена:', userResponse.status, userResponse.statusText);
+            
+            // Если токен невалиден, очищаем хранилища и перенаправляем
+            if (userResponse.status === 401) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                sessionStorage.removeItem('token');
+                sessionStorage.removeItem('user');
+                console.log('🔄 Токен недействителен, редирект на страницу входа');
                 window.location.href = '/login';
                 return;
             }
-
-            try {
-                console.log('🔄 Проверка токена и загрузка пользователя...');
-                
-                // Получаем данные текущего пользователя с проверкой токена
-                const userResponse = await fetch(`${API_URL}/profile`, {
-                    headers: { 
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                if (!userResponse.ok) {
-                    console.error('❌ Ошибка проверки токена:', userResponse.status, userResponse.statusText);
-                    
-                    // Если токен невалиден, очищаем localStorage и перенаправляем
-                    if (userResponse.status === 401) {
-                        localStorage.removeItem('token');
-                        localStorage.removeItem('user');
-                        console.log('🔄 Токен недействителен, редирект на страницу входа');
-                        window.location.href = '/login';
-                        return;
-                    }
-                    
-                    throw new Error(`HTTP ${userResponse.status}: ${userResponse.statusText}`);
-                }
-
-                currentUser = await userResponse.json();
-                console.log('✅ Пользователь загружен:', currentUser.name);
-                
-                // Обновляем UI с данными пользователя
-                document.getElementById('userName').textContent = currentUser.name || 'User';
-                document.getElementById('userAvatar').textContent = 
-                    (currentUser.name && currentUser.name[0]) ? currentUser.name[0].toUpperCase() : 'U';
-                
-                // Загружаем пользователей и чаты
-                console.log('🔄 Загрузка пользователей...');
-                await loadUsers();
-                
-                console.log('🔄 Загрузка чатов...');
-                await loadChats();
-                
-                // Инициализируем WebSocket только после успешной аутентификации
-                console.log('🔄 Инициализация WebSocket...');
-                setupWebSocket();
-                
-                console.log('✅ Инициализация завершена успешно');
-                
-            } catch (error) {
-                console.error('❌ Критическая ошибка инициализации:', error);
-                
-                // При любой ошибке очищаем данные и перенаправляем
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
-                
-                // Показываем пользователю сообщение об ошибке
-                showError('Ошибка загрузки мессенджера. Попробуйте войти заново.');
-                
-                // Перенаправляем через небольшую задержку
-                setTimeout(() => {
-                    window.location.href = '/login';
-                }, 2000);
-            }
+            
+            throw new Error(`HTTP ${userResponse.status}: ${userResponse.statusText}`);
         }
+
+        currentUser = await userResponse.json();
+        console.log('✅ Пользователь загружен:', currentUser.name);
+        
+        // Обновляем UI с данными пользователя
+        document.getElementById('userName').textContent = currentUser.name || 'User';
+        document.getElementById('userAvatar').textContent = 
+            (currentUser.name && currentUser.name[0]) ? currentUser.name[0].toUpperCase() : 'U';
+        
+        // Загружаем пользователей и чаты
+        console.log('🔄 Загрузка пользователей...');
+        await loadUsers();
+        
+        console.log('🔄 Загрузка чатов...');
+        await loadChats();
+        
+        // Инициализируем WebSocket только после успешной аутентификации
+        console.log('🔄 Инициализация WebSocket...');
+        setupWebSocket();
+        
+        console.log('✅ Инициализация завершена успешно');
+        
+    } catch (error) {
+        console.error('❌ Критическая ошибка инициализации:', error);
+        
+        // При любой ошибке очищаем данные и перенаправляем
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        sessionStorage.removeItem('token');
+        sessionStorage.removeItem('user');
+        
+        // Показываем пользователю сообщение об ошибке
+        showError('Ошибка загрузки мессенджера. Попробуйте войти заново.');
+        
+        // Перенаправляем через небольшую задержку
+        setTimeout(() => {
+            window.location.href = '/login';
+        }, 2000);
+    }
+}
 
         // Загрузка пользователей
         async function loadUsers() {
-            try {
-                const token = localStorage.getItem('token');
-                const response = await fetch(`${API_URL}/users`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                
-                if (response.ok) {
-                    allUsers = await response.json();
-                    console.log('Загружено пользователей:', allUsers.length);
-                } else {
-                    console.warn('Не удалось загрузить пользователей:', response.status);
-                    allUsers = [];
-                }
-            } catch (error) {
-                console.error('Ошибка загрузки пользователей:', error);
-                allUsers = [];
-            }
+    try {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const response = await fetch(`${API_URL}/users`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+            allUsers = await response.json();
+            console.log('Загружено пользователей:', allUsers.length);
+        } else if (response.status === 401) {
+            // Токен истек
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            sessionStorage.removeItem('token');
+            sessionStorage.removeItem('user');
+            window.location.href = '/login';
+        } else {
+            console.warn('Не удалось загрузить пользователей:', response.status);
+            allUsers = [];
         }
+    } catch (error) {
+        console.error('Ошибка загрузки пользователей:', error);
+        allUsers = [];
+    }
+}
+
+
+        // Загрузка чатов
+async function loadChats() {
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_URL}/chats`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+            chats = await response.json();
+            console.log('Загружено чатов:', chats.length);
+            displayChats();
+        } else if (response.status === 401) {
+            // Токен истек
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/login';
+        } else {
+            console.warn('Не удалось загрузить чаты:', response.status);
+            chats = [];
+            displayChats();
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки чатов:', error);
+        chats = [];
+        displayChats();
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Выбор чата
+async function selectChat(chatId) {
+    if (currentChatId === chatId) return;
+    
+    currentChatId = chatId;
+    const chat = chats.find(c => c.id === chatId);
+    
+    if (!chat) return;
+    
+    // Обновляем активный чат в UI
+    displayChats();
+    
+    // Отображаем интерфейс чата
+    displayChatContent(chat);
+    
+    // Загружаем сообщения
+    await loadMessages(chatId);
+    
+    // Присоединяемся к комнате чата в WebSocket
+    if (socket && socket.connected) {
+        socket.emit('join_chat', chatId);
+    }
+    
+    // Сбрасываем счетчик непрочитанных сообщений
+    if (chat.unreadCount > 0) {
+        chat.unreadCount = 0;
+        displayChats();
+    }
+}
+
+// Отображение контента выбранного чата
+function displayChatContent(chat) {
+    const chatContent = document.getElementById('chatContent');
+    if (!chatContent) return;
+    
+    const otherUser = chat.otherUser;
+    const chatName = chat.name || (otherUser ? otherUser.name : 'Неизвестный пользователь');
+    const statusText = otherUser ? (otherUser.online ? 'В сети' : 'Не в сети') : '';
+    
+    chatContent.innerHTML = `
+        <div class="chat-header">
+            <div class="chat-avatar">
+                ${chatName[0].toUpperCase()}
+                ${otherUser && otherUser.online ? '<div class="user-status"></div>' : ''}
+            </div>
+            <div class="chat-header-info">
+                <div class="chat-header-name">${escapeHtml(chatName)}</div>
+                <div class="chat-header-status">${statusText}</div>
+            </div>
+            <div class="chat-header-actions">
+                <button class="header-btn" onclick="startVoiceCallFromChat('${chat.id}')" title="Аудиозвонок">
+                    <ion-icon name="call-outline"></ion-icon>
+                </button>
+                <button class="header-btn" onclick="startVideoCallFromChat('${chat.id}')" title="Видеозвонок">
+                    <ion-icon name="videocam-outline"></ion-icon>
+                </button>
+                <button class="header-btn" onclick="showChatInfo('${chat.id}')" title="Информация">
+                    <ion-icon name="information-circle-outline"></ion-icon>
+                </button>
+            </div>
+        </div>
+        
+        <div class="messages-container" id="messagesContainer">
+            <div class="loading-state">
+                <div class="loading-spinner"></div>
+            </div>
+        </div>
+        
+        <div class="typing-indicator" id="typingIndicator">
+            <span id="typingUser">Пользователь</span> печатает...
+        </div>
+        
+        <div class="input-area">
+            <div class="input-wrapper">
+                <textarea 
+                    id="messageInput" 
+                    class="message-input" 
+                    placeholder="Введите сообщение..."
+                    onkeydown="handleInputKeydown(event)"
+                    oninput="handleInputChange()"
+                    rows="1"
+                ></textarea>
+                <div class="input-actions">
+                    <button class="input-action-btn" onclick="attachFile()" title="Прикрепить файл">
+                        <ion-icon name="attach-outline"></ion-icon>
+                    </button>
+                    <button class="input-action-btn" onclick="showEmoji()" title="Эмодзи">
+                        <ion-icon name="happy-outline"></ion-icon>
+                    </button>
+                </div>
+                <button class="send-btn" onclick="sendMessage()" title="Отправить">
+                    <ion-icon name="send-outline"></ion-icon>
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+// Загрузка сообщений чата
+async function loadMessages(chatId) {
+    if (!chatId) return;
+    
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_URL}/chats/${chatId}/messages`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+            messages = await response.json();
+            console.log('Загружено сообщений:', messages.length);
+            displayMessages();
+        } else if (response.status === 401) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/login';
+        } else {
+            console.warn('Не удалось загрузить сообщения:', response.status);
+            messages = [];
+            displayMessages();
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки сообщений:', error);
+        messages = [];
+        displayMessages();
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+// Отображение списка чатов
+function displayChats() {
+    const chatList = document.getElementById('chatList');
+    if (!chatList) return;
+    
+    if (chats.length === 0) {
+        chatList.innerHTML = `
+            <div class="empty-state" style="padding: 2rem 1rem; text-align: center;">
+                <ion-icon name="chatbubbles-outline" style="font-size: 3rem; opacity: 0.3; margin-bottom: 1rem;"></ion-icon>
+                <p style="color: var(--gray-500); font-size: 0.9rem;">Пока нет чатов</p>
+                <p style="color: var(--gray-400); font-size: 0.8rem;">Создайте новый чат для начала общения</p>
+            </div>
+        `;
+        return;
+    }
+
+    chatList.innerHTML = chats.map(chat => {
+        const isActive = currentChatId === chat.id;
+        const otherUser = chat.otherUser;
+        const chatName = chat.name || (otherUser ? otherUser.name : 'Неизвестный пользователь');
+        const avatarText = chatName[0].toUpperCase();
+        const lastMessage = chat.lastMessage;
+        const unreadCount = chat.unreadCount || 0;
+        
+        return `
+            <div class="chat-item ${isActive ? 'active' : ''}" onclick="selectChat('${chat.id}')">
+                <div class="chat-avatar">
+                    ${avatarText}
+                    ${otherUser && otherUser.online ? '<div class="user-status"></div>' : ''}
+                </div>
+                <div class="chat-info">
+                    <div class="chat-name">${escapeHtml(chatName)}</div>
+                    <div class="chat-preview">
+                        ${lastMessage ? escapeHtml(lastMessage.text) : 'Нет сообщений'}
+                    </div>
+                </div>
+                <div class="chat-meta">
+                    <div class="chat-time">
+                        ${lastMessage ? formatTime(lastMessage.time) : formatTime(chat.createdAt)}
+                    </div>
+                    ${unreadCount > 0 ? `<div class="unread-badge">${unreadCount}</div>` : ''}
+                    <div class="call-actions">
+                        <button class="call-btn voice" onclick="event.stopPropagation(); startVoiceCallFromChat('${chat.id}')" title="Аудиозвонок">
+                            <ion-icon name="call-outline"></ion-icon>
+                        </button>
+                        <button class="call-btn video" onclick="event.stopPropagation(); startVideoCallFromChat('${chat.id}')" title="Видеозвонок">
+                            <ion-icon name="videocam-outline"></ion-icon>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
 
         // Отображение сообщений
         function displayMessages() {
