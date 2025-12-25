@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Max Messenger</title>
+    <title>Enterprise Messenger</title>
     <link rel="stylesheet" href="/css/styles.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
@@ -17,7 +17,7 @@
                     <div class="logo">
                         <span class="material-icons">video_call</span>
                     </div>
-                    <h1>MAX Messenger</h1>
+                    <h1>Enterprise Messenger</h1>
                     <p>Безопасные корпоративные коммуникации</p>
                 </div>
 
@@ -67,7 +67,7 @@
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
-                <div class="user-profile">
+                <div class="user-profile" id="openProfileBtn" style="cursor: pointer;">
                     <div class="user-avatar" id="currentUserAvatar">
                         <span class="material-icons">person</span>
                     </div>
@@ -112,7 +112,7 @@
             <div id="welcomeScreen" class="welcome-screen">
                 <div class="welcome-content">
                     <span class="material-icons">forum</span>
-                    <h2>Добро пожаловать в MAX Messenger</h2>
+                    <h2>Добро пожаловать в Enterprise Messenger</h2>
                     <p>Выберите чат или создайте новый для начала общения</p>
                     <button class="btn-primary" id="welcomeNewChat">
                         <span class="material-icons">add</span>
@@ -161,6 +161,30 @@
 
                 <!-- Message Input -->
                 <div class="message-input">
+                    <input type="file" id="fileInput" style="display: none;" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.rar">
+                    
+                    <!-- Attach Menu -->
+                    <div class="attach-menu" id="attachMenu" style="display: none;">
+                        <div class="attach-item" data-type="photo">
+                            <div class="attach-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                                <span class="material-icons">photo</span>
+                            </div>
+                            <span>Фото/Видео</span>
+                        </div>
+                        <div class="attach-item" data-type="document">
+                            <div class="attach-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                                <span class="material-icons">insert_drive_file</span>
+                            </div>
+                            <span>Документ</span>
+                        </div>
+                        <div class="attach-item" data-type="audio">
+                            <div class="attach-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                                <span class="material-icons">headphones</span>
+                            </div>
+                            <span>Аудио</span>
+                        </div>
+                    </div>
+                    
                     <button class="icon-btn" id="attachBtn">
                         <span class="material-icons">attach_file</span>
                     </button>
@@ -173,6 +197,70 @@
                     <button class="btn-send" id="sendBtn">
                         <span class="material-icons">send</span>
                     </button>
+                </div>
+                
+                <!-- File Preview -->
+                <div class="file-preview" id="filePreview" style="display: none;">
+                    <div class="file-preview-header">
+                        <span>Прикрепленные файлы</span>
+                        <button class="icon-btn" id="clearFilesBtn">
+                            <span class="material-icons">close</span>
+                        </button>
+                    </div>
+                    <div class="file-preview-list" id="filePreviewList"></div>
+                </div>
+            </div>
+
+            <!-- Chat Info Panel -->
+            <div class="chat-info-panel" id="chatInfoPanel">
+                <div class="chat-info-header">
+                    <button class="icon-btn" id="closeChatInfoBtn">
+                        <span class="material-icons">arrow_back</span>
+                    </button>
+                    <h3>Информация</h3>
+                </div>
+
+                <div class="chat-info-content">
+                    <!-- Chat Avatar Large -->
+                    <div class="chat-info-avatar-section">
+                        <div class="chat-info-avatar" id="chatInfoAvatar">
+                            <span class="material-icons">group</span>
+                        </div>
+                        <h2 id="chatInfoName">Название чата</h2>
+                        <p id="chatInfoStatus">Статус</p>
+                    </div>
+
+                    <!-- Group Members (for group chats) -->
+                    <div class="chat-info-section" id="chatMembersSection" style="display: none;">
+                        <h4>Участники</h4>
+                        <div id="chatMembersList"></div>
+                    </div>
+
+                    <!-- Chat Settings -->
+                    <div class="chat-info-section">
+                        <h4>Настройки</h4>
+                        <div class="info-item" id="muteNotifications">
+                            <span class="material-icons">notifications_off</span>
+                            <span>Отключить уведомления</span>
+                        </div>
+                        <div class="info-item" id="searchInChat">
+                            <span class="material-icons">search</span>
+                            <span>Поиск в чате</span>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="chat-info-section">
+                        <h4>Действия</h4>
+                        <div class="info-item danger" id="clearHistory">
+                            <span class="material-icons">delete_sweep</span>
+                            <span>Очистить историю</span>
+                        </div>
+                        <div class="info-item danger" id="leaveChat">
+                            <span class="material-icons">logout</span>
+                            <span>Покинуть чат</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>
@@ -325,10 +413,109 @@
     <!-- Toast Notifications -->
     <div id="toastContainer" class="toast-container"></div>
 
+    <!-- Emoji Picker -->
+    <div class="emoji-picker" id="emojiPicker" style="display: none;">
+        <div class="emoji-picker-header">
+            <input type="text" id="emojiSearch" placeholder="Поиск эмодзи...">
+        </div>
+        <div class="emoji-categories">
+            <button class="emoji-category active" data-category="smileys">😊</button>
+            <button class="emoji-category" data-category="people">👋</button>
+            <button class="emoji-category" data-category="animals">🐶</button>
+            <button class="emoji-category" data-category="food">🍕</button>
+            <button class="emoji-category" data-category="travel">✈️</button>
+            <button class="emoji-category" data-category="objects">💡</button>
+            <button class="emoji-category" data-category="symbols">❤️</button>
+            <button class="emoji-category" data-category="flags">🏁</button>
+        </div>
+        <div class="emoji-list" id="emojiList"></div>
+    </div>
+
+    <!-- User Profile Modal -->
+    <div id="profileModal" class="modal">
+        <div class="modal-content profile-modal-content">
+            <div class="modal-header">
+                <h2>Мой профиль</h2>
+                <button class="icon-btn" id="closeProfileBtn">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            
+            <div class="profile-modal-body">
+                <!-- Avatar Section -->
+                <div class="profile-avatar-section">
+                    <div class="profile-avatar-wrapper">
+                        <div class="profile-avatar-large" id="profileAvatarDisplay">
+                            <span class="material-icons">person</span>
+                        </div>
+                        <input type="file" id="avatarInput" accept="image/*" style="display: none;">
+                        <button class="change-avatar-btn" id="changeAvatarBtn">
+                            <span class="material-icons">photo_camera</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Profile Info -->
+                <div class="profile-info-section">
+                    <div class="profile-field">
+                        <label>Полное имя</label>
+                        <div class="profile-field-content">
+                            <input type="text" id="profileNameInput" class="profile-input" readonly>
+                            <button class="icon-btn" id="editNameBtn">
+                                <span class="material-icons">edit</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="profile-field">
+                        <label>Имя пользователя</label>
+                        <div class="profile-field-content">
+                            <input type="text" id="profileUsernameDisplay" class="profile-input" readonly disabled>
+                        </div>
+                        <p class="field-hint">Имя пользователя нельзя изменить</p>
+                    </div>
+
+                    <div class="profile-field">
+                        <label>Email</label>
+                        <div class="profile-field-content">
+                            <input type="email" id="profileEmailInput" class="profile-input" readonly>
+                            <button class="icon-btn" id="editEmailBtn">
+                                <span class="material-icons">edit</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="profile-field">
+                        <label>ID пользователя</label>
+                        <div class="profile-field-content">
+                            <input type="text" id="profileUserIdDisplay" class="profile-input" readonly disabled>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Save Button (hidden by default) -->
+                <div class="profile-actions" id="profileActions" style="display: none;">
+                    <button class="btn-secondary" id="cancelProfileChanges">Отмена</button>
+                    <button class="btn-primary" id="saveProfileChanges">Сохранить изменения</button>
+                </div>
+
+                <!-- Logout Button -->
+                <div class="profile-danger-zone">
+                    <button class="btn-danger" id="logoutBtn">
+                        <span class="material-icons">logout</span>
+                        Выйти из аккаунта
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
     <script src="/js/app.js"></script>
+    <script src="/js/attachments-emoji.js"></script>
     <script src="/js/webrtc-simple.js"></script>
     <script src="/js/virtual-background-simple.js"></script>
+    <script src="/js/profile.js"></script>
     <script src="/js/ui-components.js"></script>
 </body>
 </html>

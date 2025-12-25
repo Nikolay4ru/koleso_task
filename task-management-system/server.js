@@ -9,6 +9,59 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const mongoose = require('mongoose');
+
+// MongoDB Connection
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/task-messenger';
+
+mongoose.connect(MONGODB_URI)
+.then(() => console.log('✅ MongoDB connected'))
+.catch(err => {
+  console.error('❌ MongoDB connection error:', err.message);
+  console.log('⚠️  Server will continue without MongoDB (using in-memory storage)');
+});
+
+// MongoDB Models
+const UserSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  username: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  name: { type: String, required: true },
+  email: String,
+  avatar: String,
+  createdAt: { type: Date, default: Date.now }
+});
+
+const ChatSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  type: { type: String, enum: ['private', 'group', 'task'], required: true },
+  name: String,
+  participants: [String],
+  taskId: String,
+  encrypted: { type: Boolean, default: false },
+  unreadCount: mongoose.Schema.Types.Mixed,
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+const MessageSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  chatId: { type: String, required: true, index: true },
+  senderId: { type: String, required: true },
+  text: { type: String, required: true },
+  type: { type: String, default: 'text' },
+  metadata: mongoose.Schema.Types.Mixed,
+  encrypted: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const User = mongoose.model('User', UserSchema);
+const Chat = mongoose.model('Chat', ChatSchema);
+const Message = mongoose.model('Message', MessageSchema);
+
 
 const app = express();
 const server = http.createServer(app);
@@ -26,9 +79,7 @@ const io = socketIO(server, {
 app.use(helmet({
   contentSecurityPolicy: false
 }));
-app.use(cors({
-  origin: 'https://task2.koleso.app'
-}));
+app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static('public'));
@@ -44,25 +95,107 @@ app.use('/api/', limiter);
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
 
-// In-memory database (replace with real DB in production)
+// In-memory cache for performance (synced with MongoDB)
 const users = new Map();
 const chats = new Map();
 const messages = new Map();
 const conferences = new Map();
 const onlineUsers = new Map();
 
+// Initialize data from MongoDB on startup
+async function initializeData() {
+  try {
+    // Load users from MongoDB
+    const dbUsers = await User.find({});
+    dbUsers.forEach(user => {
+      users.set(user.username, {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        password: user.password,
+        name: user.name,
+        avatar: user.avatar,
+        createdAt: user.createdAt
+      });
+    });
+    console.log(`✅ Loaded ${dbUsers.length} users from MongoDB`);
+    
+    // Load chats from MongoDB
+    const dbChats = await Chat.find({});
+    dbChats.forEach(chat => {
+      chats.set(chat.id, {
+        id: chat.id,
+        type: chat.type,
+        name: chat.name,
+        participants: chat.participants,
+        taskId: chat.taskId,
+        encrypted: chat.encrypted,
+        unreadCount: chat.unreadCount,
+        createdAt: chat.createdAt,
+        updatedAt: chat.updatedAt
+      });
+    });
+    console.log(`✅ Loaded ${dbChats.length} chats from MongoDB`);
+    
+    // Load messages from MongoDB (last 100 per chat)
+    const dbMessages = await Message.find({})
+      .sort({ createdAt: -1 })
+      .limit(10000);
+    
+    dbMessages.forEach(msg => {
+      if (!messages.has(msg.chatId)) {
+        messages.set(msg.chatId, []);
+      }
+      messages.get(msg.chatId).unshift({
+        id: msg.id,
+        chatId: msg.chatId,
+        senderId: msg.senderId,
+        text: msg.text,
+        type: msg.type,
+        metadata: msg.metadata,
+        encrypted: msg.encrypted,
+        createdAt: msg.createdAt
+      });
+    });
+    console.log(`✅ Loaded ${dbMessages.length} messages from MongoDB`);
+    
+  } catch (error) {
+    console.error('❌ Error loading data from MongoDB:', error);
+  }
+}
+
 // Initialize admin user
-const adminPassword = bcrypt.hashSync('admin123', 10);
-users.set('admin', {
-  id: 'user_admin',
-  username: 'admin',
-  email: 'admin@company.com',
-  password: adminPassword,
-  name: 'System Admin',
-  avatar: null,
-  createdAt: new Date(),
-  publicKey: null
-});
+async function initializeAdminUser() {
+  const adminPassword = bcrypt.hashSync('admin123', 10);
+  const adminData = {
+    id: 'user_admin',
+    username: 'admin',
+    email: 'admin@company.com',
+    password: adminPassword,
+    name: 'System Admin',
+    avatar: null,
+    createdAt: new Date()
+  };
+  
+  // Add to cache
+  users.set('admin', adminData);
+  
+  // Save to MongoDB
+  try {
+    const existingAdmin = await User.findOne({ username: 'admin' });
+    if (!existingAdmin) {
+      await User.create(adminData);
+      console.log('✅ Admin user created in MongoDB');
+    }
+  } catch (error) {
+    console.error('❌ Error creating admin user:', error);
+  }
+}
+
+// Call initialization
+initializeAdminUser();
+initializeData();
+
 
 // Encryption helpers
 function encryptMessage(text, key = ENCRYPTION_KEY) {
@@ -121,18 +254,27 @@ app.post('/api/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const userId = `user_${uuidv4()}`;
 
-    const user = {
+    const userData = {
       id: userId,
       username,
       email,
       password: hashedPassword,
       name: name || username,
       avatar: null,
-      createdAt: new Date(),
-      publicKey: null
+      createdAt: new Date()
     };
 
-    users.set(username, user);
+    // Save to cache
+    users.set(username, userData);
+    
+    // Save to MongoDB
+    try {
+      await User.create(userData);
+      console.log(`✅ User ${username} saved to MongoDB`);
+    } catch (dbError) {
+      console.error('❌ Error saving user to MongoDB:', dbError);
+      // Continue even if MongoDB fails
+    }
 
     const token = jwt.sign({ id: userId, username }, JWT_SECRET, { expiresIn: '7d' });
 
@@ -228,7 +370,7 @@ app.get('/api/chats', authenticateToken, (req, res) => {
   res.json(userChats);
 });
 
-app.post('/api/chats', authenticateToken, (req, res) => {
+app.post('/api/chats', authenticateToken, async (req, res) => {
   try {
     const { type, participants, name } = req.body;
     const userId = req.user.id;
@@ -240,19 +382,29 @@ app.post('/api/chats', authenticateToken, (req, res) => {
     const chatId = `chat_${uuidv4()}`;
     const allParticipants = [...new Set([userId, ...participants])];
 
-    const chat = {
+    const chatData = {
       id: chatId,
       type: type || 'private',
       name: name || null,
       participants: allParticipants,
       createdBy: userId,
       createdAt: new Date(),
+      updatedAt: new Date(),
       encrypted: true,
       unreadCount: {}
     };
 
-    chats.set(chatId, chat);
+    // Save to cache
+    chats.set(chatId, chatData);
     messages.set(chatId, []);
+    
+    // Save to MongoDB
+    try {
+      await Chat.create(chatData);
+      console.log(`✅ Chat ${chatId} saved to MongoDB`);
+    } catch (dbError) {
+      console.error('❌ Error saving chat to MongoDB:', dbError);
+    }
 
     // Notify participants
     allParticipants.forEach(participantId => {
@@ -260,11 +412,11 @@ app.post('/api/chats', authenticateToken, (req, res) => {
         .find(([sid, uid]) => uid === participantId)?.[0];
       
       if (socketId) {
-        io.to(socketId).emit('chat:created', chat);
+        io.to(socketId).emit('chat:created', chatData);
       }
     });
 
-    res.json(chat);
+    res.json(chatData);
   } catch (error) {
     res.status(500).json({ error: 'Failed to create chat' });
   }
@@ -289,6 +441,55 @@ app.get('/api/messages/:chatId', authenticateToken, (req, res) => {
   
   res.json(decryptedMessages);
 });
+
+// File upload configuration
+const uploadDir = path.join(__dirname, 'public', 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueName = `${uuidv4()}${path.extname(file.originalname)}`;
+    cb(null, uniqueName);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 50 * 1024 * 1024 // 50MB max
+  },
+  fileFilter: (req, file, cb) => {
+    // Allow all file types for now
+    cb(null, true);
+  }
+});
+
+// Upload file endpoint
+app.post('/api/upload', authenticateToken, upload.single('file'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    
+    const fileUrl = `/uploads/${req.file.filename}`;
+    
+    res.json({
+      fileUrl,
+      fileName: req.file.originalname,
+      fileSize: req.file.size,
+      mimeType: req.file.mimetype
+    });
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
 
 // Socket.IO connection handling
 io.use((socket, next) => {
@@ -332,7 +533,7 @@ io.on('connection', (socket) => {
   });
 
   // Chat message
-  socket.on('message:send', (data) => {
+  socket.on('message:send', async (data) => {
     const { chatId, text, type, metadata } = data;
     const chat = chats.get(chatId);
 
@@ -343,7 +544,7 @@ io.on('connection', (socket) => {
     const messageId = `msg_${uuidv4()}`;
     const encryptedText = chat.encrypted ? encryptMessage(text) : text;
 
-    const message = {
+    const messageData = {
       id: messageId,
       chatId,
       senderId: socket.userId,
@@ -354,10 +555,19 @@ io.on('connection', (socket) => {
       encrypted: chat.encrypted
     };
 
+    // Save to cache
     if (!messages.has(chatId)) {
       messages.set(chatId, []);
     }
-    messages.get(chatId).push(message);
+    messages.get(chatId).push(messageData);
+    
+    // Save to MongoDB
+    try {
+      await Message.create(messageData);
+      console.log(`✅ Message ${messageId} saved to MongoDB`);
+    } catch (dbError) {
+      console.error('❌ Error saving message to MongoDB:', dbError);
+    }
 
     // Update unread counts
     chat.participants.forEach(participantId => {
@@ -366,10 +576,23 @@ io.on('connection', (socket) => {
         chat.unreadCount[participantId] = (chat.unreadCount[participantId] || 0) + 1;
       }
     });
+    
+    // Update chat in MongoDB
+    try {
+      await Chat.findOneAndUpdate(
+        { id: chatId },
+        { 
+          unreadCount: chat.unreadCount,
+          updatedAt: new Date()
+        }
+      );
+    } catch (dbError) {
+      console.error('❌ Error updating chat in MongoDB:', dbError);
+    }
 
     // Send to all participants
     io.to(chatId).emit('message:new', {
-      ...message,
+      ...messageData,
       text: text // Send original (decrypted) text to all
     });
   });

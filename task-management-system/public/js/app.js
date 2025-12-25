@@ -184,22 +184,54 @@ function initSocket() {
     });
     
     socket.on('chat:created', (chat) => {
-        chats.push(chat);
-        renderChats();
+        // Check if chat already exists to prevent duplicates
+        const existingChat = chats.find(c => c.id === chat.id);
+        if (!existingChat) {
+            chats.push(chat);
+            renderChats();
+        }
     });
     
     socket.on('message:new', (message) => {
         handleNewMessage(message);
     });
     
+    // Typing indicator with multiple users support
+    const typingUsers = new Map(); // chatId -> Set of userIds
+    
     socket.on('typing:user', (data) => {
         if (currentChat && data.chatId === currentChat.id) {
             const indicator = document.getElementById('typingIndicator');
             const text = document.getElementById('typingText');
             
+            if (!typingUsers.has(data.chatId)) {
+                typingUsers.set(data.chatId, new Set());
+            }
+            
+            const chatTypingUsers = typingUsers.get(data.chatId);
+            
             if (data.typing) {
-                const user = users.find(u => u.id === data.userId);
-                text.textContent = `${user?.name || 'Пользователь'} печатает...`;
+                chatTypingUsers.add(data.userId);
+            } else {
+                chatTypingUsers.delete(data.userId);
+            }
+            
+            // Update indicator text
+            if (chatTypingUsers.size > 0) {
+                const typingUsersList = Array.from(chatTypingUsers)
+                    .map(userId => users.find(u => u.id === userId))
+                    .filter(u => u);
+                
+                let typingText = '';
+                if (typingUsersList.length === 1) {
+                    typingText = `${typingUsersList[0].name} печатает...`;
+                } else if (typingUsersList.length === 2) {
+                    typingText = `${typingUsersList[0].name} и ${typingUsersList[1].name} печатают...`;
+                } else {
+                    typingText = `${typingUsersList[0].name} и ещё ${typingUsersList.length - 1} печатают...`;
+                }
+                
+                text.textContent = typingText;
                 indicator.style.display = 'flex';
             } else {
                 indicator.style.display = 'none';
@@ -416,6 +448,28 @@ function getParticipantWord(count) {
     }
 }
 
+// Auto-update timestamps every minute
+setInterval(() => {
+    // Update chat list times
+    document.querySelectorAll('.chat-time').forEach(timeEl => {
+        const chatId = timeEl.closest('.chat-item')?.dataset.chatId;
+        if (chatId) {
+            const chat = chats.find(c => c.id === chatId);
+            if (chat && chat.lastMessage) {
+                timeEl.textContent = formatTime(chat.lastMessage.createdAt);
+            }
+        }
+    });
+    
+    // Update message times
+    document.querySelectorAll('.message-time').forEach(timeEl => {
+        const timestamp = timeEl.dataset.timestamp;
+        if (timestamp) {
+            timeEl.textContent = formatTime(new Date(timestamp));
+        }
+    });
+}, 60000); // Update every minute
+
 async function loadMessages(chatId) {
     try {
         const messages = await apiCall(`/api/messages/${chatId}`);
@@ -443,10 +497,10 @@ function renderMessages(messages) {
                 ` : ''}
                 <div class="message-content">
                     ${isGroupChat && !isSent && !isSystem ? `
-                        <div class="message-sender-name">${sender?.name || 'Пользователь'}</div>
+                        <div class="message-sender-name" data-sender-id="${msg.senderId}">${sender?.name || 'Пользователь'}</div>
                     ` : ''}
                     <div class="message-bubble ${isSystem ? 'system-bubble' : ''}">${msg.text}</div>
-                    <div class="message-time">${formatTime(msg.createdAt)}</div>
+                    <div class="message-time" data-timestamp="${msg.createdAt}">${formatTime(msg.createdAt)}</div>
                 </div>
             </div>
         `;
@@ -455,6 +509,11 @@ function renderMessages(messages) {
     // Scroll to bottom
     const container = document.getElementById('messagesContainer');
     container.scrollTop = container.scrollHeight;
+    
+    // Make sender names clickable (defined in attachments-emoji.js)
+    if (typeof makeMessageSendersClickable === 'function') {
+        makeMessageSendersClickable();
+    }
 }
 
 function handleNewMessage(message) {
@@ -477,15 +536,20 @@ function handleNewMessage(message) {
                 ` : ''}
                 <div class="message-content">
                     ${isGroupChat && !isSent && !isSystem ? `
-                        <div class="message-sender-name">${sender?.name || 'Пользователь'}</div>
+                        <div class="message-sender-name" data-sender-id="${message.senderId}">${sender?.name || 'Пользователь'}</div>
                     ` : ''}
                     <div class="message-bubble ${isSystem ? 'system-bubble' : ''}">${message.text}</div>
-                    <div class="message-time">${formatTime(message.createdAt)}</div>
+                    <div class="message-time" data-timestamp="${message.createdAt}">${formatTime(message.createdAt)}</div>
                 </div>
             </div>
         `;
         
         messagesList.insertAdjacentHTML('beforeend', messageHtml);
+        
+        // Make sender names clickable
+        if (typeof makeMessageSendersClickable === 'function') {
+            makeMessageSendersClickable();
+        }
         
         // Scroll to bottom
         const container = document.getElementById('messagesContainer');
@@ -907,6 +971,68 @@ async function createGroupChat() {
     }
 }
 
+// Open Chat Info Panel
+function openChatInfo(chat) {
+    const chatInfoAvatar = document.getElementById('chatInfoAvatar');
+    const chatInfoName = document.getElementById('chatInfoName');
+    const chatInfoStatus = document.getElementById('chatInfoStatus');
+    const chatMembersSection = document.getElementById('chatMembersSection');
+    const chatMembersList = document.getElementById('chatMembersList');
+    
+    if (chat.type === 'group') {
+        // Group chat info
+        chatInfoAvatar.style.background = generateGradient(chat.name || 'Group');
+        chatInfoAvatar.innerHTML = '<span class="material-icons">group</span>';
+        chatInfoName.textContent = chat.name || 'Групповой чат';
+        chatInfoStatus.textContent = `${chat.participants.length} ${getParticipantWord(chat.participants.length)}`;
+        
+        // Show members section
+        chatMembersSection.style.display = 'block';
+        
+        // Render members
+        const members = chat.participants
+            .map(userId => users.find(u => u.id === userId))
+            .filter(u => u);
+        
+        chatMembersList.innerHTML = members.map(member => {
+            const isOnline = onlineUsers.has(member.id);
+            const isSelf = member.id === currentUser.id;
+            
+            return `
+                <div class="member-item">
+                    <div class="member-avatar" style="background: ${generateGradient(member.name)}">
+                        ${getUserInitials(member.name)}
+                    </div>
+                    <div class="member-info">
+                        <div class="member-name">${member.name}${isSelf ? ' (Вы)' : ''}</div>
+                        <div class="member-status ${isOnline ? 'online' : ''}">
+                            ${isOnline ? 'в сети' : 'не в сети'}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+    } else {
+        // Private chat info
+        const otherParticipant = users.find(u => 
+            chat.participants.includes(u.id) && u.id !== currentUser.id
+        );
+        
+        if (otherParticipant) {
+            chatInfoAvatar.style.background = generateGradient(otherParticipant.name);
+            chatInfoAvatar.innerHTML = getUserInitials(otherParticipant.name);
+            chatInfoName.textContent = otherParticipant.name;
+            
+            const isOnline = onlineUsers.has(otherParticipant.id);
+            chatInfoStatus.textContent = isOnline ? 'в сети' : 'не в сети';
+        }
+        
+        // Hide members section
+        chatMembersSection.style.display = 'none';
+    }
+}
+
 function closeModal() {
     document.querySelectorAll('.modal').forEach(modal => {
         modal.classList.remove('active');
@@ -959,6 +1085,26 @@ function setupEventListeners() {
         document.getElementById('registerForm').style.display = 'none';
         document.getElementById('loginForm').style.display = 'block';
     });
+    
+    // Chat Info Panel
+    const chatInfoBtn = document.getElementById('chatInfoBtn');
+    const chatInfoPanel = document.getElementById('chatInfoPanel');
+    const closeChatInfoBtn = document.getElementById('closeChatInfoBtn');
+    
+    if (chatInfoBtn) {
+        chatInfoBtn.addEventListener('click', () => {
+            if (currentChat) {
+                openChatInfo(currentChat);
+                chatInfoPanel.classList.add('open');
+            }
+        });
+    }
+    
+    if (closeChatInfoBtn) {
+        closeChatInfoBtn.addEventListener('click', () => {
+            chatInfoPanel.classList.remove('open');
+        });
+    }
     
     // Tabs
     document.querySelectorAll('.tab-btn').forEach(btn => {
