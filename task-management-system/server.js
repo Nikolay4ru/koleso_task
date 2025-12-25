@@ -1,4 +1,4 @@
-// server.js - Исправленная версия с правильным порядком инициализации
+// server.js - Полная версия с мессенджером и звонками
 require('dotenv').config();
 
 const express = require('express');
@@ -88,6 +88,13 @@ class Database {
             await fs.mkdir('./data', { recursive: true });
             const data = await fs.readFile(config.dbPath, 'utf8');
             this.data = JSON.parse(data);
+            
+            // Инициализация структур если их нет
+            if (!this.data.chats) this.data.chats = [];
+            if (!this.data.chatMessages) this.data.chatMessages = [];
+            if (!this.data.chatMembers) this.data.chatMembers = [];
+            if (!this.data.calls) this.data.calls = [];
+            
             console.log('✓ База данных загружена');
         } catch (error) {
             console.log('ℹ Создание новой базы данных');
@@ -183,7 +190,7 @@ class Database {
     }
 }
 
-// ChatManager class - встроенный в server.js
+// ChatManager class - полная версия
 class ChatManager {
     constructor(db, io) {
         this.db = db;
@@ -191,6 +198,7 @@ class ChatManager {
         this.userSockets = new Map(); // userId -> Set of socketIds
         this.activeCalls = new Map(); // callId -> call object
         this.socketUsers = new Map(); // socketId -> userId
+        this.typingUsers = new Map(); // chatId -> Set of userIds
         
         // Инициализация структур БД
         if (!this.db.data.chats) this.db.data.chats = [];
@@ -199,7 +207,7 @@ class ChatManager {
         if (!this.db.data.calls) this.db.data.calls = [];
     }
 
-    // Управление подключениями
+    // ===== УПРАВЛЕНИЕ ПОДКЛЮЧЕНИЯМИ =====
     addUserSocket(userId, socketId) {
         if (!this.userSockets.has(userId)) {
             this.userSockets.set(userId, new Set());
@@ -232,8 +240,7 @@ class ChatManager {
         }
     }
 
-    
-
+    // ===== УПРАВЛЕНИЕ ЧАТАМИ =====
     async getUserChats(userId) {
         // Убеждаемся, что структура существует
         if (!this.db.data.chatMembers) {
@@ -251,7 +258,8 @@ class ChatManager {
         
         // Добавляем информацию о непрочитанных сообщениях
         for (const chat of chats) {
-            chat.unreadCount = chat.unreadCounts && chat.unreadCounts[userId] || 0;
+            if (!chat.unreadCounts) chat.unreadCounts = {};
+            chat.unreadCount = chat.unreadCounts[userId] || 0;
             
             // Для приватных чатов добавляем информацию о собеседнике
             if (chat.type === 'private') {
@@ -272,12 +280,306 @@ class ChatManager {
         );
     }
 
+    async getOrCreatePrivateChat(userId1, userId2) {
+        // Проверяем, существует ли уже приватный чат между этими пользователями
+        const existingChat = this.db.data.chats.find(chat => 
+            chat.type === 'private' && 
+            chat.members.includes(userId1) && 
+            chat.members.includes(userId2)
+        );
+
+        if (existingChat) {
+            return existingChat;
+        }
+
+        // Создаём новый приватный чат
+        const chatId = Date.now().toString();
+        const chat = {
+            id: chatId,
+            type: 'private',
+            members: [userId1, userId2],
+            createdAt: new Date().toISOString(),
+            lastMessageAt: null,
+            lastMessage: null,
+            unreadCounts: {
+                [userId1]: 0,
+                [userId2]: 0
+            }
+        };
+
+        this.db.data.chats.push(chat);
+
+        // Добавляем членство для обоих пользователей
+        this.db.data.chatMembers.push({
+            chatId,
+            userId: userId1,
+            status: 'active',
+            joinedAt: new Date().toISOString()
+        });
+
+        this.db.data.chatMembers.push({
+            chatId,
+            userId: userId2,
+            status: 'active',
+            joinedAt: new Date().toISOString()
+        });
+
+        await this.db.save();
+        return chat;
+    }
+
+    async createGroupChat(name, creatorId, memberIds) {
+        const chatId = Date.now().toString();
+        const members = [creatorId, ...memberIds.filter(id => id !== creatorId)];
+        
+        const chat = {
+            id: chatId,
+            type: 'group',
+            name,
+            members,
+            creatorId,
+            createdAt: new Date().toISOString(),
+            lastMessageAt: null,
+            lastMessage: null,
+            unreadCounts: {}
+        };
+
+        // Инициализируем счётчики непрочитанных для всех участников
+        members.forEach(memberId => {
+            chat.unreadCounts[memberId] = 0;
+        });
+
+        this.db.data.chats.push(chat);
+
+        // Добавляем членство для всех участников
+        members.forEach(memberId => {
+            this.db.data.chatMembers.push({
+                chatId,
+                userId: memberId,
+                status: 'active',
+                joinedAt: new Date().toISOString()
+            });
+        });
+
+        await this.db.save();
+
+        // Уведомляем всех участников о новом чате
+        members.forEach(memberId => {
+            this.sendToUser(memberId, 'chat_created', chat);
+        });
+
+        return chat;
+    }
+
+    async createTaskChat(taskId, taskTitle, members) {
+        const chatId = `task_${taskId}`;
+        
+        // Проверяем, не существует ли уже чат для этой задачи
+        const existingChat = this.db.data.chats.find(c => c.id === chatId);
+        if (existingChat) {
+            return existingChat;
+        }
+
+        const chat = {
+            id: chatId,
+            type: 'task',
+            taskId,
+            name: `Задача: ${taskTitle}`,
+            members,
+            createdAt: new Date().toISOString(),
+            lastMessageAt: null,
+            lastMessage: null,
+            unreadCounts: {}
+        };
+
+        // Инициализируем счётчики непрочитанных
+        members.forEach(memberId => {
+            chat.unreadCounts[memberId] = 0;
+        });
+
+        this.db.data.chats.push(chat);
+
+        // Добавляем членство
+        members.forEach(memberId => {
+            this.db.data.chatMembers.push({
+                chatId,
+                userId: memberId,
+                status: 'active',
+                joinedAt: new Date().toISOString()
+            });
+        });
+
+        await this.db.save();
+        return chat;
+    }
+
+    // ===== УПРАВЛЕНИЕ СООБЩЕНИЯМИ =====
+    async sendMessage(chatId, senderId, content, type = 'text', attachments = []) {
+        const chat = this.db.data.chats.find(c => c.id === chatId);
+        if (!chat) {
+            throw new Error('Чат не найден');
+        }
+
+        // Проверяем, является ли отправитель участником чата
+        if (!chat.members.includes(senderId)) {
+            throw new Error('Вы не являетесь участником этого чата');
+        }
+
+        const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const message = {
+            id: messageId,
+            chatId,
+            senderId,
+            content,
+            type,
+            attachments: attachments || [],
+            timestamp: new Date().toISOString(),
+            readBy: [senderId]
+        };
+
+        // Сохраняем сообщение
+        if (!this.db.data.chatMessages) {
+            this.db.data.chatMessages = [];
+        }
+        this.db.data.chatMessages.push(message);
+
+        // Обновляем информацию о чате
+        chat.lastMessage = {
+            content,
+            senderId,
+            timestamp: message.timestamp
+        };
+        chat.lastMessageAt = message.timestamp;
+
+        // Увеличиваем счётчик непрочитанных для всех участников, кроме отправителя
+        if (!chat.unreadCounts) chat.unreadCounts = {};
+        chat.members.forEach(memberId => {
+            if (memberId !== senderId) {
+                chat.unreadCounts[memberId] = (chat.unreadCounts[memberId] || 0) + 1;
+            }
+        });
+
+        await this.db.save();
+
+        // Отправляем сообщение всем участникам через WebSocket
+        const sender = this.db.data.users.find(u => u.id === senderId);
+        const messageWithSender = {
+            ...message,
+            sender: sender ? { id: sender.id, name: sender.name } : null
+        };
+
+        chat.members.forEach(memberId => {
+            this.sendToUser(memberId, 'new_message', {
+                chatId,
+                message: messageWithSender,
+                chat: {
+                    id: chat.id,
+                    lastMessage: chat.lastMessage,
+                    lastMessageAt: chat.lastMessageAt,
+                    unreadCount: chat.unreadCounts[memberId] || 0
+                }
+            });
+        });
+
+        return message;
+    }
+
+    async getMessages(chatId, limit = 50, before = null) {
+        let messages = this.db.data.chatMessages.filter(m => m.chatId === chatId);
+
+        // Фильтруем по времени если указан параметр before
+        if (before) {
+            messages = messages.filter(m => new Date(m.timestamp) < new Date(before));
+        }
+
+        // Сортируем по времени (новые сначала) и ограничиваем количество
+        messages = messages
+            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+            .slice(0, limit);
+
+        // Добавляем информацию об отправителях
+        const messagesWithSenders = messages.map(msg => {
+            const sender = this.db.data.users.find(u => u.id === msg.senderId);
+            return {
+                ...msg,
+                sender: sender ? { id: sender.id, name: sender.name } : null
+            };
+        });
+
+        // Возвращаем в хронологическом порядке
+        return messagesWithSenders.reverse();
+    }
+
+    async markAsRead(chatId, userId) {
+        const chat = this.db.data.chats.find(c => c.id === chatId);
+        if (!chat) return;
+
+        // Сбрасываем счётчик непрочитанных
+        if (!chat.unreadCounts) chat.unreadCounts = {};
+        chat.unreadCounts[userId] = 0;
+
+        // Помечаем все сообщения как прочитанные
+        const chatMessages = this.db.data.chatMessages.filter(m => m.chatId === chatId);
+        chatMessages.forEach(msg => {
+            if (!msg.readBy) msg.readBy = [];
+            if (!msg.readBy.includes(userId)) {
+                msg.readBy.push(userId);
+            }
+        });
+
+        await this.db.save();
+
+        // Уведомляем отправителей о прочтении
+        chat.members.forEach(memberId => {
+            if (memberId !== userId) {
+                this.sendToUser(memberId, 'messages_read', { chatId, userId });
+            }
+        });
+    }
+
+    // ===== TYPING ИНДИКАТОРЫ =====
+    setTyping(chatId, userId, isTyping) {
+        if (!this.typingUsers.has(chatId)) {
+            this.typingUsers.set(chatId, new Set());
+        }
+
+        const typingSet = this.typingUsers.get(chatId);
+        
+        if (isTyping) {
+            typingSet.add(userId);
+        } else {
+            typingSet.delete(userId);
+        }
+
+        // Уведомляем других участников
+        const chat = this.db.data.chats.find(c => c.id === chatId);
+        if (chat) {
+            const user = this.db.data.users.find(u => u.id === userId);
+            chat.members.forEach(memberId => {
+                if (memberId !== userId) {
+                    this.sendToUser(memberId, 'user_typing', {
+                        chatId,
+                        userId,
+                        userName: user ? user.name : 'Unknown',
+                        isTyping
+                    });
+                }
+            });
+        }
+    }
+
     // ===== УПРАВЛЕНИЕ ЗВОНКАМИ =====
     async startCall(chatId, initiatorId, callType) {
         console.log(`Starting ${callType} call in chat ${chatId} by user ${initiatorId}`);
         
+        const chat = this.db.data.chats.find(c => c.id === chatId);
+        if (!chat) {
+            throw new Error('Чат не найден');
+        }
+
+        const callId = Date.now().toString();
         const call = {
-            id: Date.now().toString(),
+            id: callId,
             chatId,
             initiatorId,
             type: callType,
@@ -286,30 +588,35 @@ class ChatManager {
             createdAt: new Date().toISOString()
         };
 
-        this.activeCalls.set(call.id, call);
-
-        // Сохраняем в БД
+        this.activeCalls.set(callId, call);
         this.db.data.calls.push({ ...call });
         await this.db.save();
 
-        // Уведомляем получателя (для простоты считаем что chatId это userId получателя)
-        const recipientId = parseInt(chatId);
-        if (recipientId && recipientId !== initiatorId) {
-            this.sendToUser(recipientId, 'incoming_call', {
-                callId: call.id,
-                initiatorId,
-                callType,
-                chatName: 'Приватный чат',
-                chatId
-            });
-        }
+        // Получаем информацию об инициаторе
+        const initiator = this.db.data.users.find(u => u.id === initiatorId);
+
+        // Уведомляем всех остальных участников чата о входящем звонке
+        chat.members.forEach(memberId => {
+            if (memberId !== initiatorId) {
+                this.sendToUser(memberId, 'incoming_call', {
+                    callId,
+                    chatId,
+                    initiatorId,
+                    initiatorName: initiator ? initiator.name : 'Unknown',
+                    callType,
+                    chatName: chat.name || 'Приватный чат'
+                });
+            }
+        });
 
         return call;
     }
 
     async acceptCall(callId, userId) {
         const call = this.activeCalls.get(callId);
-        if (!call || call.status === 'ended') return null;
+        if (!call || call.status === 'ended') {
+            throw new Error('Звонок не найден или уже завершён');
+        }
 
         if (!call.participants.includes(userId)) {
             call.participants.push(userId);
@@ -317,11 +624,15 @@ class ChatManager {
 
         call.status = 'active';
         
-        // Уведомляем инициатора о принятии звонка
-        this.sendToUser(call.initiatorId, 'call_accepted', {
-            callId,
-            userId,
-            participants: call.participants
+        // Уведомляем всех участников о принятии звонка
+        const user = this.db.data.users.find(u => u.id === userId);
+        call.participants.forEach(participantId => {
+            this.sendToUser(participantId, 'call_accepted', {
+                callId,
+                userId,
+                userName: user ? user.name : 'Unknown',
+                participants: call.participants
+            });
         });
 
         return call;
@@ -331,10 +642,13 @@ class ChatManager {
         const call = this.activeCalls.get(callId);
         if (!call) return null;
 
+        const user = this.db.data.users.find(u => u.id === userId);
+
         // Уведомляем инициатора об отклонении
         this.sendToUser(call.initiatorId, 'call_declined', {
             callId,
-            userId
+            userId,
+            userName: user ? user.name : 'Unknown'
         });
 
         return this.endCall(callId);
@@ -348,12 +662,12 @@ class ChatManager {
         call.endedAt = new Date().toISOString();
 
         // Уведомляем всех участников о завершении звонка
-        for (const participantId of call.participants) {
+        call.participants.forEach(participantId => {
             this.sendToUser(participantId, 'call_ended', {
                 callId,
                 endedAt: call.endedAt
             });
-        }
+        });
 
         this.activeCalls.delete(callId);
         return call;
@@ -362,13 +676,16 @@ class ChatManager {
     // WebRTC сигналинг
     async handleSignaling(callId, fromUserId, signal) {
         const call = this.activeCalls.get(callId);
-        if (!call) return;
+        if (!call) {
+            console.warn(`Call ${callId} not found for signaling`);
+            return;
+        }
 
         console.log(`Handling ${signal.type} signal for call ${callId} from user ${fromUserId}`);
 
         switch (signal.type) {
             case 'offer':
-                for (const participantId of call.participants) {
+                call.participants.forEach(participantId => {
                     if (participantId !== fromUserId) {
                         this.sendToUser(participantId, 'sdp_offer', {
                             callId,
@@ -376,11 +693,11 @@ class ChatManager {
                             offer: signal.offer
                         });
                     }
-                }
+                });
                 break;
 
             case 'answer':
-                for (const participantId of call.participants) {
+                call.participants.forEach(participantId => {
                     if (participantId !== fromUserId) {
                         this.sendToUser(participantId, 'sdp_answer', {
                             callId,
@@ -388,11 +705,11 @@ class ChatManager {
                             answer: signal.answer
                         });
                     }
-                }
+                });
                 break;
 
             case 'ice-candidate':
-                for (const participantId of call.participants) {
+                call.participants.forEach(participantId => {
                     if (participantId !== fromUserId) {
                         this.sendToUser(participantId, 'ice_candidate', {
                             callId,
@@ -400,7 +717,7 @@ class ChatManager {
                             candidate: signal.candidate
                         });
                     }
-                }
+                });
                 break;
         }
     }
@@ -457,7 +774,7 @@ app.get('/messenger', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'messenger.html'));
 });
 
-// API маршруты
+// ===== API МАРШРУТЫ - АУТЕНТИФИКАЦИЯ =====
 app.post('/api/register', async (req, res) => {
     try {
         const { name, email, password } = req.body;
@@ -525,7 +842,10 @@ app.get('/api/users', authMiddleware, async (req, res) => {
     try {
         const users = db.data.users.map(u => {
             const { password, ...userWithoutPassword } = u;
-            return userWithoutPassword;
+            return {
+                ...userWithoutPassword,
+                online: chatManager ? chatManager.isUserOnline(u.id) : false
+            };
         });
         res.json(users);
     } catch (error) {
@@ -533,6 +853,7 @@ app.get('/api/users', authMiddleware, async (req, res) => {
     }
 });
 
+// ===== API МАРШРУТЫ - ЗАДАЧИ =====
 app.get('/api/tasks', authMiddleware, async (req, res) => {
     try {
         const tasks = await db.getTasks(req.user.id, req.user.role);
@@ -597,62 +918,92 @@ app.delete('/api/tasks/:id', authMiddleware, async (req, res) => {
     }
 });
 
-// API для push уведомлений
-app.get('/api/vapid-public-key', (req, res) => {
-    if (process.env.VAPID_PUBLIC_KEY) {
-        res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
-    } else {
-        res.status(503).json({ error: 'Push уведомления недоступны' });
-    }
-});
-
-app.post('/api/push-subscribe', authMiddleware, async (req, res) => {
-    try {
-        const { subscription, userId } = req.body;
-        
-        // Сохраняем подписку в БД
-        const user = await db.findUserById(userId);
-        if (user) {
-            user.pushSubscription = subscription;
-            await db.save();
-        }
-        
-        res.json({ success: true });
-    } catch (error) {
-        console.error('Ошибка сохранения push подписки:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
-});
-
-// API для чатов (базовые endpoint'ы)
+// ===== API МАРШРУТЫ - ЧАТЫ =====
 app.get('/api/chats', authMiddleware, async (req, res) => {
     try {
         const chats = await chatManager.getUserChats(req.user.id);
         res.json(chats);
     } catch (error) {
+        console.error('Ошибка получения чатов:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
 
 app.post('/api/chats', authMiddleware, async (req, res) => {
     try {
-        // Создание чата - пока заглушка
-        res.json({ id: Date.now().toString(), type: 'private' });
+        const { type, name, members, taskId, taskTitle } = req.body;
+
+        let chat;
+        if (type === 'private') {
+            // Создаём или получаем приватный чат
+            const otherUserId = members[0];
+            chat = await chatManager.getOrCreatePrivateChat(req.user.id, otherUserId);
+        } else if (type === 'group') {
+            // Создаём групповой чат
+            chat = await chatManager.createGroupChat(name, req.user.id, members);
+        } else if (type === 'task') {
+            // Создаём чат для задачи
+            chat = await chatManager.createTaskChat(taskId, taskTitle, members);
+        } else {
+            return res.status(400).json({ error: 'Неверный тип чата' });
+        }
+
+        res.json(chat);
     } catch (error) {
+        console.error('Ошибка создания чата:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
 
-app.get('/api/chats/:id/messages', authMiddleware, async (req, res) => {
+app.get('/api/chats/:chatId/messages', authMiddleware, async (req, res) => {
     try {
-        // Возвращаем пустой список сообщений
-        res.json([]);
+        const { chatId } = req.params;
+        const { limit = 50, before } = req.query;
+
+        const messages = await chatManager.getMessages(chatId, parseInt(limit), before);
+        res.json(messages);
     } catch (error) {
+        console.error('Ошибка получения сообщений:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
 
-// API для отклонения звонка через push уведомление
+app.post('/api/chats/:chatId/messages', authMiddleware, async (req, res) => {
+    try {
+        const { chatId } = req.params;
+        const { content, type = 'text', attachments = [] } = req.body;
+
+        if (!content || content.trim() === '') {
+            return res.status(400).json({ error: 'Сообщение не может быть пустым' });
+        }
+
+        const message = await chatManager.sendMessage(
+            chatId,
+            req.user.id,
+            content,
+            type,
+            attachments
+        );
+
+        res.json({ message });
+    } catch (error) {
+        console.error('Ошибка отправки сообщения:', error);
+        res.status(500).json({ error: error.message || 'Ошибка сервера' });
+    }
+});
+
+app.post('/api/chats/:chatId/read', authMiddleware, async (req, res) => {
+    try {
+        const { chatId } = req.params;
+        await chatManager.markAsRead(chatId, req.user.id);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Ошибка отметки как прочитанное:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+// ===== API МАРШРУТЫ - ЗВОНКИ =====
 app.post('/api/calls/:callId/decline', authMiddleware, async (req, res) => {
     try {
         const callId = req.params.callId;
@@ -669,7 +1020,33 @@ app.post('/api/calls/:callId/decline', authMiddleware, async (req, res) => {
     }
 });
 
-// WebSocket обработка
+// ===== API МАРШРУТЫ - PUSH УВЕДОМЛЕНИЯ =====
+app.get('/api/vapid-public-key', (req, res) => {
+    if (process.env.VAPID_PUBLIC_KEY) {
+        res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
+    } else {
+        res.status(503).json({ error: 'Push уведомления недоступны' });
+    }
+});
+
+app.post('/api/push-subscribe', authMiddleware, async (req, res) => {
+    try {
+        const { subscription, userId } = req.body;
+        
+        const user = await db.findUserById(userId);
+        if (user) {
+            user.pushSubscription = subscription;
+            await db.save();
+        }
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Ошибка сохранения push подписки:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+// ===== WEBSOCKET ОБРАБОТКА =====
 io.on('connection', (socket) => {
     console.log('WebSocket подключен:', socket.id);
     
@@ -685,16 +1062,61 @@ io.on('connection', (socket) => {
                 chatManager.addUserSocket(user.id, socket.id);
                 await db.updateUserStatus(user.id, 'online');
                 
+                // Уведомляем пользователя об успешной аутентификации
                 socket.emit('authenticated', { success: true, user });
+                
+                // Уведомляем других пользователей об онлайн статусе
+                io.emit('user_status_changed', {
+                    userId: user.id,
+                    status: 'online'
+                });
+                
+                console.log(`User ${user.name} (${user.id}) authenticated`);
             } else {
                 socket.emit('authenticated', { success: false, error: 'User not found' });
             }
         } catch (error) {
+            console.error('Authentication error:', error);
             socket.emit('authenticated', { success: false, error: 'Invalid token' });
         }
     });
 
-    // Обработчики звонков
+    // ===== ОБРАБОТЧИКИ СООБЩЕНИЙ =====
+    socket.on('send_message', async ({ chatId, content, type, attachments }) => {
+        if (!socket.userId) {
+            socket.emit('error', { message: 'Не авторизован' });
+            return;
+        }
+
+        try {
+            await chatManager.sendMessage(socket.userId, chatId, content, type, attachments);
+        } catch (error) {
+            console.error('Error sending message:', error);
+            socket.emit('error', { message: error.message });
+        }
+    });
+
+    socket.on('typing_start', ({ chatId }) => {
+        if (!socket.userId) return;
+        chatManager.setTyping(chatId, socket.userId, true);
+    });
+
+    socket.on('typing_stop', ({ chatId }) => {
+        if (!socket.userId) return;
+        chatManager.setTyping(chatId, socket.userId, false);
+    });
+
+    socket.on('mark_as_read', async ({ chatId }) => {
+        if (!socket.userId) return;
+        
+        try {
+            await chatManager.markAsRead(chatId, socket.userId);
+        } catch (error) {
+            console.error('Error marking as read:', error);
+        }
+    });
+
+    // ===== ОБРАБОТЧИКИ ЗВОНКОВ =====
     socket.on('call_start', async ({ chatId, type }) => {
         if (!socket.userId) return;
 
@@ -702,27 +1124,30 @@ io.on('connection', (socket) => {
             const call = await chatManager.startCall(chatId, socket.userId, type);
             socket.emit('call_started', call);
         } catch (error) {
+            console.error('Error starting call:', error);
             socket.emit('call_error', { error: error.message });
         }
     });
 
-    socket.on('call_accepted', async ({ callId }) => {
+    socket.on('call_accept', async ({ callId }) => {
         if (!socket.userId) return;
 
         try {
             const call = await chatManager.acceptCall(callId, socket.userId);
             socket.emit('call_joined', call);
         } catch (error) {
+            console.error('Error accepting call:', error);
             socket.emit('call_error', { error: error.message });
         }
     });
 
-    socket.on('call_declined', async ({ callId }) => {
+    socket.on('call_decline', async ({ callId }) => {
         if (!socket.userId) return;
 
         try {
             await chatManager.declineCall(callId, socket.userId);
         } catch (error) {
+            console.error('Error declining call:', error);
             socket.emit('call_error', { error: error.message });
         }
     });
@@ -737,6 +1162,7 @@ io.on('connection', (socket) => {
         }
     });
 
+    // ===== WEBRTC СИГНАЛИНГ =====
     socket.on('call_signal', async ({ callId, signal }) => {
         if (!socket.userId) return;
 
@@ -747,18 +1173,28 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('disconnect', () => {
+    // ===== ОТКЛЮЧЕНИЕ =====
+    socket.on('disconnect', async () => {
         if (socket.userId) {
             chatManager.removeUserSocket(socket.userId, socket.id);
             
+            // Если у пользователя больше нет активных соединений
             if (!chatManager.isUserOnline(socket.userId)) {
-                db.updateUserStatus(socket.userId, 'offline');
+                await db.updateUserStatus(socket.userId, 'offline');
+                
+                // Уведомляем других пользователей об оффлайн статусе
+                io.emit('user_status_changed', {
+                    userId: socket.userId,
+                    status: 'offline'
+                });
             }
+            
+            console.log(`User ${socket.userId} disconnected`);
         }
     });
 });
 
-// Запуск сервера
+// ===== ЗАПУСК СЕРВЕРА =====
 async function startServer() {
     try {
         await fs.mkdir('./data', { recursive: true });
@@ -775,6 +1211,7 @@ async function startServer() {
             console.log(`🌐 URL: http://localhost:${config.port}`);
             console.log(`👥 Пользователей: ${db.data.users.length}`);
             console.log(`📋 Задач: ${db.data.tasks.length}`);
+            console.log(`💬 Чатов: ${db.data.chats.length}`);
         });
         
     } catch (error) {
