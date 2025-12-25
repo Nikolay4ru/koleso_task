@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Max Messenger</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="authScreen" class="auth-screen">
+        <div class="auth-container">
+            <div class="auth-card">
+                <div class="auth-header">
+                    <div class="logo">
+                        <span class="material-icons">video_call</span>
+                    </div>
+                    <h1>MAX Messenger</h1>
+                    <p>Безопасные корпоративные коммуникации</p>
+                </div>
+
+                <div id="loginForm" class="auth-form">
+                    <div class="input-group">
+                        <label for="loginUsername">Имя пользователя</label>
+                        <input type="text" id="loginUsername" placeholder="Введите имя пользователя" autocomplete="username">
+                    </div>
+                    <div class="input-group">
+                        <label for="loginPassword">Пароль</label>
+                        <input type="password" id="loginPassword" placeholder="Введите пароль" autocomplete="current-password">
+                    </div>
+                    <button id="loginBtn" class="btn-primary">Войти</button>
+                    <p class="auth-switch">
+                        Нет аккаунта? <a href="#" id="showRegister">Зарегистрироваться</a>
+                    </p>
+                </div>
+
+                <div id="registerForm" class="auth-form" style="display: none;">
+                    <div class="input-group">
+                        <label for="registerName">Полное имя</label>
+                        <input type="text" id="registerName" placeholder="Иван Иванов">
+                    </div>
+                    <div class="input-group">
+                        <label for="registerEmail">Email</label>
+                        <input type="email" id="registerEmail" placeholder="ivan@company.com">
+                    </div>
+                    <div class="input-group">
+                        <label for="registerUsername">Имя пользователя</label>
+                        <input type="text" id="registerUsername" placeholder="ivan.ivanov">
+                    </div>
+                    <div class="input-group">
+                        <label for="registerPassword">Пароль</label>
+                        <input type="password" id="registerPassword" placeholder="Минимум 8 символов">
+                    </div>
+                    <button id="registerBtn" class="btn-primary">Создать аккаунт</button>
+                    <p class="auth-switch">
+                        Уже есть аккаунт? <a href="#" id="showLogin">Войти</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="mainApp" class="main-app" style="display: none;">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="user-profile">
+                    <div class="user-avatar" id="currentUserAvatar">
+                        <span class="material-icons">person</span>
+                    </div>
+                    <div class="user-info">
+                        <h3 id="currentUserName">User</h3>
+                        <span class="user-status online">В сети</span>
+                    </div>
+                </div>
+                <button class="icon-btn" id="newChatBtn" title="Новый чат">
+                    <span class="material-icons">add_comment</span>
+                </button>
+            </div>
+
+            <div class="sidebar-tabs">
+                <button class="tab-btn active" data-tab="chats">
+                    <span class="material-icons">chat</span>
+                    <span>Чаты</span>
+                </button>
+                <button class="tab-btn" data-tab="contacts">
+                    <span class="material-icons">contacts</span>
+                    <span>Контакты</span>
+                </button>
+            </div>
+
+            <div class="sidebar-search">
+                <span class="material-icons">search</span>
+                <input type="text" id="searchInput" placeholder="Поиск чатов и контактов...">
+            </div>
+
+            <div class="sidebar-content">
+                <div id="chatsTab" class="tab-content active">
+                    <div id="chatsList" class="chats-list"></div>
+                </div>
+                <div id="contactsTab" class="tab-content">
+                    <div id="contactsList" class="contacts-list"></div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Chat Area -->
+        <main class="chat-area">
+            <div id="welcomeScreen" class="welcome-screen">
+                <div class="welcome-content">
+                    <span class="material-icons">forum</span>
+                    <h2>Добро пожаловать в MAX Messenger</h2>
+                    <p>Выберите чат или создайте новый для начала общения</p>
+                    <button class="btn-primary" id="welcomeNewChat">
+                        <span class="material-icons">add</span>
+                        Начать новый чат
+                    </button>
+                </div>
+            </div>
+
+            <div id="chatContainer" class="chat-container" style="display: none;">
+                <!-- Chat Header -->
+                <div class="chat-header">
+                    <div class="chat-info">
+                        <div class="chat-avatar">
+                            <span class="material-icons">person</span>
+                        </div>
+                        <div>
+                            <h3 id="chatName">Chat Name</h3>
+                            <p id="chatStatus" class="chat-status">В сети</p>
+                        </div>
+                    </div>
+                    <div class="chat-actions">
+                        <button class="icon-btn" id="audioCallBtn" title="Аудио звонок">
+                            <span class="material-icons">call</span>
+                        </button>
+                        <button class="icon-btn" id="videoCallBtn" title="Видео звонок">
+                            <span class="material-icons">videocam</span>
+                        </button>
+                        <button class="icon-btn" id="chatInfoBtn" title="Информация">
+                            <span class="material-icons">info</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Messages Area -->
+                <div class="messages-container" id="messagesContainer">
+                    <div id="messagesList" class="messages-list"></div>
+                </div>
+
+                <!-- Typing Indicator -->
+                <div id="typingIndicator" class="typing-indicator" style="display: none;">
+                    <span class="typing-dots">
+                        <span></span><span></span><span></span>
+                    </span>
+                    <span id="typingText">печатает...</span>
+                </div>
+
+                <!-- Message Input -->
+                <div class="message-input">
+                    <button class="icon-btn" id="attachBtn">
+                        <span class="material-icons">attach_file</span>
+                    </button>
+                    <div class="input-wrapper">
+                        <textarea id="messageTextarea" placeholder="Введите сообщение..." rows="1"></textarea>
+                    </div>
+                    <button class="icon-btn" id="emojiBtn">
+                        <span class="material-icons">sentiment_satisfied_alt</span>
+                    </button>
+                    <button class="btn-send" id="sendBtn">
+                        <span class="material-icons">send</span>
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Video Conference Panel (Fullscreen) -->
+        <div id="conferencePanel" class="conference-panel" style="display: none;">
+            <!-- Top Bar -->
+            <div class="conference-header" id="conferenceHeader">
+                <div class="conference-info">
+                    <div>
+                        <h3 id="conferenceName">Видеоконференция</h3>
+                        <p id="conferenceParticipants">0 участников</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Video Grid -->
+            <div class="conference-grid" id="conferenceGrid" data-participants="0">
+                <!-- Video tiles will be added dynamically -->
+            </div>
+
+            <!-- Bottom Controls -->
+            <div class="conference-controls" id="conferenceControls">
+                <button class="control-btn" id="toggleMicBtn" title="Выключить микрофон">
+                    <span class="material-icons">mic</span>
+                </button>
+                <button class="control-btn" id="toggleCameraBtn" title="Выключить камеру">
+                    <span class="material-icons">videocam</span>
+                </button>
+                <button class="control-btn" id="shareScreenBtn" title="Демонстрация экрана">
+                    <span class="material-icons">screen_share</span>
+                </button>
+                <button class="control-btn" id="backgroundBtn" title="Виртуальный фон">
+                    <span class="material-icons">wallpaper</span>
+                </button>
+                <button class="control-btn" id="fullscreenBtn" title="Полноэкранный режим">
+                    <span class="material-icons">fullscreen</span>
+                </button>
+                <button class="control-btn settings-btn" id="settingsBtn" title="Настройки">
+                    <span class="material-icons">settings</span>
+                </button>
+                <button class="control-btn end-call-btn" id="endCallBtn" title="Завершить звонок">
+                    <span class="material-icons">call_end</span>
+                </button>
+            </div>
+
+            <!-- Toggle Sidebar Button -->
+            <button class="toggle-sidebar-btn" id="toggleSidebarBtn" title="Чат и участники">
+                <span class="material-icons">chat</span>
+            </button>
+
+            <!-- Sidebar (Chat/Participants) -->
+            <div class="conference-sidebar" id="conferenceSidebar">
+                <div class="sidebar-header">
+                    <h3>Информация</h3>
+                    <button class="sidebar-close-btn" id="closeSidebarBtn">
+                        <span class="material-icons">close</span>
+                    </button>
+                </div>
+
+                <div class="sidebar-tabs">
+                    <button class="tab-btn active" data-tab="participants">
+                        <span class="material-icons">people</span>
+                        Участники
+                    </button>
+                    <button class="tab-btn" data-tab="chat">
+                        <span class="material-icons">chat</span>
+                        Чат
+                    </button>
+                </div>
+
+                <div class="sidebar-content">
+                    <div id="participantsPanel" class="tab-content active">
+                        <div id="participantsList"></div>
+                    </div>
+                    <div id="chatPanel" class="tab-content">
+                        <div id="conferenceChat">
+                            <p style="color: rgba(255,255,255,0.5); text-align: center; padding: 40px 20px;">
+                                Чат конференции
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Chat Modal -->
+    <div id="newChatModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Новый чат</h2>
+                <button class="icon-btn" id="closeModalBtn">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="chat-type-selector">
+                    <button class="type-btn active" data-type="private">
+                        <span class="material-icons">person</span>
+                        Личный чат
+                    </button>
+                    <button class="type-btn" data-type="group">
+                        <span class="material-icons">group</span>
+                        Групповой чат
+                    </button>
+                </div>
+
+                <div id="privateChat" class="chat-type-content">
+                    <div class="search-users">
+                        <input type="text" id="userSearchInput" placeholder="Поиск пользователей...">
+                    </div>
+                    <div id="usersList" class="users-list"></div>
+                </div>
+
+                <div id="groupChat" class="chat-type-content" style="display: none;">
+                    <div class="input-group">
+                        <label>Название группы</label>
+                        <input type="text" id="groupNameInput" placeholder="Введите название группы">
+                    </div>
+                    <div class="search-users">
+                        <input type="text" id="groupUserSearchInput" placeholder="Добавить участников...">
+                    </div>
+                    <div id="selectedUsers" class="selected-users"></div>
+                    <div id="groupUsersList" class="users-list"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="cancelChatBtn">Отмена</button>
+                <button class="btn-primary" id="createChatBtn">Создать</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Permission -->
+    <div id="notificationBanner" class="notification-banner" style="display: none;">
+        <span class="material-icons">notifications</span>
+        <span>Разрешите уведомления для получения звонков и сообщений</span>
+        <button id="enableNotifications">Разрешить</button>
+        <button id="dismissNotifications" class="icon-btn">
+            <span class="material-icons">close</span>
+        </button>
+    </div>
+
+    <!-- Incoming Call Modal -->
+    <div id="incomingCallModal" class="modal" style="display: none;">
+        <div id="incomingCallContent" class="modal-content"></div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    <script src="/js/app.js"></script>
+    <script src="/js/webrtc-simple.js"></script>
+    <script src="/js/virtual-background-simple.js"></script>
+    <script src="/js/ui-components.js"></script>
+</body>
+</html>
