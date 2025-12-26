@@ -24,7 +24,7 @@ mongoose.connect(MONGODB_URI)
   console.log('⚠️  Server will continue without MongoDB (using in-memory storage)');
 });
 
-// MongoDB Models
+// MongoDB Models - ИСПРАВЛЕНО: Добавлено поле createdBy, убрана ссылка на chatId
 const UserSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   username: { type: String, required: true, unique: true },
@@ -43,6 +43,7 @@ const ChatSchema = new mongoose.Schema({
   taskId: String,
   encrypted: { type: Boolean, default: false },
   unreadCount: mongoose.Schema.Types.Mixed,
+  createdBy: { type: String, required: true }, // ИСПРАВЛЕНО: Добавлено обязательное поле
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
@@ -62,7 +63,6 @@ const User = mongoose.model('User', UserSchema);
 const Chat = mongoose.model('Chat', ChatSchema);
 const Message = mongoose.model('Message', MessageSchema);
 
-
 const app = express();
 const server = http.createServer(app);
 const io = socketIO(server, {
@@ -80,14 +80,14 @@ app.use(helmet({
   contentSecurityPolicy: false
 }));
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '1024mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1024mb' }));
 app.use(express.static('public'));
 
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100
+  max: 1024
 });
 app.use('/api/', limiter);
 
@@ -102,7 +102,7 @@ const messages = new Map();
 const conferences = new Map();
 const onlineUsers = new Map();
 
-// Initialize data from MongoDB on startup
+// Initialize data from MongoDB on startup - ИСПРАВЛЕНО: Добавлено поле createdBy
 async function initializeData() {
   try {
     // Load users from MongoDB
@@ -131,13 +131,14 @@ async function initializeData() {
         taskId: chat.taskId,
         encrypted: chat.encrypted,
         unreadCount: chat.unreadCount,
+        createdBy: chat.createdBy, // ИСПРАВЛЕНО: Добавлено поле
         createdAt: chat.createdAt,
         updatedAt: chat.updatedAt
       });
     });
     console.log(`✅ Loaded ${dbChats.length} chats from MongoDB`);
     
-    // Load messages from MongoDB (last 100 per chat)
+    // Load messages from MongoDB (last 10000)
     const dbMessages = await Message.find({})
       .sort({ createdAt: -1 })
       .limit(10000);
@@ -195,7 +196,6 @@ async function initializeAdminUser() {
 // Call initialization
 initializeAdminUser();
 initializeData();
-
 
 // Encryption helpers
 function encryptMessage(text, key = ENCRYPTION_KEY) {
@@ -284,11 +284,12 @@ app.post('/api/register', async (req, res) => {
         id: userId,
         username,
         email,
-        name: user.name,
-        avatar: user.avatar
+        name: userData.name,
+        avatar: userData.avatar
       }
     });
   } catch (error) {
+    console.error('Registration error:', error);
     res.status(500).json({ error: 'Registration failed' });
   }
 });
@@ -320,6 +321,7 @@ app.post('/api/login', async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Login error:', error);
     res.status(500).json({ error: 'Login failed' });
   }
 });
@@ -330,7 +332,7 @@ app.get('/api/users', authenticateToken, (req, res) => {
     username: u.username,
     name: u.name,
     avatar: u.avatar,
-    online: onlineUsers.has(u.id)
+    online: Array.from(onlineUsers.values()).includes(u.id)
   }));
   res.json(userList);
 });
@@ -354,7 +356,7 @@ app.get('/api/chats', authenticateToken, (req, res) => {
         lastMessagePreview = {
           id: lastMessage.id,
           senderId: lastMessage.senderId,
-          text: messageText, // Decrypted text for preview
+          text: messageText,
           type: lastMessage.type,
           createdAt: lastMessage.createdAt
         };
@@ -370,6 +372,7 @@ app.get('/api/chats', authenticateToken, (req, res) => {
   res.json(userChats);
 });
 
+// ИСПРАВЛЕНО: Улучшенное создание чатов с валидацией и обработкой ошибок
 app.post('/api/chats', authenticateToken, async (req, res) => {
   try {
     const { type, participants, name } = req.body;
@@ -387,23 +390,41 @@ app.post('/api/chats', authenticateToken, async (req, res) => {
       type: type || 'private',
       name: name || null,
       participants: allParticipants,
-      createdBy: userId,
+      createdBy: userId, // ИСПРАВЛЕНО: Обязательное поле
       createdAt: new Date(),
       updatedAt: new Date(),
       encrypted: true,
       unreadCount: {}
     };
 
+    // Валидация данных
+    if (!chatData.id || !chatData.type || !chatData.createdBy) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
     // Save to cache
     chats.set(chatId, chatData);
     messages.set(chatId, []);
     
-    // Save to MongoDB
+    // Save to MongoDB with error handling
     try {
       await Chat.create(chatData);
       console.log(`✅ Chat ${chatId} saved to MongoDB`);
     } catch (dbError) {
       console.error('❌ Error saving chat to MongoDB:', dbError);
+      
+      // Специальная обработка ошибки дублирования ключа chatId
+      if (dbError.code === 11000 && dbError.message.includes('chatId')) {
+        console.log('🔧 Detected chatId index issue. Please run: db.chats.dropIndex("chatId_1")');
+        // Продолжаем работу - чат сохранен в кеше
+      } else if (dbError.code === 11000) {
+        console.error('❌ Duplicate key error:', dbError.keyValue);
+        // Проверяем, не существует ли уже такой чат
+        const existingChat = await Chat.findOne({ id: chatId });
+        if (existingChat) {
+          console.log('📋 Using existing chat from MongoDB');
+        }
+      }
     }
 
     // Notify participants
@@ -418,6 +439,7 @@ app.post('/api/chats', authenticateToken, async (req, res) => {
 
     res.json(chatData);
   } catch (error) {
+    console.error('❌ Chat creation failed:', error);
     res.status(500).json({ error: 'Failed to create chat' });
   }
 });
@@ -461,7 +483,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: {
-    fileSize: 50 * 1024 * 1024 // 50MB max
+    fileSize: 1024 * 1024 * 1024// 1024MB max
   },
   fileFilter: (req, file, cb) => {
     // Allow all file types for now
@@ -490,6 +512,150 @@ app.post('/api/upload', authenticateToken, upload.single('file'), (req, res) => 
   }
 });
 
+
+// Upload avatar endpoint - ИСПРАВЛЕНО с broadcast
+app.post('/api/upload-avatar', authenticateToken, upload.single('file'), async (req, res) => {
+  try {
+    console.log('📸 Avatar upload request from user:', req.user.id);
+    console.log('File:', req.file);
+    
+    if (!req.file) {
+      console.error('❌ No file in request');
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    
+    const avatarUrl = `/uploads/${req.file.filename}`;
+    const userId = req.user.id;
+    
+    console.log('Avatar URL:', avatarUrl);
+    
+    // Update user avatar in cache
+    const userEntry = Array.from(users.entries()).find(([username, user]) => user.id === userId);
+    
+    if (userEntry) {
+      const [username, userData] = userEntry;
+      userData.avatar = avatarUrl;
+      users.set(username, userData);
+      
+      console.log('✅ Avatar updated in cache for user:', username);
+      
+      // Update in MongoDB
+      try {
+        await User.findOneAndUpdate(
+          { id: userId },
+          { avatar: avatarUrl }
+        );
+        console.log(`✅ Avatar updated in MongoDB for user ${userId}`);
+      } catch (dbError) {
+        console.error('❌ Error updating avatar in MongoDB:', dbError);
+        // Continue even if MongoDB fails
+      }
+      
+      // НОВОЕ: Уведомляем всех пользователей об обновлении аватара
+      io.emit('user:avatar-updated', {
+        userId: userId,
+        username: username,
+        avatar: avatarUrl
+      });
+      console.log('📢 Broadcast avatar update to all users');
+      
+    } else {
+      console.error('❌ User not found in cache:', userId);
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({
+      avatarUrl,
+      message: 'Avatar uploaded successfully'
+    });
+    
+  } catch (error) {
+    console.error('❌ Avatar upload error:', error);
+    res.status(500).json({ error: 'Avatar upload failed: ' + error.message });
+  }
+});
+
+// Get current user profile
+app.get('/api/profile', authenticateToken, (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userEntry = Array.from(users.entries()).find(([username, user]) => user.id === userId);
+    
+    if (!userEntry) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const [username, userData] = userEntry;
+    
+    res.json({
+      id: userData.id,
+      username: userData.username,
+      email: userData.email,
+      name: userData.name,
+      avatar: userData.avatar
+    });
+    
+  } catch (error) {
+    console.error('Get profile error:', error);
+    res.status(500).json({ error: 'Failed to get profile' });
+  }
+});
+
+// Update user profile - ИСПРАВЛЕНО: правильный путь
+app.put('/api/profile/update', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { name, email } = req.body;
+    
+    console.log('📝 Profile update request:', { userId, name, email });
+    
+    const userEntry = Array.from(users.entries()).find(([username, user]) => user.id === userId);
+    
+    if (!userEntry) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const [username, userData] = userEntry;
+    
+    // Update user data
+    if (name) userData.name = name;
+    if (email) userData.email = email;
+    
+    users.set(username, userData);
+    
+    console.log('✅ Profile updated in cache');
+    
+    // Update in MongoDB
+    try {
+      await User.findOneAndUpdate(
+        { id: userId },
+        { 
+          name: userData.name,
+          email: userData.email
+        }
+      );
+      console.log(`✅ Profile updated in MongoDB for user ${userId}`);
+    } catch (dbError) {
+      console.error('❌ Error updating profile in MongoDB:', dbError);
+      // Continue even if MongoDB fails
+    }
+    
+    res.json({
+      user: {
+        id: userData.id,
+        username: userData.username,
+        email: userData.email,
+        name: userData.name,
+        avatar: userData.avatar
+      },
+      message: 'Profile updated successfully'
+    });
+    
+  } catch (error) {
+    console.error('❌ Update profile error:', error);
+    res.status(500).json({ error: 'Failed to update profile: ' + error.message });
+  }
+});
 
 // Socket.IO connection handling
 io.use((socket, next) => {
@@ -624,123 +790,193 @@ io.on('connection', (socket) => {
   });
 
   // WebRTC signaling for conference
-  socket.on('conference:join', (conferenceId) => {
-    socket.join(`conference:${conferenceId}`);
-    
-    if (!conferences.has(conferenceId)) {
-      conferences.set(conferenceId, {
-        id: conferenceId,
-        participants: new Set(),
-        startedAt: new Date()
-      });
-    }
-
-    const conference = conferences.get(conferenceId);
-    conference.participants.add(socket.userId);
-
-    // Notify existing participants
-    socket.to(`conference:${conferenceId}`).emit('conference:participant:joined', {
-      userId: socket.userId,
-      username: socket.username
+socket.on('conference:join', (conferenceId) => {
+  console.log('📞 User joining conference:', {
+    userId: socket.userId,
+    username: socket.username,
+    conferenceId
+  });
+  
+  socket.join(`conference:${conferenceId}`);
+  
+  if (!conferences.has(conferenceId)) {
+    conferences.set(conferenceId, {
+      id: conferenceId,
+      participants: new Map(), // userId -> username
+      startedAt: new Date()
     });
+  }
 
-    // Send existing participants to new user
-    const existingParticipants = Array.from(conference.participants)
-      .filter(id => id !== socket.userId)
-      .map(id => {
-        const user = Array.from(users.values()).find(u => u.id === id);
-        return {
-          userId: id,
-          username: user?.username
-        };
-      });
+  const conference = conferences.get(conferenceId);
+  
+  // Получаем список существующих участников ДО добавления нового
+  const existingParticipants = Array.from(conference.participants.entries())
+    .map(([userId, username]) => ({ userId, username }));
+  
+  console.log('📞 Existing participants:', existingParticipants);
+  
+  // Добавляем нового участника
+  conference.participants.set(socket.userId, socket.username);
 
+  // Отправляем новому участнику список существующих участников
+  if (existingParticipants.length > 0) {
     socket.emit('conference:participants', existingParticipants);
+    console.log('📤 Sent participant list to new joiner:', socket.username);
+  }
+
+  // Уведомляем всех СУЩЕСТВУЮЩИХ участников о новом участнике
+  socket.to(`conference:${conferenceId}`).emit('conference:participant:joined', {
+    userId: socket.userId,
+    username: socket.username
   });
+  
+  console.log('📢 Notified existing participants about:', socket.username);
+  console.log('📊 Total participants in conference:', conference.participants.size);
+});
 
-  socket.on('conference:leave', (conferenceId) => {
-    const conference = conferences.get(conferenceId);
-    if (conference) {
-      conference.participants.delete(socket.userId);
-      
-      socket.to(`conference:${conferenceId}`).emit('conference:participant:left', {
-        userId: socket.userId
-      });
-
-      if (conference.participants.size === 0) {
-        conferences.delete(conferenceId);
-      }
-    }
+socket.on('conference:leave', (conferenceId) => {
+  console.log('📞 User leaving conference:', {
+    userId: socket.userId,
+    username: socket.username,
+    conferenceId
+  });
+  
+  socket.leave(`conference:${conferenceId}`);
+  
+  const conference = conferences.get(conferenceId);
+  if (conference) {
+    conference.participants.delete(socket.userId);
     
-    socket.leave(`conference:${conferenceId}`);
-  });
+    // Уведомляем всех участников
+    socket.to(`conference:${conferenceId}`).emit('conference:participant:left', socket.userId);
+    
+    console.log('📊 Remaining participants:', conference.participants.size);
+
+    if (conference.participants.size === 0) {
+      conferences.delete(conferenceId);
+      console.log('🏁 Conference ended:', conferenceId);
+    }
+  }
+});
 
   // WebRTC signaling
-  socket.on('webrtc:offer', ({ to, offer, conferenceId }) => {
-    const toSocketId = Array.from(onlineUsers.entries())
-      .find(([sid, uid]) => uid === to)?.[0];
-    
-    if (toSocketId) {
-      io.to(toSocketId).emit('webrtc:offer', {
-        from: socket.userId,
-        offer,
-        conferenceId
-      });
-    }
+socket.on('webrtc:offer', (data) => {
+  console.log('📞 WebRTC offer:', {
+    from: socket.username,
+    fromId: socket.userId,
+    to: data.to,
+    conferenceId: data.conferenceId
   });
+  
+  // Находим socket ID получателя
+  const recipientSocketId = Array.from(onlineUsers.entries())
+    .find(([sid, uid]) => uid === data.to)?.[0];
+  
+  if (recipientSocketId) {
+    io.to(recipientSocketId).emit('webrtc:offer', {
+      from: socket.userId,
+      offer: data.offer,
+      conferenceId: data.conferenceId
+    });
+    console.log('✅ Offer sent to:', data.to);
+  } else {
+    console.log('⚠️ Recipient not online:', data.to);
+  }
+});
 
-  socket.on('webrtc:answer', ({ to, answer, conferenceId }) => {
-    const toSocketId = Array.from(onlineUsers.entries())
-      .find(([sid, uid]) => uid === to)?.[0];
-    
-    if (toSocketId) {
-      io.to(toSocketId).emit('webrtc:answer', {
-        from: socket.userId,
-        answer,
-        conferenceId
-      });
-    }
+socket.on('webrtc:answer', (data) => {
+  console.log('📞 WebRTC answer:', {
+    from: socket.username,
+    fromId: socket.userId,
+    to: data.to,
+    conferenceId: data.conferenceId
   });
+  
+  // Находим socket ID получателя
+  const recipientSocketId = Array.from(onlineUsers.entries())
+    .find(([sid, uid]) => uid === data.to)?.[0];
+  
+  if (recipientSocketId) {
+    io.to(recipientSocketId).emit('webrtc:answer', {
+      from: socket.userId,
+      answer: data.answer,
+      conferenceId: data.conferenceId
+    });
+    console.log('✅ Answer sent to:', data.to);
+  } else {
+    console.log('⚠️ Recipient not online:', data.to);
+  }
+});
 
-  socket.on('webrtc:ice-candidate', ({ to, candidate, conferenceId }) => {
-    const toSocketId = Array.from(onlineUsers.entries())
-      .find(([sid, uid]) => uid === to)?.[0];
-    
-    if (toSocketId) {
-      io.to(toSocketId).emit('webrtc:ice-candidate', {
-        from: socket.userId,
-        candidate,
-        conferenceId
-      });
-    }
+socket.on('webrtc:ice-candidate', (data) => {
+  console.log('🧊 ICE candidate:', {
+    from: socket.username,
+    fromId: socket.userId,
+    to: data.to,
+    conferenceId: data.conferenceId
   });
+  
+  // Находим socket ID получателя
+  const recipientSocketId = Array.from(onlineUsers.entries())
+    .find(([sid, uid]) => uid === data.to)?.[0];
+  
+  if (recipientSocketId) {
+    io.to(recipientSocketId).emit('webrtc:ice-candidate', {
+      from: socket.userId,
+      candidate: data.candidate,
+      conferenceId: data.conferenceId
+    });
+    console.log('✅ ICE candidate sent to:', data.to);
+  } else {
+    console.log('⚠️ Recipient not online:', data.to);
+  }
+});
 
   // Disconnect
   socket.on('disconnect', () => {
-    console.log(`User disconnected: ${socket.username}`);
+    console.log(`User disconnected: ${socket.username} (${socket.userId})`);
     
-    // Remove from conferences
-    conferences.forEach((conference, conferenceId) => {
-      if (conference.participants.has(socket.userId)) {
-        conference.participants.delete(socket.userId);
-        io.to(`conference:${conferenceId}`).emit('conference:participant:left', {
-          userId: socket.userId
-        });
-      }
-    });
-
     onlineUsers.delete(socket.id);
 
-    // Notify about offline status
+    // Notify all users about offline status
     io.emit('users:online', {
       userId: socket.userId,
       online: false
     });
+
+    // Leave all conferences
+    conferences.forEach((conference, conferenceId) => {
+      if (conference.participants.has(socket.userId)) {
+        conference.participants.delete(socket.userId);
+        socket.to(`conference:${conferenceId}`).emit('conference:user-left', {
+          userId: socket.userId,
+          conferenceId
+        });
+
+        if (conference.participants.size === 0) {
+          conferences.delete(conferenceId);
+        }
+      }
+    });
   });
 });
 
-const PORT = process.env.PORT || 3000;
+// Start server
+const PORT = process.env.PORT || 3010;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📱 Open http://localhost:${PORT} in your browser`);
+  console.log(`📱 Access the app at http://localhost:${PORT}`);
 });
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    mongoose.connection.close(false, () => {
+      console.log('MongoDB connection closed');
+      process.exit(0);
+    });
+  });
+});
+
+module.exports = { app, server, io };

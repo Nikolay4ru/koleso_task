@@ -42,7 +42,15 @@ document.querySelectorAll('.attach-item').forEach(item => {
 document.getElementById('fileInput')?.addEventListener('change', (e) => {
     const files = Array.from(e.target.files);
     
+    const MAX_FILE_SIZE = 1024 * 1024 * 1024; // 1024MB
+    
     files.forEach(file => {
+        // Проверка размера файла
+        if (file.size > MAX_FILE_SIZE) {
+            showToast(`${file.name} слишком большой (макс. 1024MB)`, 'error');
+            return;
+        }
+        
         if (!selectedFiles.find(f => f.name === file.name && f.size === file.size)) {
             selectedFiles.push(file);
         }
@@ -134,14 +142,109 @@ function getFileIcon(mimeType) {
     return 'insert_drive_file';
 }
 
-// Update sendMessage to include files
+// Get file type from filename
+function getFileType(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    
+    const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
+    const videoExts = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'];
+    const audioExts = ['mp3', 'wav', 'ogg', 'aac', 'm4a'];
+    const docExts = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt'];
+    
+    if (imageExts.includes(ext)) return 'image';
+    if (videoExts.includes(ext)) return 'video';
+    if (audioExts.includes(ext)) return 'audio';
+    if (docExts.includes(ext)) return 'document';
+    return 'file';
+}
+
+// ИСПРАВЛЕНО: Update sendMessage to include files with proper metadata
 const originalSendMessage = window.sendMessage;
 window.sendMessage = async function() {
+    console.log('=== SEND MESSAGE (attachments-emoji.js) ===');
+    
     const textarea = document.getElementById('messageTextarea');
     const text = textarea.value.trim();
     
-    if (!text && selectedFiles.length === 0) return;
-    if (!currentChat) return;
+    console.log('Text:', text);
+    console.log('Selected files:', selectedFiles.length);
+    console.log('currentChat:', currentChat);
+    console.log('pendingChatUser:', pendingChatUser);
+    
+    if (!text && selectedFiles.length === 0) {
+        console.log('No text and no files');
+        return;
+    }
+    
+    // ВАЖНО: Если есть pendingChatUser, создаем чат СНАЧАЛА
+    if (pendingChatUser && !currentChat) {
+        console.log('Creating chat for pending user:', pendingChatUser.id);
+        
+        try {
+            // Блокируем UI
+            textarea.disabled = true;
+            const sendBtn = document.getElementById('sendBtn');
+            if (sendBtn) sendBtn.disabled = true;
+            
+            const originalText = text;
+            const filesToSend = [...selectedFiles]; // Копируем массив файлов
+            textarea.value = 'Отправка...';
+            
+            // Создаем чат
+            const chat = await createChatForContact(pendingChatUser);
+            console.log('Chat created successfully:', chat.id);
+            
+            // Восстанавливаем UI
+            textarea.value = '';
+            textarea.style.height = 'auto';
+            textarea.disabled = false;
+            if (sendBtn) sendBtn.disabled = false;
+            
+            // Отправляем текст если есть
+            if (originalText) {
+                socket.emit('message:send', {
+                    chatId: chat.id,
+                    text: originalText,
+                    type: 'text'
+                });
+            }
+            
+            // Отправляем файлы если есть
+            if (filesToSend.length > 0) {
+                await sendFiles(filesToSend, chat.id);
+                selectedFiles = [];
+                renderFilePreview();
+            }
+            
+            // Очищаем pendingChatUser
+            pendingChatUser = null;
+            textarea.focus();
+            
+            console.log('Message sent to new chat successfully');
+            return;
+            
+        } catch (error) {
+            console.error('Failed to create chat:', error);
+            showToast('Ошибка создания чата', 'error');
+            
+            // Восстанавливаем текст
+            textarea.value = text;
+            textarea.disabled = false;
+            const sendBtn = document.getElementById('sendBtn');
+            if (sendBtn) sendBtn.disabled = false;
+            textarea.focus();
+            return;
+        }
+    }
+    
+    // Проверяем наличие currentChat
+    if (!currentChat) {
+        console.error('No current chat');
+        showToast('Ошибка: выберите чат', 'error');
+        return;
+    }
+    
+    console.log('Sending to existing chat:', currentChat.id);
     
     // Send text message if present
     if (text) {
@@ -156,20 +259,23 @@ window.sendMessage = async function() {
     
     // Send files if present
     if (selectedFiles.length > 0) {
-        await sendFiles(selectedFiles);
+        await sendFiles(selectedFiles, currentChat.id);
         selectedFiles = [];
         renderFilePreview();
     }
 };
 
-// Send files to server
-async function sendFiles(files) {
+// ИСПРАВЛЕНО: Send files to server with progress indication
+async function sendFiles(files, chatId) {
     for (const file of files) {
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('chatId', currentChat.id);
+        formData.append('chatId', chatId);
         
         try {
+            // Показываем уведомление о начале загрузки
+            showToast(`Загрузка ${file.name}...`, 'info');
+            
             const token = localStorage.getItem('token') || sessionStorage.getItem('token');
             const response = await fetch('/api/upload', {
                 method: 'POST',
@@ -179,35 +285,48 @@ async function sendFiles(files) {
                 body: formData
             });
             
-            if (!response.ok) throw new Error('Upload failed');
+            if (!response.ok) {
+                if (response.status === 413) {
+                    throw new Error('Файл слишком большой (макс. 100MB)');
+                }
+                throw new Error('Upload failed');
+            }
             
             const data = await response.json();
             
-            // Send file message
+            console.log('File uploaded:', data);
+            
+            // Определяем тип файла
+            const fileType = getFileType(file.name);
+            
+            // ИСПРАВЛЕНО: Правильная структура metadata.files как МАССИВ
             socket.emit('message:send', {
-                chatId: currentChat.id,
-                text: file.name,
-                type: getFileType(file.type),
+                chatId: chatId,
+                text: '', // Пустой текст для файловых сообщений
+                type: fileType, // 'image', 'video', 'audio', 'document', 'file'
                 metadata: {
-                    fileName: file.name,
-                    fileSize: file.size,
-                    fileUrl: data.fileUrl,
-                    mimeType: file.type
+                    files: [{
+                        name: file.name,
+                        size: file.size,
+                        url: data.fileUrl
+                    }]
                 }
             });
             
+            console.log('File message sent:', file.name);
+            showToast(`${file.name} загружен`, 'success');
+            
         } catch (error) {
             console.error('File upload error:', error);
-            showToast('Ошибка загрузки файла', 'error');
+            
+            // Показываем конкретную ошибку
+            if (error.message.includes('слишком большой')) {
+                showToast(`${file.name}: Файл слишком большой (макс. 100MB)`, 'error');
+            } else {
+                showToast(`Ошибка загрузки ${file.name}`, 'error');
+            }
         }
     }
-}
-
-function getFileType(mimeType) {
-    if (mimeType.startsWith('image/')) return 'image';
-    if (mimeType.startsWith('video/')) return 'video';
-    if (mimeType.startsWith('audio/')) return 'audio';
-    return 'file';
 }
 
 // ==================== EMOJI PICKER ====================
