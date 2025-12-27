@@ -26,14 +26,18 @@ mongoose.connect(MONGODB_URI)
 
 // MongoDB Models - ИСПРАВЛЕНО: Добавлено поле createdBy, убрана ссылка на chatId
 const UserSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true },
-  username: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-  name: { type: String, required: true },
-  email: String,
-  avatar: String,
-  createdAt: { type: Date, default: Date.now }
+    id: { type: String, required: true, unique: true },
+    name: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
+    username: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    avatar: { type: String, default: null },
+    isAdmin: { type: Boolean, default: false },
+    isActive: { type: Boolean, default: true },
+    createdAt: { type: Date, default: Date.now }
 });
+
+
 
 const ChatSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
@@ -56,12 +60,29 @@ const MessageSchema = new mongoose.Schema({
   type: { type: String, default: 'text' },
   metadata: mongoose.Schema.Types.Mixed,
   encrypted: { type: Boolean, default: false },
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+
+  delivered: { type: Boolean, default: false },
+    deliveredAt: { type: Date },
+    read: { type: Boolean, default: false },
+    readAt: { type: Date }
 });
 
 const User = mongoose.model('User', UserSchema);
 const Chat = mongoose.model('Chat', ChatSchema);
 const Message = mongoose.model('Message', MessageSchema);
+
+let Task, Department;
+let useMongoose = true;
+if (useMongoose) {
+    try {
+        Task = require('./models/Task');
+        Department = require('./models/Department');
+        console.log('✅ Task and Department models loaded');
+    } catch (error) {
+        console.warn('⚠️ Task/Department models not found, using in-memory storage');
+    }
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -98,9 +119,12 @@ const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toSt
 // In-memory cache for performance (synced with MongoDB)
 const users = new Map();
 const chats = new Map();
+const chatsMap = new Map();
 const messages = new Map();
 const conferences = new Map();
+const userSockets = new Map(); 
 const onlineUsers = new Map();
+const tasksMap = new Map();
 
 // Initialize data from MongoDB on startup - ИСПРАВЛЕНО: Добавлено поле createdBy
 async function initializeData() {
@@ -115,6 +139,7 @@ async function initializeData() {
         password: user.password,
         name: user.name,
         avatar: user.avatar,
+        isAdmin: user.isAdmin || false,
         createdAt: user.createdAt
       });
     });
@@ -166,35 +191,61 @@ async function initializeData() {
 }
 
 // Initialize admin user
-async function initializeAdminUser() {
-  const adminPassword = bcrypt.hashSync('admin123', 10);
-  const adminData = {
-    id: 'user_admin',
-    username: 'admin',
-    email: 'admin@company.com',
-    password: adminPassword,
-    name: 'System Admin',
-    avatar: null,
-    createdAt: new Date()
-  };
-  
-  // Add to cache
-  users.set('admin', adminData);
-  
-  // Save to MongoDB
-  try {
-    const existingAdmin = await User.findOne({ username: 'admin' });
-    if (!existingAdmin) {
-      await User.create(adminData);
-      console.log('✅ Admin user created in MongoDB');
+// ==================== CREATE DEFAULT ADMIN ====================
+
+async function createDefaultAdmin() {
+    if (useMongoose && User) {
+        try {
+            const adminExists = await User.findOne({ username: 'admin' });
+            
+            if (!adminExists) {
+                const hashedPassword = await bcrypt.hash('admin123', 10);
+                const adminUser = new User({
+                    id: generateId(),
+                    name: 'Администратор',
+                    email: 'admin@example.com',
+                    username: 'admin',
+                    password: hashedPassword,
+                    isAdmin: true,
+                    isActive: true,
+                    createdAt: new Date()
+                });
+                
+                await adminUser.save();
+                console.log('✅ Default admin created (username: admin, password: admin123)');
+                console.log('⚠️  ВАЖНО: Измените пароль администратора после первого входа!');
+            }
+        } catch (error) {
+            console.error('Error creating default admin:', error);
+        }
+    } else {
+        // In-memory fallback
+        const adminExists = Array.from(users.values()).find(u => u.username === 'admin');
+        
+        if (!adminExists) {
+            const hashedPassword = await bcrypt.hash('admin123', 10);
+            const adminUser = {
+                id: generateId(),
+                name: 'Администратор',
+                email: 'admin@example.com',
+                username: 'admin',
+                password: hashedPassword,
+                isAdmin: true,
+                isActive: true,
+                avatar: null,
+                createdAt: new Date()
+            };
+            
+            users.set('admin', adminUser);
+            console.log('✅ Default admin created (username: admin, password: admin123)');
+            console.log('⚠️  ВАЖНО: Измените пароль администратора после первого входа!');
+        }
     }
-  } catch (error) {
-    console.error('❌ Error creating admin user:', error);
-  }
 }
 
-// Call initialization
-initializeAdminUser();
+// Вызовите эту функцию при старте сервера
+createDefaultAdmin();
+
 initializeData();
 
 // Encryption helpers
@@ -220,23 +271,63 @@ function decryptMessage(encrypted, key = ENCRYPTION_KEY) {
   }
 }
 
+
+function generateId() {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
+
+
 // Authentication middleware
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+function authenticateToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
 
-  if (!token) {
-    return res.status(401).json({ error: 'Access denied' });
-  }
-
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Invalid token' });
+    if (!token) {
+        return res.status(401).json({ error: 'Access token required' });
     }
-    req.user = user;
-    next();
-  });
-};
+
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        
+        console.log('🔐 Token decoded:', decoded);
+        
+        // ВАЖНО: Проверяем что decoded содержит id
+        if (!decoded.id) {
+            console.error('❌ Token missing id field:', decoded);
+            return res.status(403).json({ error: 'Invalid token structure' });
+        }
+        
+        req.user = decoded;
+        console.log('✅ User authenticated:', req.user.id);
+        next();
+    } catch (error) {
+        console.error('❌ Token decode error:', error);
+        return res.status(403).json({ error: 'Invalid token' });
+    }
+}
+
+
+function isAdmin(req, res, next) {
+    if (useMongoose && User) {
+        User.findOne({ id: req.user.id }).then(user => {
+            if (!user || !user.isAdmin) {
+                return res.status(403).json({ error: 'Admin access required' });
+            }
+            req.user.isAdmin = user.isAdmin;
+            next();
+        }).catch(error => {
+            console.error('Admin check error:', error);
+            res.status(500).json({ error: 'Server error' });
+        });
+    } else {
+        // In-memory fallback
+        const user = Array.from(users.values()).find(u => u.id === req.user.id);
+        if (!user || !user.isAdmin) {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+        next();
+    }
+}
 
 // API Routes
 app.post('/api/register', async (req, res) => {
@@ -261,6 +352,7 @@ app.post('/api/register', async (req, res) => {
       password: hashedPassword,
       name: name || username,
       avatar: null,
+      isAdmin: null,
       createdAt: new Date()
     };
 
@@ -295,35 +387,95 @@ app.post('/api/register', async (req, res) => {
 });
 
 app.post('/api/login', async (req, res) => {
-  try {
-    const { username, password } = req.body;
+    try {
+        const { username, password } = req.body;
 
-    const user = users.get(username);
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+        if (!username || !password) {
+            return res.status(400).json({ error: 'Username and password are required' });
+        }
+
+        if (useMongoose && User) {
+            const user = await User.findOne({ username });
+
+            if (!user) {
+                return res.status(401).json({ error: 'Invalid credentials' });
+            }
+            
+            if (user.isActive === false) {
+                return res.status(403).json({ error: 'Account is disabled' });
+            }
+
+            const validPassword = await bcrypt.compare(password, user.password);
+
+            if (!validPassword) {
+                return res.status(401).json({ error: 'Invalid credentials' });
+            }
+
+            // ВАЖНО: Создаем токен с правильной структурой
+            const tokenPayload = {
+                id: user.id,           // Используем user.id, не _id
+                username: user.username
+            };
+            
+            console.log('Creating token with payload:', tokenPayload);
+            
+            const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '7d' });
+
+            res.json({
+                token,
+                user: {
+                    id: user.id,
+                    name: user.name,
+                    email: user.email,
+                    username: user.username,
+                    avatar: user.avatar,
+                    isAdmin: user.isAdmin || false
+                }
+            });
+        } else {
+            // In-memory fallback
+            const user = users.get(username);
+
+            if (!user) {
+                return res.status(401).json({ error: 'Invalid credentials' });
+            }
+            
+            if (user.isActive === false) {
+                return res.status(403).json({ error: 'Account is disabled' });
+            }
+
+            const validPassword = await bcrypt.compare(password, user.password);
+
+            if (!validPassword) {
+                return res.status(401).json({ error: 'Invalid credentials' });
+            }
+
+            // ВАЖНО: Создаем токен с правильной структурой
+            const tokenPayload = {
+                id: user.id,
+                username: user.username
+            };
+            
+            console.log('Creating token with payload:', tokenPayload);
+            
+            const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '7d' });
+
+            res.json({
+                token,
+                user: {
+                    id: user.id,
+                    name: user.name,
+                    email: user.email,
+                    username: user.username,
+                    avatar: user.avatar,
+                    isAdmin: user.isAdmin || false
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ error: 'Login failed' });
     }
-
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    const token = jwt.sign({ id: user.id, username }, JWT_SECRET, { expiresIn: '7d' });
-
-    res.json({
-      token,
-      user: {
-        id: user.id,
-        username,
-        email: user.email,
-        name: user.name,
-        avatar: user.avatar
-      }
-    });
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Login failed' });
-  }
 });
 
 app.get('/api/users', authenticateToken, (req, res) => {
@@ -332,9 +484,39 @@ app.get('/api/users', authenticateToken, (req, res) => {
     username: u.username,
     name: u.name,
     avatar: u.avatar,
+    isAdmin: u.isAdmin || false,
     online: Array.from(onlineUsers.values()).includes(u.id)
   }));
   res.json(userList);
+});
+
+// Get specific user by ID
+app.get('/api/users/:userId', authenticateToken, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        console.log('Getting user by ID:', userId);
+        
+        let user;
+        
+        if (useMongoose && User) {
+            user = await User.findOne({ id: userId }).select('-password');
+        }
+        
+        if (!user) {
+            user = Array.from(users.values()).find(u => u.id === userId);
+        }
+        
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        res.json(user);
+        
+    } catch (error) {
+        console.error('Get user error:', error);
+        res.status(500).json({ error: 'Failed to get user' });
+    }
 });
 
 app.get('/api/chats', authenticateToken, (req, res) => {
@@ -444,24 +626,99 @@ app.post('/api/chats', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/api/messages/:chatId', authenticateToken, (req, res) => {
-  const { chatId } = req.params;
-  const userId = req.user.id;
-
-  const chat = chats.get(chatId);
-  if (!chat || !chat.participants.includes(userId)) {
-    return res.status(403).json({ error: 'Access denied' });
-  }
-
-  const chatMessages = messages.get(chatId) || [];
-  
-  // Decrypt messages before sending to client
-  const decryptedMessages = chatMessages.map(msg => ({
-    ...msg,
-    text: msg.encrypted ? decryptMessage(msg.text) : msg.text
-  }));
-  
-  res.json(decryptedMessages);
+app.get('/api/messages/:chatId', authenticateToken, async (req, res) => {
+    try {
+        const { chatId } = req.params;
+        const userId = req.user.id;
+        
+        console.log('📨 Getting messages for chat:', chatId, 'User:', userId);
+        
+        // Сначала проверяем что чат существует и пользователь имеет к нему доступ
+        let chat;
+        
+        if (useMongoose && Chat) {
+            try {
+                chat = await Chat.findOne({ id: chatId });
+                console.log('Chat from MongoDB:', chat ? 'found' : 'not found');
+            } catch (err) {
+                console.warn('⚠️ Could not find chat in MongoDB:', err.message);
+            }
+        }
+        
+        // Если не нашли в MongoDB, ищем в памяти
+        if (!chat) {
+            chat = chatsMap.get(chatId) || Array.from(chats.values()).find(c => c.id === chatId);
+            if (chat) {
+                console.log('Chat from memory:', chat.id);
+            }
+        }
+        
+        if (!chat) {
+            console.error('❌ Chat not found:', chatId);
+            return res.status(404).json({ error: 'Chat not found' });
+        }
+        
+        // Проверяем что пользователь является участником чата
+        if (!chat.participants || !chat.participants.includes(userId)) {
+            console.error('❌ User not a participant:', userId, 'Chat participants:', chat.participants);
+            return res.status(403).json({ error: 'Access denied to this chat' });
+        }
+        
+        console.log('✅ User has access to chat');
+        
+        let chatMessages = [];
+        
+        // Получаем сообщения
+        if (useMongoose && Message) {
+            try {
+                chatMessages = await Message.find({ chatId })
+                    .sort({ createdAt: 1 })
+                    .lean();
+                
+                console.log('✅ Found', chatMessages.length, 'messages in MongoDB');
+            } catch (err) {
+                console.warn('⚠️ Could not get messages from MongoDB:', err.message);
+            }
+        }
+        
+        // In-memory fallback если не нашли в MongoDB
+        if (chatMessages.length === 0) {
+            const allMessages = Array.from(messages.values()).flat();
+            chatMessages = allMessages
+                .filter(msg => msg.chatId === chatId)
+                .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+            
+            console.log('✅ Found', chatMessages.length, 'messages in memory');
+        }
+        
+        // ВАЖНО: Расшифровываем зашифрованные сообщения перед отправкой
+        const decryptedMessages = chatMessages.map(msg => {
+            if (msg.encrypted && msg.text) {
+                try {
+                    return {
+                        ...msg,
+                        text: decryptMessage(msg.text), // Расшифровываем
+                        encrypted: false // Помечаем что уже расшифровано для клиента
+                    };
+                } catch (decryptError) {
+                    console.error('Error decrypting message:', msg.id, decryptError);
+                    return {
+                        ...msg,
+                        text: '[Ошибка расшифровки]'
+                    };
+                }
+            }
+            return msg;
+        });
+        
+        console.log('📤 Returning', decryptedMessages.length, 'messages (decrypted)');
+        res.json(decryptedMessages);
+        
+    } catch (error) {
+        console.error('❌ Get messages error:', error);
+        console.error('Error stack:', error.stack);
+        res.status(500).json({ error: 'Failed to get messages' });
+    }
 });
 
 // File upload configuration
@@ -592,7 +849,8 @@ app.get('/api/profile', authenticateToken, (req, res) => {
       username: userData.username,
       email: userData.email,
       name: userData.name,
-      avatar: userData.avatar
+      avatar: userData.avatar,
+      isAdmin: userData.isAdmin || false
     });
     
   } catch (error) {
@@ -657,6 +915,1024 @@ app.put('/api/profile/update', authenticateToken, async (req, res) => {
   }
 });
 
+
+
+
+
+
+// ==================== TASKS API ====================
+
+// Get all tasks
+app.get('/api/tasks', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        
+        if (useMongoose && Task) {
+            const tasks = await Task.find({
+                $or: [
+                    { creatorId: userId },
+                    { assigneeId: userId },
+                    { watchers: userId }
+                ]
+            }).sort({ createdAt: -1 });
+            
+            res.json(tasks);
+        } else {
+            // In-memory fallback
+            const allTasks = Array.from(tasksMap.values());
+            const userTasks = allTasks.filter(task => 
+                task.creatorId === userId || 
+                task.assigneeId === userId ||
+                (task.watchers && task.watchers.includes(userId))
+            );
+            res.json(userTasks);
+        }
+    } catch (error) {
+        console.error('Get tasks error:', error);
+        res.status(500).json({ error: 'Failed to get tasks' });
+    }
+});
+
+// Create task
+// Create task
+app.post('/api/tasks', authenticateToken, async (req, res) => {
+    console.log('=== CREATE TASK REQUEST ===');
+    console.log('User:', req.user);
+    console.log('Body:', req.body);
+    
+    try {
+        const { title, description, departmentId, assigneeId, priority, dueDate, watchers } = req.body;
+        const userId = req.user.id;
+        
+        console.log('Parsed data:', { title, departmentId, assigneeId, userId, watchers });
+        
+        if (!title || !departmentId) {
+            console.log('❌ Validation failed: missing title or department');
+            return res.status(400).json({ error: 'Title and department are required' });
+        }
+        
+        const taskId = generateId();
+        console.log('Generated task ID:', taskId);
+        
+        const taskData = {
+            id: taskId,
+            title,
+            description: description || '',
+            departmentId,
+            assigneeId: assigneeId || null,
+            creatorId: userId,
+            priority: priority || 'normal',
+            status: 'todo',
+            dueDate: dueDate || null,
+            watchers: watchers || [],
+            watchersCount: watchers ? watchers.length : 0,
+            commentsCount: 0,
+            hasUnread: false,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+        
+        console.log('Task data prepared:', taskData);
+        
+        let savedTask;
+        let taskChat;
+        
+        // Всегда используем in-memory как запасной вариант
+        console.log('Saving to in-memory storage...');
+        tasksMap.set(taskData.id, taskData);
+        savedTask = taskData;
+        console.log('✅ Task saved to memory');
+        
+        // Создаем чат для задачи
+        const chatId = generateId();
+        console.log('Generated chat ID:', chatId);
+        
+        const taskChatData = {
+    id: chatId,
+    type: 'task',
+    taskId: savedTask.id,
+    name: `Задача: ${title}`,
+    participants: Array.from(new Set([
+        userId,                    // Создатель задачи
+        assigneeId,                // Исполнитель
+        ...(watchers || [])        // Наблюдатели
+    ].filter(Boolean))),           // Убираем null/undefined и дубликаты
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+};
+        
+        console.log('Chat data prepared:', taskChatData);
+        
+        chatsMap.set(taskChatData.id, taskChatData);
+        taskChat = taskChatData;
+        console.log('✅ Task chat saved to memory');
+        
+        // Пробуем сохранить в MongoDB если доступен
+        if (useMongoose && Task) {
+            try {
+                console.log('Attempting to save to MongoDB...');
+                const mongoTask = new Task(taskData);
+                await mongoTask.save();
+                console.log('✅ Task saved to MongoDB');
+                
+                if (Chat) {
+                    const mongoChat = new Chat(taskChatData);
+                    await mongoChat.save();
+                    console.log('✅ Chat saved to MongoDB');
+                }
+            } catch (dbError) {
+                console.warn('⚠️ MongoDB save failed (using in-memory):', dbError.message);
+                // Уже сохранено в памяти, продолжаем
+            }
+        } else {
+            console.log('MongoDB not available, using in-memory only');
+        }
+        
+        // Broadcast task creation
+        console.log('Broadcasting task:created event');
+        io.emit('task:created', savedTask);
+        
+        // Broadcast chat creation to participants
+        if (taskChat && taskChat.participants) {
+            console.log('Broadcasting chat to participants:', taskChat.participants);
+            taskChat.participants.forEach(participantId => {
+                const socketId = userSockets.get(participantId);
+                if (socketId) {
+                    io.to(socketId).emit('chat:created', taskChat);
+                }
+            });
+        }
+        
+        // Возвращаем задачу с информацией о чате
+        const response = {
+            ...savedTask,
+            chatId: taskChat ? taskChat.id : null
+        };
+        
+        console.log('✅ Sending response:', response);
+        res.status(201).json(response);
+        
+    } catch (error) {
+        console.error('❌❌❌ CREATE TASK ERROR ❌❌❌');
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+        console.error('Error details:', error);
+        
+        res.status(500).json({ 
+            error: 'Failed to create task',
+            message: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+    }
+});
+
+// Update task
+app.put('/api/tasks/:taskId', authenticateToken, async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        const { title, description, departmentId, assigneeId, priority, dueDate, watchers } = req.body;
+        const userId = req.user.id;
+        
+        if (useMongoose && Task) {
+            const task = await Task.findOne({ id: taskId });
+            
+            if (!task) {
+                return res.status(404).json({ error: 'Task not found' });
+            }
+            
+            // Check permissions
+            if (task.creatorId !== userId) {
+                return res.status(403).json({ error: 'Not authorized' });
+            }
+            
+            task.title = title;
+            task.description = description || '';
+            task.departmentId = departmentId;
+            task.assigneeId = assigneeId || null;
+            task.priority = priority || 'normal';
+            task.dueDate = dueDate || null;
+            task.watchers = watchers || [];
+            task.updatedAt = new Date().toISOString();
+            
+            await task.save();
+            
+            // Update task chat participants
+            const taskChat = await Chat.findOne({ taskId: task.id });
+            if (taskChat) {
+                taskChat.participants = [task.creatorId, task.assigneeId, ...task.watchers].filter(Boolean);
+                await taskChat.save();
+            }
+            
+            io.emit('task:updated', task);
+            
+            res.json(task);
+        } else {
+            // In-memory fallback
+            const task = tasksMap.get(taskId);
+            
+            if (!task) {
+                return res.status(404).json({ error: 'Task not found' });
+            }
+            
+            if (task.creatorId !== userId) {
+                return res.status(403).json({ error: 'Not authorized' });
+            }
+            
+            task.title = title;
+            task.description = description || '';
+            task.departmentId = departmentId;
+            task.assigneeId = assigneeId || null;
+            task.priority = priority || 'normal';
+            task.dueDate = dueDate || null;
+            task.watchers = watchers || [];
+            task.updatedAt = new Date().toISOString();
+            
+            tasksMap.set(taskId, task);
+            
+            io.emit('task:updated', task);
+            
+            res.json(task);
+        }
+    } catch (error) {
+        console.error('Update task error:', error);
+        res.status(500).json({ error: 'Failed to update task' });
+    }
+});
+
+// Update task status
+app.patch('/api/tasks/:taskId/status', authenticateToken, async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        const { status } = req.body;
+        const userId = req.user.id;
+        
+        if (!['todo', 'in_progress', 'review', 'done'].includes(status)) {
+            return res.status(400).json({ error: 'Invalid status' });
+        }
+        
+        if (useMongoose && Task) {
+            const task = await Task.findOne({ id: taskId });
+            
+            if (!task) {
+                return res.status(404).json({ error: 'Task not found' });
+            }
+            
+            task.status = status;
+            task.updatedAt = new Date().toISOString();
+            
+            if (status === 'done') {
+                task.completedAt = new Date().toISOString();
+            }
+            
+            await task.save();
+            
+            // Send notification to task chat
+            const taskChat = await Chat.findOne({ taskId: task.id });
+            if (taskChat) {
+                const statusNames = {
+                    'todo': 'К выполнению',
+                    'in_progress': 'В работе',
+                    'review': 'На проверке',
+                    'done': 'Выполнено'
+                };
+                
+                const systemMessage = {
+                    id: generateId(),
+                    chatId: taskChat.id,
+                    senderId: userId,
+                    type: 'system',
+                    text: `Статус задачи изменен на: ${statusNames[status]}`,
+                    createdAt: new Date().toISOString()
+                };
+                
+                const message = new Message(systemMessage);
+                await message.save();
+                
+                io.to(taskChat.id).emit('message:new', message);
+            }
+            
+            io.emit('task:updated', task);
+            
+            res.json(task);
+        } else {
+            // In-memory fallback
+            const task = tasksMap.get(taskId);
+            
+            if (!task) {
+                return res.status(404).json({ error: 'Task not found' });
+            }
+            
+            task.status = status;
+            task.updatedAt = new Date().toISOString();
+            
+            if (status === 'done') {
+                task.completedAt = new Date().toISOString();
+            }
+            
+            tasksMap.set(taskId, task);
+            
+            io.emit('task:updated', task);
+            
+            res.json(task);
+        }
+    } catch (error) {
+        console.error('Update task status error:', error);
+        res.status(500).json({ error: 'Failed to update task status' });
+    }
+});
+
+// Delete task
+app.delete('/api/tasks/:taskId', authenticateToken, async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        const userId = req.user.id;
+        
+        if (useMongoose && Task) {
+            const task = await Task.findOne({ id: taskId });
+            
+            if (!task) {
+                return res.status(404).json({ error: 'Task not found' });
+            }
+            
+            if (task.creatorId !== userId) {
+                return res.status(403).json({ error: 'Not authorized' });
+            }
+            
+            await Task.deleteOne({ id: taskId });
+            
+            // Delete task chat
+            await Chat.deleteOne({ taskId: task.id });
+            
+            io.emit('task:deleted', taskId);
+            
+            res.json({ message: 'Task deleted' });
+        } else {
+            // In-memory fallback
+            const task = tasksMap.get(taskId);
+            
+            if (!task) {
+                return res.status(404).json({ error: 'Task not found' });
+            }
+            
+            if (task.creatorId !== userId) {
+                return res.status(403).json({ error: 'Not authorized' });
+            }
+            
+            tasksMap.delete(taskId);
+            
+            io.emit('task:deleted', taskId);
+            
+            res.json({ message: 'Task deleted' });
+        }
+    } catch (error) {
+        console.error('Delete task error:', error);
+        res.status(500).json({ error: 'Failed to delete task' });
+    }
+});
+
+// ==================== DEPARTMENTS API ====================
+
+// Get all departments
+app.get('/api/departments', authenticateToken, async (req, res) => {
+    try {
+        if (useMongoose && Department) {
+            const departments = await Department.find().sort({ name: 1 });
+            res.json(departments);
+        } else {
+            // In-memory fallback with default departments
+            const departments = [
+                { id: 'dept-1', name: 'Разработка', createdAt: new Date().toISOString() },
+                { id: 'dept-2', name: 'Дизайн', createdAt: new Date().toISOString() },
+                { id: 'dept-3', name: 'Маркетинг', createdAt: new Date().toISOString() },
+                { id: 'dept-4', name: 'Продажи', createdAt: new Date().toISOString() },
+                { id: 'dept-5', name: 'Поддержка', createdAt: new Date().toISOString() }
+            ];
+            res.json(departments);
+        }
+    } catch (error) {
+        console.error('Get departments error:', error);
+        res.status(500).json({ error: 'Failed to get departments' });
+    }
+});
+
+// Create department
+app.post('/api/departments', authenticateToken, async (req, res) => {
+    try {
+        const { name } = req.body;
+        
+        if (!name) {
+            return res.status(400).json({ error: 'Name is required' });
+        }
+        
+        const departmentData = {
+            id: generateId(),
+            name,
+            createdAt: new Date().toISOString()
+        };
+        
+        if (useMongoose && Department) {
+            const department = new Department(departmentData);
+            await department.save();
+            res.status(201).json(department);
+        } else {
+            res.status(201).json(departmentData);
+        }
+    } catch (error) {
+        console.error('Create department error:', error);
+        res.status(500).json({ error: 'Failed to create department' });
+    }
+});
+
+// ==================== TASK CHATS API ====================
+
+
+// Create task chat
+app.post('/api/task-chats', authenticateToken, async (req, res) => {
+    try {
+        const { taskId } = req.body;
+        const userId = req.user.id;
+        
+        console.log('📞 Creating task chat for task:', taskId, 'User:', userId);
+        
+        if (!taskId) {
+            return res.status(400).json({ error: 'Task ID is required' });
+        }
+        
+        // Сначала проверяем существует ли чат
+        if (useMongoose && Chat) {
+            try {
+                let taskChat = await Chat.findOne({ taskId });
+                
+                if (taskChat) {
+                    console.log('✅ Task chat already exists in MongoDB:', taskChat.id);
+                    
+                    // Проверяем что текущий пользователь в участниках
+                    if (!taskChat.participants.includes(userId)) {
+                        taskChat.participants.push(userId);
+                        await taskChat.save();
+                        console.log('✅ Added user to chat participants');
+                    }
+                    
+                    return res.json(taskChat);
+                }
+            } catch (err) {
+                console.warn('⚠️ Could not check MongoDB for existing chat:', err.message);
+            }
+        }
+        
+        // Проверяем в памяти
+        let taskChat = Array.from(chatsMap.values()).find(c => c.taskId === taskId);
+        if (taskChat) {
+            console.log('✅ Task chat already exists in memory:', taskChat.id);
+            
+            // Проверяем что текущий пользователь в участниках
+            if (!taskChat.participants.includes(userId)) {
+                taskChat.participants.push(userId);
+                console.log('✅ Added user to chat participants');
+            }
+            
+            return res.json(taskChat);
+        }
+        
+        // Ищем задачу
+        let task;
+        
+        if (useMongoose && Task) {
+            try {
+                task = await Task.findOne({ id: taskId });
+                if (task) {
+                    console.log('✅ Task found in MongoDB:', task.id);
+                }
+            } catch (err) {
+                console.warn('⚠️ Could not find task in MongoDB:', err.message);
+            }
+        }
+        
+        // Если не нашли в MongoDB, ищем в памяти
+        if (!task) {
+            task = tasksMap.get(taskId);
+            if (task) {
+                console.log('✅ Task found in memory:', task.id);
+            }
+        }
+        
+        if (!task) {
+            console.error('❌ Task not found anywhere:', taskId);
+            console.log('Available tasks in memory:', Array.from(tasksMap.keys()));
+            return res.status(404).json({ error: 'Task not found' });
+        }
+        
+        // Создаем чат с правильными участниками
+        const participants = Array.from(new Set([
+            userId,                         // Текущий пользователь
+            task.creatorId,                 // Создатель задачи
+            task.assigneeId,                // Исполнитель
+            ...(task.watchers || [])        // Наблюдатели
+        ].filter(Boolean)));                // Убираем null/undefined и дубликаты
+        
+        console.log('Creating chat with participants:', participants);
+        
+        const chatData = {
+            id: generateId(),
+            type: 'task',
+            taskId: task.id,
+            name: `Задача: ${task.title}`,
+            participants: participants,
+            createdBy: userId,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+        
+        if (useMongoose && Chat) {
+            try {
+                const chat = new Chat(chatData);
+                await chat.save();
+                taskChat = chat.toObject();
+                console.log('✅ Task chat created in MongoDB:', taskChat.id);
+            } catch (err) {
+                console.warn('⚠️ Could not save chat to MongoDB, using memory:', err.message);
+                chatsMap.set(chatData.id, chatData);
+                taskChat = chatData;
+            }
+        } else {
+            chatsMap.set(chatData.id, chatData);
+            taskChat = chatData;
+            console.log('✅ Task chat created in memory:', taskChat.id);
+        }
+        
+        // Emit to all participants
+        participants.forEach(participantId => {
+            const socketId = userSockets.get(participantId);
+            if (socketId) {
+                io.to(socketId).emit('chat:created', taskChat);
+            }
+        });
+        
+        res.status(201).json(taskChat);
+        
+    } catch (error) {
+        console.error('❌ Create task chat error:', error);
+        console.error('Error stack:', error.stack);
+        res.status(500).json({ 
+            error: 'Failed to create task chat',
+            message: error.message
+        });
+    }
+});
+
+
+
+// Get chat by ID
+app.get('/api/chats/:chatId', authenticateToken, async (req, res) => {
+    try {
+        const { chatId } = req.params;
+        
+        if (useMongoose && Chat) {
+            const chat = await Chat.findOne({ id: chatId });
+            if (chat) {
+                return res.json(chat);
+            }
+        }
+        
+        // In-memory fallback
+        const chat = chatsMap.get(chatId) || Array.from(chats.values()).find(c => c.id === chatId);
+        
+        if (!chat) {
+            return res.status(404).json({ error: 'Chat not found' });
+        }
+        
+        res.json(chat);
+    } catch (error) {
+        console.error('Get chat error:', error);
+        res.status(500).json({ error: 'Failed to get chat' });
+    }
+});
+
+
+
+
+// ==================== ADMIN ROUTES ====================
+
+// Get admin statistics
+app.get('/api/admin/stats', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        let stats = {
+            totalUsers: 0,
+            newUsersThisMonth: 0,
+            totalTasks: 0,
+            activeTasks: 0,
+            totalDepartments: 0,
+            totalMessages: 0,
+            messagesToday: 0,
+            recentActivity: [],
+            departmentStats: []
+        };
+        
+        if (useMongoose && User && Task && Department && Message) {
+            const now = new Date();
+            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+            const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            
+            // Basic stats
+            stats.totalUsers = await User.countDocuments();
+            stats.newUsersThisMonth = await User.countDocuments({ 
+                createdAt: { $gte: monthStart } 
+            });
+            stats.totalTasks = await Task.countDocuments();
+            stats.activeTasks = await Task.countDocuments({ 
+                status: { $in: ['todo', 'in_progress', 'review'] } 
+            });
+            stats.totalDepartments = await Department.countDocuments();
+            stats.totalMessages = await Message.countDocuments();
+            stats.messagesToday = await Message.countDocuments({ 
+                createdAt: { $gte: dayStart } 
+            });
+            
+            // Department stats
+            const departments = await Department.find();
+            stats.departmentStats = await Promise.all(departments.map(async dept => {
+                const tasksCount = await Task.countDocuments({ departmentId: dept.id });
+                const completedTasks = await Task.countDocuments({ 
+                    departmentId: dept.id, 
+                    status: 'done' 
+                });
+                
+                // Count employees in department (tasks assigned to users in department)
+                const departmentTasks = await Task.find({ departmentId: dept.id });
+                const employeeIds = new Set(departmentTasks.map(t => t.assigneeId).filter(Boolean));
+                
+                return {
+                    id: dept.id,
+                    name: dept.name,
+                    employeeCount: employeeIds.size,
+                    tasksCount,
+                    completedTasks
+                };
+            }));
+            
+            // Recent activity (last 10 messages)
+            const recentMessages = await Message.find()
+                .sort({ createdAt: -1 })
+                .limit(10)
+                .lean();
+            
+            stats.recentActivity = recentMessages.map(msg => ({
+                userId: msg.senderId,
+                action: 'Отправил сообщение',
+                timestamp: msg.createdAt
+            }));
+            
+        } else {
+            // In-memory fallback
+            stats.totalUsers = users.size;
+            stats.totalTasks = tasksMap.size;
+            stats.activeTasks = Array.from(tasksMap.values()).filter(t => 
+                ['todo', 'in_progress', 'review'].includes(t.status)
+            ).length;
+            stats.totalDepartments = 5; // Default departments
+        }
+        
+        res.json(stats);
+    } catch (error) {
+        console.error('Get admin stats error:', error);
+        res.status(500).json({ error: 'Failed to get statistics' });
+    }
+});
+
+// Get all users (admin)
+app.get('/api/admin/users', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        if (useMongoose && User) {
+            const allUsers = await User.find({}, '-password').sort({ createdAt: -1 }).lean();
+            res.json(allUsers);
+        } else {
+            const allUsers = Array.from(users.values()).map(({ password, ...user }) => user);
+            res.json(allUsers);
+        }
+    } catch (error) {
+        console.error('Get admin users error:', error);
+        res.status(500).json({ error: 'Failed to get users' });
+    }
+});
+
+// Create user (admin)
+app.post('/api/admin/users', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const { name, email, username, password, isAdmin: isUserAdmin } = req.body;
+        
+        if (!name || !email || !username || !password) {
+            return res.status(400).json({ error: 'All fields are required' });
+        }
+        
+        const hashedPassword = await bcrypt.hash(password, 10);
+        
+        if (useMongoose && User) {
+            const existingUser = await User.findOne({ 
+                $or: [{ username }, { email }] 
+            });
+            
+            if (existingUser) {
+                return res.status(400).json({ error: 'User already exists' });
+            }
+            
+            const userId = generateId();
+            const user = new User({
+                id: userId,
+                name,
+                email,
+                username,
+                password: hashedPassword,
+                isAdmin: isUserAdmin || false,
+                isActive: true,
+                createdAt: new Date()
+            });
+            
+            await user.save();
+            
+            const { password: _, ...userWithoutPassword } = user.toObject();
+            res.status(201).json(userWithoutPassword);
+        } else {
+            // In-memory fallback
+            const existingUser = Array.from(users.values()).find(
+                u => u.username === username || u.email === email
+            );
+            
+            if (existingUser) {
+                return res.status(400).json({ error: 'User already exists' });
+            }
+            
+            const userId = generateId();
+            const user = {
+                id: userId,
+                name,
+                email,
+                username,
+                password: hashedPassword,
+                isAdmin: isUserAdmin || false,
+                isActive: true,
+                createdAt: new Date()
+            };
+            
+            users.set(username, user);
+            
+            const { password: _, ...userWithoutPassword } = user;
+            res.status(201).json(userWithoutPassword);
+        }
+    } catch (error) {
+        console.error('Create user error:', error);
+        res.status(500).json({ error: 'Failed to create user' });
+    }
+});
+
+// Update user (admin)
+app.put('/api/admin/users/:userId', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { name, email, username, password, isAdmin: isUserAdmin } = req.body;
+        
+        if (useMongoose && User) {
+            const user = await User.findOne({ id: userId });
+            
+            if (!user) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            
+            user.name = name;
+            user.email = email;
+            user.username = username;
+            user.isAdmin = isUserAdmin;
+            
+            if (password) {
+                user.password = await bcrypt.hash(password, 10);
+            }
+            
+            await user.save();
+            
+            const { password: _, ...userWithoutPassword } = user.toObject();
+            res.json(userWithoutPassword);
+        } else {
+            // In-memory fallback
+            const user = Array.from(users.values()).find(u => u.id === userId);
+            
+            if (!user) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            
+            user.name = name;
+            user.email = email;
+            user.username = username;
+            user.isAdmin = isUserAdmin;
+            
+            if (password) {
+                user.password = await bcrypt.hash(password, 10);
+            }
+            
+            users.set(username, user);
+            
+            const { password: _, ...userWithoutPassword } = user;
+            res.json(userWithoutPassword);
+        }
+    } catch (error) {
+        console.error('Update user error:', error);
+        res.status(500).json({ error: 'Failed to update user' });
+    }
+});
+
+// Toggle user role (admin)
+app.post('/api/admin/users/:userId/toggle-role', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        if (useMongoose && User) {
+            const user = await User.findOne({ id: userId });
+            
+            if (!user) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            
+            user.isAdmin = !user.isAdmin;
+            await user.save();
+            
+            res.json({ message: 'User role updated' });
+        } else {
+            const user = Array.from(users.values()).find(u => u.id === userId);
+            
+            if (!user) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            
+            user.isAdmin = !user.isAdmin;
+            res.json({ message: 'User role updated' });
+        }
+    } catch (error) {
+        console.error('Toggle user role error:', error);
+        res.status(500).json({ error: 'Failed to toggle user role' });
+    }
+});
+
+// Toggle user status (admin)
+app.post('/api/admin/users/:userId/toggle-status', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        if (useMongoose && User) {
+            const user = await User.findOne({ id: userId });
+            
+            if (!user) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            
+            user.isActive = !user.isActive;
+            await user.save();
+            
+            res.json({ message: 'User status updated' });
+        } else {
+            const user = Array.from(users.values()).find(u => u.id === userId);
+            
+            if (!user) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            
+            user.isActive = user.isActive !== false ? false : true;
+            res.json({ message: 'User status updated' });
+        }
+    } catch (error) {
+        console.error('Toggle user status error:', error);
+        res.status(500).json({ error: 'Failed to toggle user status' });
+    }
+});
+
+// Delete user (admin)
+app.delete('/api/admin/users/:userId', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        if (useMongoose && User) {
+            await User.deleteOne({ id: userId });
+            res.json({ message: 'User deleted' });
+        } else {
+            const user = Array.from(users.values()).find(u => u.id === userId);
+            if (user) {
+                users.delete(user.username);
+            }
+            res.json({ message: 'User deleted' });
+        }
+    } catch (error) {
+        console.error('Delete user error:', error);
+        res.status(500).json({ error: 'Failed to delete user' });
+    }
+});
+
+// Get all departments (admin)
+app.get('/api/admin/departments', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        if (useMongoose && Department) {
+            const departments = await Department.find().sort({ name: 1 }).lean();
+            res.json(departments);
+        } else {
+            const departments = [
+                { id: 'dept-1', name: 'Разработка', description: 'Отдел разработки ПО', createdAt: new Date().toISOString() },
+                { id: 'dept-2', name: 'Дизайн', description: 'Отдел дизайна и UX', createdAt: new Date().toISOString() },
+                { id: 'dept-3', name: 'Маркетинг', description: 'Отдел маркетинга', createdAt: new Date().toISOString() },
+                { id: 'dept-4', name: 'Продажи', description: 'Отдел продаж', createdAt: new Date().toISOString() },
+                { id: 'dept-5', name: 'Поддержка', description: 'Служба поддержки', createdAt: new Date().toISOString() }
+            ];
+            res.json(departments);
+        }
+    } catch (error) {
+        console.error('Get admin departments error:', error);
+        res.status(500).json({ error: 'Failed to get departments' });
+    }
+});
+
+// Create department (admin)
+app.post('/api/admin/departments', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const { name, description } = req.body;
+        
+        if (!name) {
+            return res.status(400).json({ error: 'Name is required' });
+        }
+        
+        const departmentData = {
+            id: generateId(),
+            name,
+            description: description || '',
+            createdAt: new Date().toISOString()
+        };
+        
+        if (useMongoose && Department) {
+            const department = new Department(departmentData);
+            await department.save();
+            res.status(201).json(department);
+        } else {
+            res.status(201).json(departmentData);
+        }
+    } catch (error) {
+        console.error('Create department error:', error);
+        res.status(500).json({ error: 'Failed to create department' });
+    }
+});
+
+// Update department (admin)
+app.put('/api/admin/departments/:deptId', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const { deptId } = req.params;
+        const { name, description } = req.body;
+        
+        if (useMongoose && Department) {
+            const department = await Department.findOne({ id: deptId });
+            
+            if (!department) {
+                return res.status(404).json({ error: 'Department not found' });
+            }
+            
+            department.name = name;
+            department.description = description || '';
+            await department.save();
+            
+            res.json(department);
+        } else {
+            res.json({ id: deptId, name, description });
+        }
+    } catch (error) {
+        console.error('Update department error:', error);
+        res.status(500).json({ error: 'Failed to update department' });
+    }
+});
+
+// Delete department (admin)
+app.delete('/api/admin/departments/:deptId', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const { deptId } = req.params;
+        
+        if (useMongoose && Department) {
+            await Department.deleteOne({ id: deptId });
+        }
+        
+        res.json({ message: 'Department deleted' });
+    } catch (error) {
+        console.error('Delete department error:', error);
+        res.status(500).json({ error: 'Failed to delete department' });
+    }
+});
+
+// Get all tasks (admin)
+app.get('/api/admin/tasks', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        if (useMongoose && Task) {
+            const tasks = await Task.find().sort({ createdAt: -1 }).lean();
+            res.json(tasks);
+        } else {
+            const allTasks = Array.from(tasksMap.values());
+            res.json(allTasks);
+        }
+    } catch (error) {
+        console.error('Get admin tasks error:', error);
+        res.status(500).json({ error: 'Failed to get tasks' });
+    }
+});
+
 // Socket.IO connection handling
 io.use((socket, next) => {
   const token = socket.handshake.auth.token;
@@ -676,92 +1952,180 @@ io.use((socket, next) => {
 });
 
 io.on('connection', (socket) => {
-  console.log(`User connected: ${socket.username} (${socket.userId})`);
-  
-  onlineUsers.set(socket.id, socket.userId);
+    console.log(`User connected: ${socket.username} (${socket.userId})`);
+    
+   // ВАЖНО: Сохраняем mapping userId -> socketId
+    userSockets.set(socket.userId, socket.id);
+    console.log('✅ User socket mapped:', socket.userId, '->', socket.id);
+    
+    onlineUsers.set(socket.id, socket.userId);
 
-  // Notify all users about online status
-  io.emit('users:online', {
-    userId: socket.userId,
-    online: true
-  });
+    // Notify all users about online status
+    io.emit('users:online', {
+        userId: socket.userId,
+        online: true
+    });
 
-  // Send online users list
-  const onlineUserIds = Array.from(new Set(onlineUsers.values()));
-  socket.emit('users:list', onlineUserIds);
+    // Send online users list
+    const onlineUserIds = Array.from(new Set(onlineUsers.values()));
+    socket.emit('users:list', onlineUserIds);
 
-  // Join user's chat rooms
-  const userChats = Array.from(chats.values())
-    .filter(chat => chat.participants.includes(socket.userId));
-  
-  userChats.forEach(chat => {
-    socket.join(chat.id);
-  });
+    // ИСПРАВЛЕНО: Join user's chat rooms - ищем в обоих Maps
+    const userChatsFromChats = Array.from(chats.values())
+        .filter(chat => chat.participants && chat.participants.includes(socket.userId));
+    
+    const userChatsFromChatsMap = Array.from(chatsMap.values())
+        .filter(chat => chat.participants && chat.participants.includes(socket.userId));
+    
+    const allUserChats = [...userChatsFromChats, ...userChatsFromChatsMap];
+    
+    console.log('👤 User chats:', allUserChats.length);
+    
+    allUserChats.forEach(chat => {
+        socket.join(chat.id);
+        console.log('✅ Joined chat room:', chat.id);
+    });
 
-  // Chat message
-  socket.on('message:send', async (data) => {
-    const { chatId, text, type, metadata } = data;
-    const chat = chats.get(chatId);
 
-    if (!chat || !chat.participants.includes(socket.userId)) {
-      return socket.emit('error', { message: 'Access denied' });
+    // Chat join
+socket.on('chat:join', (chatId) => {
+    console.log('👤 User manually joining chat room:', chatId);
+    socket.join(chatId);
+});
+
+// Chat message
+socket.on('message:send', async (data) => {
+    console.log('📨 Received message:send:', data);
+    console.log('User:', socket.userId);
+    
+const { chatId, text, type, metadata, tempId } = data;
+    
+    // ИСПРАВЛЕНО: Ищем чат в обоих местах
+    let chat = chats.get(chatId);
+    if (!chat) {
+        chat = chatsMap.get(chatId);
     }
+    if (!chat) {
+        // Ищем в массивах значений
+        chat = Array.from(chats.values()).find(c => c.id === chatId);
+    }
+    if (!chat) {
+        chat = Array.from(chatsMap.values()).find(c => c.id === chatId);
+    }
+    
+    console.log('Chat found:', chat ? 'yes' : 'no');
+    
+    if (!chat) {
+        console.error('❌ Chat not found:', chatId);
+        console.log('Available chats:', Array.from(chats.keys()));
+        console.log('Available chatsMap:', Array.from(chatsMap.keys()));
+        return socket.emit('error', { message: 'Chat not found' });
+    }
+    
+    if (!chat.participants || !chat.participants.includes(socket.userId)) {
+        console.error('❌ Access denied. User:', socket.userId, 'Participants:', chat.participants);
+        return socket.emit('error', { message: 'Access denied' });
+    }
+    
+    console.log('✅ Access granted');
 
     const messageId = `msg_${uuidv4()}`;
     const encryptedText = chat.encrypted ? encryptMessage(text) : text;
 
     const messageData = {
-      id: messageId,
-      chatId,
-      senderId: socket.userId,
-      text: encryptedText,
-      type: type || 'text',
-      metadata: metadata || {},
-      createdAt: new Date(),
-      encrypted: chat.encrypted
+        id: messageId,
+        chatId,
+        senderId: socket.userId,
+        text: encryptedText,
+        type: type || 'text',
+        metadata: metadata || {},
+        createdAt: new Date().toISOString(),
+        encrypted: chat.encrypted,
+         delivered: false,
+        read: false,
+        tempId: tempId
     };
+    
+    console.log('💾 Saving message:', messageData.id);
 
     // Save to cache
     if (!messages.has(chatId)) {
-      messages.set(chatId, []);
+        messages.set(chatId, []);
     }
     messages.get(chatId).push(messageData);
+    console.log('✅ Message saved to memory');
     
     // Save to MongoDB
     try {
-      await Message.create(messageData);
-      console.log(`✅ Message ${messageId} saved to MongoDB`);
+        await Message.create(messageData);
+        console.log(`✅ Message ${messageId} saved to MongoDB`);
     } catch (dbError) {
-      console.error('❌ Error saving message to MongoDB:', dbError);
+        console.error('❌ Error saving message to MongoDB:', dbError);
     }
 
     // Update unread counts
     chat.participants.forEach(participantId => {
-      if (participantId !== socket.userId) {
-        chat.unreadCount = chat.unreadCount || {};
-        chat.unreadCount[participantId] = (chat.unreadCount[participantId] || 0) + 1;
-      }
+        if (participantId !== socket.userId) {
+            chat.unreadCount = chat.unreadCount || {};
+            chat.unreadCount[participantId] = (chat.unreadCount[participantId] || 0) + 1;
+        }
     });
     
     // Update chat in MongoDB
     try {
-      await Chat.findOneAndUpdate(
-        { id: chatId },
-        { 
-          unreadCount: chat.unreadCount,
-          updatedAt: new Date()
-        }
-      );
+        await Chat.findOneAndUpdate(
+            { id: chatId },
+            { 
+                unreadCount: chat.unreadCount,
+                updatedAt: new Date().toISOString()
+            }
+        );
     } catch (dbError) {
-      console.error('❌ Error updating chat in MongoDB:', dbError);
+        console.error('❌ Error updating chat in MongoDB:', dbError);
     }
 
-    // Send to all participants
+    // ВАЖНО: Отправляем сообщение в комнату чата
+    console.log('📤 Broadcasting message to room:', chatId);
     io.to(chatId).emit('message:new', {
-      ...messageData,
-      text: text // Send original (decrypted) text to all
+        ...messageData,
+        text: text // Send original (decrypted) text to all
     });
-  });
+    
+    console.log('✅ Message broadcasted');
+
+    // Update task if this is a task chat
+    if (chat.taskId) {
+        console.log('📋 Updating task comments:', chat.taskId);
+        
+        if (useMongoose && Task) {
+            await Task.updateOne(
+                { id: chat.taskId },
+                { 
+                    $inc: { commentsCount: 1 },
+                    $set: { hasUnread: true }
+                }
+            );
+        } else {
+            const task = tasksMap.get(chat.taskId);
+            if (task) {
+                task.commentsCount = (task.commentsCount || 0) + 1;
+                task.hasUnread = true;
+                tasksMap.set(chat.taskId, task);
+            }
+        }
+        
+        io.emit('task:comment', {
+            taskId: chat.taskId,
+            userId: socket.userId
+        });
+        
+        console.log('✅ Task updated');
+    }
+});
+
+
+
+
 
   // Typing indicator
   socket.on('typing:start', (chatId) => {
@@ -780,14 +2144,183 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Mark messages as read
-  socket.on('messages:read', (chatId) => {
-    const chat = chats.get(chatId);
-    if (chat && chat.unreadCount) {
-      chat.unreadCount[socket.userId] = 0;
-      socket.emit('chat:updated', chat);
+  // Сообщение доставлено (когда получатель получил сообщение)
+// Сообщение доставлено
+socket.on('message:delivered', async (data) => {
+    const { messageId, chatId } = data;
+    
+    console.log('✅ Message delivered:', messageId, 'Chat:', chatId);
+    
+    try {
+        // Находим сообщение
+        let message;
+        
+        if (useMongoose && Message) {
+            message = await Message.findOneAndUpdate(
+                { id: messageId },
+                { 
+                    delivered: true,
+                    deliveredAt: new Date()
+                },
+                { new: true }
+            );
+        }
+        
+        // Обновляем в памяти
+        const chatMessages = messages.get(chatId);
+        if (chatMessages) {
+            const msg = chatMessages.find(m => m.id === messageId);
+            if (msg) {
+                msg.delivered = true;
+                msg.deliveredAt = new Date().toISOString();
+                message = msg;
+            }
+        }
+        
+        if (message) {
+            // ИСПРАВЛЕНО: Отправляем обновление ТОЛЬКО отправителю
+            const senderSocketId = userSockets.get(message.senderId);
+            if (senderSocketId) {
+                io.to(senderSocketId).emit('message:status-updated', {
+                    messageId,
+                    delivered: true,
+                    deliveredAt: new Date().toISOString()
+                });
+                
+                console.log('✅ Sent delivered status to sender:', message.senderId);
+            }
+        }
+        
+    } catch (error) {
+        console.error('❌ Error updating message delivered status:', error);
     }
-  });
+});
+
+// Сообщение прочитано
+socket.on('message:read', async (data) => {
+    const { messageId, chatId } = data;
+    
+    console.log('👁️ Message read:', messageId, 'Chat:', chatId);
+    
+    try {
+        // Находим сообщение
+        let message;
+        
+        if (useMongoose && Message) {
+            message = await Message.findOneAndUpdate(
+                { id: messageId },
+                { 
+                    read: true,
+                    readAt: new Date(),
+                    delivered: true,
+                    deliveredAt: new Date()
+                },
+                { new: true }
+            );
+        }
+        
+        // Обновляем в памяти
+        const chatMessages = messages.get(chatId);
+        if (chatMessages) {
+            const msg = chatMessages.find(m => m.id === messageId);
+            if (msg) {
+                msg.read = true;
+                msg.readAt = new Date().toISOString();
+                msg.delivered = true;
+                msg.deliveredAt = new Date().toISOString();
+                message = msg;
+            }
+        }
+        
+        if (message) {
+            // ИСПРАВЛЕНО: Отправляем обновление ТОЛЬКО отправителю
+            const senderSocketId = userSockets.get(message.senderId);
+            if (senderSocketId) {
+                io.to(senderSocketId).emit('message:status-updated', {
+                    messageId,
+                    read: true,
+                    readAt: new Date().toISOString(),
+                    delivered: true
+                });
+                
+                console.log('✅ Sent read status to sender:', message.senderId);
+            }
+        }
+        
+    } catch (error) {
+        console.error('❌ Error updating message read status:', error);
+    }
+});
+
+// Пометить все сообщения чата как прочитанные
+socket.on('messages:read-all', async (chatId) => {
+    console.log('👁️ Marking all messages as read in chat:', chatId);
+    
+    try {
+        // Находим чат
+        let chat = chats.get(chatId) || chatsMap.get(chatId);
+        
+        if (!chat) {
+            console.error('Chat not found:', chatId);
+            return;
+        }
+        
+        // Обновляем все непрочитанные сообщения в MongoDB
+        if (useMongoose && Message) {
+            await Message.updateMany(
+                { 
+                    chatId: chatId,
+                    senderId: { $ne: socket.userId }, // Не наши сообщения
+                    read: false
+                },
+                { 
+                    read: true,
+                    readAt: new Date(),
+                    delivered: true,
+                    deliveredAt: new Date()
+                }
+            );
+        }
+        
+        // Обновляем в памяти
+        const chatMessages = messages.get(chatId);
+        if (chatMessages) {
+            chatMessages.forEach(msg => {
+                if (msg.senderId !== socket.userId && !msg.read) {
+                    msg.read = true;
+                    msg.readAt = new Date().toISOString();
+                    msg.delivered = true;
+                    msg.deliveredAt = new Date().toISOString();
+                    
+                    // Уведомляем о каждом обновлении
+                    io.to(chatId).emit('message:status-updated', {
+                        messageId: msg.id,
+                        read: true,
+                        readAt: msg.readAt,
+                        delivered: true
+                    });
+                }
+            });
+        }
+        
+        // Сбрасываем счетчик непрочитанных
+        if (chat.unreadCount) {
+            chat.unreadCount[socket.userId] = 0;
+            
+            if (useMongoose && Chat) {
+                await Chat.findOneAndUpdate(
+                    { id: chatId },
+                    { unreadCount: chat.unreadCount }
+                );
+            }
+        }
+        
+        console.log('✅ All messages marked as read');
+        
+    } catch (error) {
+        console.error('❌ Error marking messages as read:', error);
+    }
+});
 
   // WebRTC signaling for conference
 socket.on('conference:join', (conferenceId) => {

@@ -361,7 +361,7 @@ function logout() {
     
     // Hide main app, show auth
     document.getElementById('mainApp').style.display = 'none';
-    document.getElementById('authContainer').style.display = 'flex';
+    document.getElementById('authScreen').style.display = 'flex';
     
     // Close profile modal
     closeProfileModal();

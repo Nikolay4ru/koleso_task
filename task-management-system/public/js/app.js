@@ -6,11 +6,15 @@ let users = [];
 let chats = [];
 let onlineUsers = new Set();
 let pendingChatUser = null;
+let pendingStatusUpdates = new Map();
 
 
 // Делаем переменные доступными глобально для других модулей
 window.currentChat = null;
 window.pendingChatUser = null;
+
+
+
 
 // ==================== Utility Functions ====================
 function showToast(message, type = 'success') {
@@ -105,6 +109,68 @@ async function apiCall(endpoint, options = {}) {
     return response.json();
 }
 
+
+
+// ==================== SIDEBAR COLLAPSE ==================== 
+
+let sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+
+function initSidebarToggle() {
+    const sidebar = document.getElementById('sidebar');
+    const toggleBtn = document.getElementById('sidebarToggleBtn');
+    
+    if (!sidebar || !toggleBtn) return;
+    
+    // Применяем сохраненное состояние
+    if (sidebarCollapsed) {
+        sidebar.classList.add('collapsed');
+    }
+    
+    // Обработчик клика
+    toggleBtn.addEventListener('click', () => {
+        sidebarCollapsed = !sidebarCollapsed;
+        sidebar.classList.toggle('collapsed');
+        
+        // Сохраняем состояние
+        localStorage.setItem('sidebarCollapsed', sidebarCollapsed);
+        
+        // Обновляем тултип
+        toggleBtn.title = sidebarCollapsed ? 'Развернуть панель' : 'Свернуть панель';
+    });
+}
+
+
+
+
+function addTooltipsToSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
+    
+    // Для кнопок табов
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        const text = btn.querySelector('span:not(.material-icons)')?.textContent;
+        if (text) {
+            btn.setAttribute('data-tooltip', text);
+        }
+    });
+    
+    // Для чатов
+    document.querySelectorAll('.chat-item').forEach(item => {
+        const name = item.querySelector('.chat-name')?.textContent;
+        if (name) {
+            item.setAttribute('data-tooltip', name);
+        }
+    });
+    
+    // Для контактов
+    document.querySelectorAll('.contact-item').forEach(item => {
+        const name = item.querySelector('.contact-name, h4')?.textContent;
+        if (name) {
+            item.setAttribute('data-tooltip', name);
+        }
+    });
+}
+
 // ==================== Authentication ====================
 async function login(username, password) {
     try {
@@ -179,8 +245,9 @@ function initSocket() {
         
         socket.on('connect', () => {
             console.log('Connected to server');
-            loadChats();
-            loadUsers();
+            loadUsers().then(() => {
+        loadChats();
+    });
             
             if (typeof setupWebRTCSocketHandlers === 'function') {
                 setupWebRTCSocketHandlers();
@@ -200,18 +267,57 @@ function initSocket() {
         console.log('Disconnected from server');
     });
     
-    socket.on('users:online', (data) => {
-        if (data.online) {
-            onlineUsers.add(data.userId);
-        } else {
-            onlineUsers.delete(data.userId);
-        }
-        updateOnlineStatus();
-    });
+socket.on('users:online', (data) => {
+    console.log('👤 User online status changed:', data.userId, 'Online:', data.online);
     
-    socket.on('users:list', (userIds) => {
-        onlineUsers = new Set(userIds);
-        updateOnlineStatus();
+    if (data.online) {
+        onlineUsers.add(data.userId);
+    } else {
+        onlineUsers.delete(data.userId);
+    }
+    // Обновляем статус в заголовке чата СРАЗУ
+    updateChatHeaderStatus(data.userId, data.online);
+    // ВАЖНО: Обновляем все места сразу
+    updateOnlineStatus();
+});
+
+    
+socket.on('users:list', (userIds) => {
+    console.log('👥 Online users list received:', userIds.length, 'users');
+    onlineUsers = new Set(userIds);
+    
+    // Обновляем заголовок чата если он открыт
+    if (currentChat && currentChat.type === 'private') {
+        const otherUserId = currentChat.participants.find(id => id !== currentUser.id);
+        if (otherUserId) {
+            updateChatHeaderStatus(otherUserId, onlineUsers.has(otherUserId));
+        }
+    } else if (pendingChatUser && pendingChatUser.id) {
+        updateChatHeaderStatus(pendingChatUser.id, onlineUsers.has(pendingChatUser.id));
+    }
+    
+    // Обновляем все остальное
+    updateOnlineStatus();
+});
+
+    socket.on('chat:created', (chat) => {
+        console.log('📨 Received chat:created event:', chat);
+        
+        try {
+            // Проверяем что чат еще не добавлен
+            const exists = chats.find(c => c.id === chat.id);
+            if (!exists) {
+                chats.push(chat);
+                console.log('✅ Chat added to local array');
+                
+                // Обновляем список
+                renderChats();
+            } else {
+                console.log('⚠️ Chat already exists, skipping');
+            }
+        } catch (error) {
+            console.error('❌ Error handling chat:created:', error);
+        }
     });
 
 
@@ -276,9 +382,100 @@ function initSocket() {
         }
     });
     
-    socket.on('message:new', (message) => {
-        handleNewMessage(message);
-    });
+socket.on('message:new', (message) => {
+    console.log('📨 Received message:new event:', message);
+    
+    // Если это наше сообщение и есть tempId, заменяем временное на реальное
+    if (message.senderId === currentUser.id && message.tempId) {
+        const tempMessageEl = document.querySelector(`[data-message-id="${message.tempId}"]`);
+        
+        if (tempMessageEl) {
+            console.log('🔄 Replacing temp message:', message.tempId, '→', message.id);
+            
+            // Заменяем data-message-id на реальный
+            tempMessageEl.setAttribute('data-message-id', message.id);
+            
+            // Обновляем статус на "отправлено"
+            const statusEl = tempMessageEl.querySelector('.message-status');
+            if (statusEl && currentChat && currentChat.type === 'private') {
+                statusEl.className = 'message-status sent';
+                statusEl.textContent = '✓';
+            }
+            
+            // НОВОЕ: Применяем отложенные обновления статуса
+            if (pendingStatusUpdates.has(message.id)) {
+                console.log('📦 Applying pending status update for:', message.id);
+                const pendingUpdate = pendingStatusUpdates.get(message.id);
+                
+                if (statusEl) {
+                    if (pendingUpdate.read) {
+                        statusEl.className = 'message-status read';
+                        statusEl.textContent = '✓✓';
+                        console.log('✅ Applied pending READ status');
+                    } else if (pendingUpdate.delivered) {
+                        statusEl.className = 'message-status delivered';
+                        statusEl.textContent = '✓✓';
+                        console.log('✅ Applied pending DELIVERED status');
+                    }
+                }
+                
+                pendingStatusUpdates.delete(message.id);
+            }
+            
+            console.log('✅ Temp message replaced with real ID');
+            return; // Не добавляем новое сообщение
+        }
+    }
+    
+    handleNewMessage(message);
+});
+
+
+// В начале файла с глобальными переменными
+let pendingStatusUpdates = new Map(); // Храним обновления которые пришли до рендера сообщения
+
+// Обработчик обновления статуса
+socket.on('message:status-updated', (data) => {
+    console.log('📊 Message status updated:', data);
+    
+    const { messageId, delivered, read } = data;
+    
+    // Находим сообщение в DOM
+    const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
+    
+    if (!messageEl) {
+        console.log('⚠️ Message element not found, saving to pending updates:', messageId);
+        // Сохраняем обновление для применения позже
+        pendingStatusUpdates.set(messageId, { delivered, read });
+        return;
+    }
+    
+    // НОВОЕ: Проверяем что это наше сообщение (только для них показываем статус)
+    const isSentMessage = messageEl.classList.contains('sent');
+    if (!isSentMessage) {
+        console.log('⏭️ Skipping status update for received message:', messageId);
+        return;
+    }
+    
+    const statusEl = messageEl.querySelector('.message-status');
+    if (!statusEl) {
+        console.log('⚠️ Status element not found for message:', messageId);
+        return;
+    }
+    
+    console.log('Current status:', statusEl.className, statusEl.textContent);
+    
+    // Обновляем иконку статуса
+    if (read) {
+        statusEl.className = 'message-status read';
+        statusEl.textContent = '✓✓';
+        console.log('✅ Updated to READ status');
+    } else if (delivered) {
+        statusEl.className = 'message-status delivered';
+        statusEl.textContent = '✓✓';
+        console.log('✅ Updated to DELIVERED status');
+    }
+});
     
     const typingUsers = new Map();
     
@@ -323,110 +520,181 @@ function initSocket() {
 }
 
 // ==================== UI Rendering ====================
+
 function renderChats() {
     const chatsList = document.getElementById('chatsList');
-    
+    if (!chatsList) {
+        console.error('❌ Chats list container not found');
+        return;
+    }
+    addTooltipsToSidebar();
+    console.log('🎨 Rendering chats list, count:', chats.length);
+    console.log('Users loaded:', users.length);
+
     if (chats.length === 0) {
         chatsList.innerHTML = `
-            <div style="padding: 40px 20px; text-align: center; color: var(--text-secondary);">
-                <span class="material-icons" style="font-size: 48px; margin-bottom: 12px; opacity: 0.5;">chat_bubble_outline</span>
+            <div class="empty-state" style="padding: 40px 20px; text-align: center; color: var(--text-secondary);">
+                <span class="material-icons" style="font-size: 64px; opacity: 0.3;">chat_bubble_outline</span>
                 <p>Нет активных чатов</p>
-                <p style="font-size: 12px; margin-top: 8px;">Создайте новый чат для начала общения</p>
             </div>
         `;
         return;
     }
-    
-    const sortedChats = chats.sort((a, b) => {
-        const timeA = a.lastMessage?.createdAt || a.createdAt;
-        const timeB = b.lastMessage?.createdAt || b.createdAt;
-        return new Date(timeB) - new Date(timeA);
-    });
-    
+
+    // Сортируем по последнему обновлению
+    const sortedChats = [...chats].sort((a, b) => 
+        new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt)
+    );
+
     chatsList.innerHTML = sortedChats.map(chat => {
-        if (!chat || !chat.id) {
-            console.warn('Invalid chat in list:', chat);
-            return '';
-        }
+        let chatName = 'Чат';
+        let chatAvatar = '';
+        let chatSubtitle = '';
         
-        const isActive = currentChat && currentChat.id === chat.id;
-        
-        let chatName, avatarContent, showOnline, avatarStyle;
-        
-        const participants = Array.isArray(chat.participants) ? chat.participants : [];
-        
-        if (chat.type === 'group') {
-            chatName = chat.name || 'Групповой чат';
-            avatarContent = '<span class="material-icons">group</span>';
-            avatarStyle = `background: ${generateGradient(chatName)};`;
-            showOnline = false;
-        } else {
-            // ИСПРАВЛЕНО: Объявляем otherParticipant в правильной области видимости
-            const otherParticipant = users.find(u => participants.includes(u.id) && u.id !== currentUser.id);
-            chatName = otherParticipant?.name || 'Чат';
-            showOnline = otherParticipant && onlineUsers.has(otherParticipant.id);
-            
-            // Показываем аватар или инициалы
-            if (otherParticipant && otherParticipant.avatar) {
-                avatarContent = `<img src="${otherParticipant.avatar}" alt="${chatName}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
-                avatarStyle = 'background: transparent;';
-            } else if (otherParticipant) {
-                avatarContent = getUserInitials(otherParticipant.name);
-                avatarStyle = `background: ${generateGradient(chatName)};`;
-            } else {
-                avatarContent = '<span class="material-icons">person</span>';
-                avatarStyle = `background: ${generateGradient(chatName)};`;
-            }
-        }
-        
-        let messagePreview = 'Нет сообщений';
-        if (chat.lastMessage) {
-            const messageText = chat.lastMessage.text || chat.lastMessage.content || 'Сообщение';
-            const sender = users.find(u => u.id === chat.lastMessage.senderId);
-            const senderName = sender?.id === currentUser.id ? 'Вы' : sender?.name || 'Пользователь';
-            
-            if (chat.lastMessage.metadata && chat.lastMessage.metadata.files && chat.lastMessage.metadata.files.length > 0) {
-                const file = chat.lastMessage.metadata.files[0];
-                const fileType = getFileType(file.name);
-                const fileIcon = fileType === 'image' ? '🖼️' : fileType === 'video' ? '🎥' : fileType === 'audio' ? '🎵' : '📄';
-                messagePreview = `${senderName}: ${fileIcon} ${file.name}`;
-            } else if (chat.type === 'group') {
-                messagePreview = `${senderName}: ${messageText.substring(0, 25)}`;
-            } else {
-                const prefix = chat.lastMessage.senderId === currentUser.id ? 'Вы: ' : '';
-                messagePreview = prefix + messageText.substring(0, 30);
-            }
-        }
-        
-        return `
-            <div class="chat-item ${isActive ? 'active' : ''}" data-chat-id="${chat.id}">
-                <div class="chat-avatar ${showOnline ? 'online' : ''}" style="${avatarStyle}">
-                    ${avatarContent}
+        if (chat.type === 'task') {
+            // Чат задачи
+            chatName = chat.name || 'Чат задачи';
+            chatAvatar = `
+                <div class="user-avatar" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    <span class="material-icons">task_alt</span>
                 </div>
-                <div class="chat-details">
-                    <div class="chat-header-row">
-                        <span class="chat-name">${chatName}</span>
-                        <span class="chat-time">${chat.lastMessage ? formatTime(chat.lastMessage.createdAt) : ''}</span>
+            `;
+            chatSubtitle = 'Чат задачи';
+        } else if (chat.type === 'group') {
+            // Групповой чат
+            chatName = chat.name || 'Группа';
+            chatAvatar = `
+                <div class="user-avatar" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                    <span class="material-icons">group</span>
+                </div>
+            `;
+            chatSubtitle = `${chat.participants ? chat.participants.length : 0} участников`;
+        } else {
+            // Личный чат
+            const otherUserId = chat.participants ? chat.participants.find(id => id !== currentUser.id) : null;
+            
+            if (!otherUserId) {
+                console.warn('⚠️ No other user found in chat:', chat.id, 'Participants:', chat.participants);
+                chatName = 'Неизвестный чат';
+                chatAvatar = `
+                    <div class="user-avatar" style="background: linear-gradient(135deg, #ccc 0%, #999 100%);">
+                        <span class="material-icons">person</span>
                     </div>
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <span class="chat-preview">${messagePreview}</span>
-                        ${chat.unreadCount > 0 ? `<span class="unread-badge">${chat.unreadCount}</span>` : ''}
+                `;
+                chatSubtitle = 'Пользователь не найден';
+            } else {
+                const otherUser = users.find(u => u.id === otherUserId);
+                
+                if (otherUser) {
+                    chatName = otherUser.name;
+                    
+                    // Проверяем статус онлайн
+                    const isOnline = onlineUsers.has(otherUser.id);
+                    
+                    if (otherUser.avatar) {
+                        chatAvatar = `
+                            <div class="user-avatar ${isOnline ? 'online' : ''}">
+                                <img src="${otherUser.avatar}" alt="${otherUser.name}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
+                            </div>
+                        `;
+                    } else {
+                        chatAvatar = `
+                            <div class="user-avatar ${isOnline ? 'online' : ''}" style="background: ${generateGradient(otherUser.name)}">
+                                ${getUserInitials(otherUser.name)}
+                            </div>
+                        `;
+                    }
+                    chatSubtitle = isOnline ? 'В сети' : 'Не в сети';
+                } else {
+                    // ИСПРАВЛЕНО: Пользователь не загружен, но мы знаем его ID
+                    console.warn('⚠️ User not found in users array:', otherUserId);
+                    console.log('Available users:', users.map(u => ({ id: u.id, name: u.name })));
+                    
+                    chatName = 'Загрузка...';
+                    chatAvatar = `
+                        <div class="user-avatar" style="background: ${generateGradient(otherUserId)}">
+                            ${getUserInitials('U')}
+                        </div>
+                    `;
+                    chatSubtitle = 'Загрузка данных...';
+                    
+                    // НОВОЕ: Попробуем загрузить пользователя
+                    loadMissingUser(otherUserId);
+                }
+            }
+        }
+
+        return `
+            <div class="chat-item ${currentChat && currentChat.id === chat.id ? 'active' : ''}" 
+                 data-chat-id="${chat.id}" 
+                 onclick="openChatById('${chat.id}')">
+                ${chatAvatar}
+                <div class="chat-item-content">
+                    <div class="chat-item-header">
+                        <h4>${chatName}</h4>
+                        <span class="chat-time">${formatTime(chat.updatedAt || chat.createdAt)}</span>
                     </div>
+                    <p class="chat-preview">${chatSubtitle}</p>
                 </div>
             </div>
         `;
     }).join('');
-    
-    document.querySelectorAll('.chat-item').forEach(item => {
-        item.addEventListener('click', () => {
-            const chatId = item.dataset.chatId;
-            const chat = chats.find(c => c.id === chatId);
-            if (chat) {
-                openChat(chat);
-            }
-        });
-    });
+
+
 }
+
+
+// Загружаем отсутствующего пользователя
+async function loadMissingUser(userId) {
+    if (!userId) return;
+    
+    // Проверяем что уже не загружаем этого пользователя
+    if (window.loadingUsers && window.loadingUsers.has(userId)) {
+        console.log('Already loading user:', userId);
+        return;
+    }
+    
+    if (!window.loadingUsers) {
+        window.loadingUsers = new Set();
+    }
+    
+    window.loadingUsers.add(userId);
+    
+    try {
+        console.log('📥 Loading missing user:', userId);
+        
+        // Загружаем конкретного пользователя
+        const user = await apiCall(`/api/users/${userId}`);
+        
+        if (user) {
+            // Проверяем что пользователь еще не в массиве
+            const exists = users.find(u => u.id === user.id);
+            if (!exists) {
+                users.push(user);
+                console.log('✅ Added missing user:', user.name);
+                
+                // Перерисовываем чаты
+                renderChats();
+                renderContacts();
+            }
+        }
+    } catch (error) {
+        console.error('❌ Error loading missing user:', error);
+    } finally {
+        window.loadingUsers.delete(userId);
+    }
+}
+
+// Глобальная функция для открытия чата
+window.openChatById = function(chatId) {
+    console.log('Opening chat by ID:', chatId);
+    const chat = chats.find(c => c.id === chatId);
+    if (chat) {
+        openChat(chat);
+    } else {
+        console.error('Chat not found:', chatId);
+    }
+};
 
 function renderContacts() {
     const contactsList = document.getElementById('contactsList');
@@ -482,6 +750,35 @@ function renderContacts() {
             selectContact(userId);
         });
     });
+
+    addTooltipsToSidebar();
+}
+
+
+function updateChatHeaderStatus(userId, isOnline) {
+    // Проверяем что этот пользователь сейчас открыт в чате
+    let isCurrentChatUser = false;
+    
+    if (currentChat && currentChat.type === 'private') {
+        const otherUserId = currentChat.participants.find(id => id !== currentUser.id);
+        isCurrentChatUser = (otherUserId === userId);
+    } else if (pendingChatUser && pendingChatUser.id === userId) {
+        isCurrentChatUser = true;
+    }
+    
+    if (!isCurrentChatUser) {
+        console.log('⏭️ User not in current chat, skipping header update');
+        return;
+    }
+    
+    const chatStatus = document.getElementById('chatStatus');
+    if (chatStatus) {
+        chatStatus.textContent = isOnline ? 'В сети' : 'Не в сети';
+        chatStatus.className = isOnline ? 'online' : '';
+        console.log('✅ Updated chat header status:', userId, '→', isOnline ? 'online' : 'offline');
+    } else {
+        console.warn('⚠️ chatStatus element not found');
+    }
 }
 
 function selectContact(userId) {
@@ -693,77 +990,132 @@ async function createChatForContact(user) {
 }
 
 async function openChat(chat) {
+    console.log('📱 Opening chat:', chat);
+    console.log('Current user:', currentUser);
+    console.log('Chat participants:', chat.participants);
+    console.log('User is participant:', chat.participants?.includes(currentUser.id));
+    
     if (!chat || !chat.id) {
-        console.error('Invalid chat object:', chat);
-        showToast('Ошибка: неверный чат', 'error');
+        console.error('❌ Invalid chat object:', chat);
         return;
     }
     
     currentChat = chat;
-    window.currentChat = chat;
-    pendingChatUser = null;
-    window.pendingChatUser = null;
     
-    document.getElementById('welcomeScreen').style.display = 'none';
-    document.getElementById('chatContainer').style.display = 'flex';
+    // Hide welcome screen and show chat container
+    const welcomeScreen = document.getElementById('welcomeScreen');
+    const chatContainer = document.getElementById('chatContainer');
     
+    if (welcomeScreen) welcomeScreen.style.display = 'none';
+    if (chatContainer) chatContainer.style.display = 'flex';
+    
+    // Update chat header
+    const chatName = document.getElementById('chatName');
+    const chatStatus = document.getElementById('chatStatus');
+    const chatAvatar = document.querySelector('.chat-info .chat-avatar');
+    
+    // ВАЖНО: Сначала проверяем тип чата
+    if (chat.type === 'task') {
+        // Чат задачи
+        console.log('📋 Displaying task chat');
+        if (chatName) chatName.textContent = chat.name || 'Чат задачи';
+        if (chatStatus) chatStatus.textContent = 'Чат задачи';
+        if (chatAvatar) {
+            chatAvatar.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            chatAvatar.innerHTML = '<span class="material-icons">task_alt</span>';
+        }
+    } else if (chat.type === 'group') {
+        // Групповой чат
+        console.log('👥 Displaying group chat');
+        if (chatName) chatName.textContent = chat.name || 'Группа';
+        if (chatStatus) chatStatus.textContent = `${chat.participants.length} участников`;
+        if (chatAvatar) {
+            chatAvatar.style.background = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
+            chatAvatar.innerHTML = '<span class="material-icons">group</span>';
+        }
+    } else {
+        // Личный чат
+        console.log('💬 Displaying private chat');
+        const otherUserId = chat.participants.find(id => id !== currentUser.id);
+        const otherUser = users.find(u => u.id === otherUserId);
+        
+        if (otherUser) {
+             if (chatName) chatName.textContent = otherUser.name;
+            
+            // ИСПРАВЛЕНО: Проверяем статус онлайн
+            const isOnline = onlineUsers.has(otherUser.id);
+            console.log('User online status:', otherUser.id, '=', isOnline);
+            
+            if (chatStatus) {
+                chatStatus.textContent = isOnline ? 'В сети' : 'Не в сети';
+                chatStatus.className = isOnline ? 'online' : '';
+                console.log('✅ Set chat status:', chatStatus.textContent);
+            }
+            if (chatAvatar) {
+                if (otherUser.avatar) {
+                    chatAvatar.style.background = 'transparent';
+                    chatAvatar.innerHTML = `<img src="${otherUser.avatar}" alt="${otherUser.name}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+                } else {
+                    chatAvatar.style.background = generateGradient(otherUser.name);
+                    chatAvatar.innerHTML = getUserInitials(otherUser.name);
+                }
+            }
+        }
+    }
+    
+    // Load messages
+    try {
+        console.log('📨 Loading messages for chat:', chat.id);
+        const msgs = await apiCall(`/api/messages/${chat.id}`);
+        console.log('✅ Loaded', msgs.length, 'messages');
+        renderMessages(msgs);
+
+
+        if (socket && chat.type === 'private') {
+            console.log('👁️ Marking messages as read in chat:', chat.id);
+            
+            // Отправляем события для каждого непрочитанного сообщения
+            msgs.forEach(msg => {
+                if (msg.senderId !== currentUser.id && !msg.read) {
+                    socket.emit('message:delivered', {
+                        messageId: msg.id,
+                        chatId: chat.id
+                    });
+                    
+                    socket.emit('message:read', {
+                        messageId: msg.id,
+                        chatId: chat.id
+                    });
+                }
+            });
+        }
+        
+        // Scroll to bottom
+        setTimeout(() => {
+            const container = document.getElementById('messagesContainer');
+            if (container) {
+                container.scrollTop = container.scrollHeight;
+            }
+        }, 100);
+    } catch (error) {
+        console.error('❌ Error loading messages:', error);
+        console.error('Error details:', error.message);
+        
+        // Показываем пустой чат вместо ошибки
+        console.log('Showing empty chat due to error');
+        renderMessages([]);
+    }
+    
+    // Update active chat in sidebar
     document.querySelectorAll('.chat-item').forEach(item => {
         item.classList.toggle('active', item.dataset.chatId === chat.id);
     });
     
-    const chatHeader = document.querySelector('.chat-header');
-    const chatAvatar = chatHeader.querySelector('.chat-avatar');
-    
-    if (chat.type === 'group') {
-        // Проверяем наличие participants и его тип
-        const participantCount = Array.isArray(chat.participants) ? chat.participants.length : 0;
-        
-        document.getElementById('chatName').textContent = chat.name || 'Групповой чат';
-        document.getElementById('chatStatus').textContent = `${participantCount} ${getParticipantWord(participantCount)}`;
-        
-        chatAvatar.style.background = generateGradient(chat.name || 'Group');
-        chatAvatar.innerHTML = '<span class="material-icons">group</span>';
-        
-        chatHeader.setAttribute('data-chat-type', 'group');
-        
-    } else {
-        // ИСПРАВЛЕНО: Правильное отображение аватара для приватного чата
-        const participants = Array.isArray(chat.participants) ? chat.participants : [];
-        const otherParticipant = users.find(u => participants.includes(u.id) && u.id !== currentUser.id);
-        const chatName = otherParticipant?.name || 'Чат';
-        const isOnline = otherParticipant && onlineUsers.has(otherParticipant.id);
-        
-        document.getElementById('chatName').textContent = chatName;
-        document.getElementById('chatStatus').textContent = isOnline ? 'В сети' : 'Не в сети';
-        
-        // ИСПРАВЛЕНО: Показываем аватар или инициалы
-        if (otherParticipant) {
-            if (otherParticipant.avatar) {
-                chatAvatar.style.background = 'transparent';
-                chatAvatar.innerHTML = `<img src="${otherParticipant.avatar}" alt="${chatName}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
-            } else {
-                chatAvatar.style.background = generateGradient(chatName);
-                chatAvatar.innerHTML = getUserInitials(chatName);
-            }
-        } else {
-            chatAvatar.style.background = generateGradient(chatName);
-            chatAvatar.innerHTML = '<span class="material-icons">person</span>';
-        }
-        
-        chatHeader.removeAttribute('data-chat-type');
+    // Join socket room for this chat
+    if (socket) {
+        console.log('🔌 Joining socket room:', chat.id);
+        socket.emit('chat:join', chat.id);
     }
-    
-    await loadMessages(chat.id);
-    
-    socket.emit('messages:read', chat.id);
-    
-    document.getElementById('messageTextarea').focus();
-    
-    // Включаем кнопки звонков
-    const audioCallBtn = document.getElementById('audioCallBtn');
-    const videoCallBtn = document.getElementById('videoCallBtn');
-    if (audioCallBtn) audioCallBtn.disabled = false;
-    if (videoCallBtn) videoCallBtn.disabled = false;
 }
 
 function getParticipantWord(count) {
@@ -875,6 +1227,8 @@ function formatFileSize(bytes) {
     return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
 }
 
+
+
 function renderMessages(messages) {
     const messagesList = document.getElementById('messagesList');
     const isGroupChat = currentChat && currentChat.type === 'group';
@@ -884,13 +1238,9 @@ function renderMessages(messages) {
         const sender = users.find(u => u.id === msg.senderId);
         const isSystem = msg.type === 'system';
         
-        // Рендерим файлы если они есть
         const filesHtml = msg.metadata && msg.metadata.files ? renderMessageFiles(msg.metadata.files) : '';
-        
-        // ИСПРАВЛЕНО: Не показываем пустой bubble если есть только файлы
         const hasText = msg.text && msg.text.trim().length > 0;
         
-        // ИСПРАВЛЕНО: Аватар сообщения
         let messageAvatarHtml = '';
         if (!isSent && !isSystem && sender) {
             if (sender.avatar) {
@@ -908,8 +1258,39 @@ function renderMessages(messages) {
             }
         }
         
+        // ИСПРАВЛЕНО: Проверяем отложенные обновления
+        let statusIcon = '';
+        if (isSent && currentChat && currentChat.type === 'private') {
+            // Проверяем есть ли отложенное обновление
+            const pendingUpdate = pendingStatusUpdates.get(msg.id);
+            
+            if (pendingUpdate) {
+                console.log('📦 Found pending update for message:', msg.id, pendingUpdate);
+                
+                if (pendingUpdate.read) {
+                    statusIcon = '<span class="message-status read">✓✓</span>';
+                    msg.read = true; // Обновляем объект
+                } else if (pendingUpdate.delivered) {
+                    statusIcon = '<span class="message-status delivered">✓✓</span>';
+                    msg.delivered = true; // Обновляем объект
+                }
+                
+                // Удаляем из очереди
+                pendingStatusUpdates.delete(msg.id);
+            } else {
+                // Используем статус из сообщения
+                if (msg.read) {
+                    statusIcon = '<span class="message-status read">✓✓</span>';
+                } else if (msg.delivered) {
+                    statusIcon = '<span class="message-status delivered">✓✓</span>';
+                } else {
+                    statusIcon = '<span class="message-status sent">✓</span>';
+                }
+            }
+        }
+        
         return `
-            <div class="message ${isSent ? 'sent' : 'received'} ${isSystem ? 'system' : ''}">
+            <div class="message ${isSent ? 'sent' : 'received'} ${isSystem ? 'system' : ''}" data-message-id="${msg.id}">
                 ${messageAvatarHtml}
                 <div class="message-content">
                     ${isGroupChat && !isSent && !isSystem ? `
@@ -917,7 +1298,10 @@ function renderMessages(messages) {
                     ` : ''}
                     ${filesHtml}
                     ${hasText ? `<div class="message-bubble ${isSystem ? 'system-bubble' : ''}">${msg.text}</div>` : ''}
-                    <div class="message-time" data-timestamp="${msg.createdAt}">${formatTime(msg.createdAt)}</div>
+                    <div class="message-time-status">
+                        <span class="message-time" data-timestamp="${msg.createdAt}">${formatTime(msg.createdAt)}</span>
+                        ${statusIcon}
+                    </div>
                 </div>
             </div>
         `;
@@ -931,6 +1315,10 @@ function renderMessages(messages) {
     }
 }
 
+
+    
+
+
 function handleNewMessage(message) {
     console.log('New message received:', message);
     
@@ -942,11 +1330,8 @@ function handleNewMessage(message) {
         const isGroupChat = currentChat.type === 'group';
         
         const filesHtml = message.metadata && message.metadata.files ? renderMessageFiles(message.metadata.files) : '';
-        
-        // ИСПРАВЛЕНО: Не показываем пустой bubble если есть только файлы
         const hasText = message.text && message.text.trim().length > 0;
         
-        // ИСПРАВЛЕНО: Аватар сообщения
         let messageAvatarHtml = '';
         if (!isSent && !isSystem && sender) {
             if (sender.avatar) {
@@ -964,8 +1349,34 @@ function handleNewMessage(message) {
             }
         }
         
+        // ИСПРАВЛЕНО: Проверяем отложенные обновления
+        let statusIcon = '';
+        if (isSent && currentChat.type === 'private') {
+            const pendingUpdate = pendingStatusUpdates.get(message.id);
+            
+            if (pendingUpdate) {
+                console.log('📦 Applying pending update to new message:', message.id);
+                
+                if (pendingUpdate.read) {
+                    statusIcon = '<span class="message-status read">✓✓</span>';
+                } else if (pendingUpdate.delivered) {
+                    statusIcon = '<span class="message-status delivered">✓✓</span>';
+                }
+                
+                pendingStatusUpdates.delete(message.id);
+            } else {
+                if (message.read) {
+                    statusIcon = '<span class="message-status read">✓✓</span>';
+                } else if (message.delivered) {
+                    statusIcon = '<span class="message-status delivered">✓✓</span>';
+                } else {
+                    statusIcon = '<span class="message-status sent">✓</span>';
+                }
+            }
+        }
+        
         const messageHtml = `
-            <div class="message ${isSent ? 'sent' : 'received'} ${isSystem ? 'system' : ''}">
+            <div class="message ${isSent ? 'sent' : 'received'} ${isSystem ? 'system' : ''}" data-message-id="${message.id}">
                 ${messageAvatarHtml}
                 <div class="message-content">
                     ${isGroupChat && !isSent && !isSystem ? `
@@ -973,7 +1384,10 @@ function handleNewMessage(message) {
                     ` : ''}
                     ${filesHtml}
                     ${hasText ? `<div class="message-bubble ${isSystem ? 'system-bubble' : ''}">${message.text}</div>` : ''}
-                    <div class="message-time" data-timestamp="${message.createdAt}">${formatTime(message.createdAt)}</div>
+                    <div class="message-time-status">
+                        <span class="message-time" data-timestamp="${message.createdAt}">${formatTime(message.createdAt)}</span>
+                        ${statusIcon}
+                    </div>
                 </div>
             </div>
         `;
@@ -987,9 +1401,32 @@ function handleNewMessage(message) {
         const container = document.getElementById('messagesContainer');
         container.scrollTop = container.scrollHeight;
         
-        socket.emit('messages:read', currentChat.id);
+        // Если это входящее сообщение в ЛИЧНОМ чате - отправляем статусы
+        if (!isSent && currentChat.type === 'private') {
+            console.log('📨 Received message in private chat, sending status updates');
+            
+            socket.emit('message:delivered', {
+                messageId: message.id,
+                chatId: currentChat.id
+            });
+            
+            socket.emit('message:read', {
+                messageId: message.id,
+                chatId: currentChat.id
+            });
+        }
+    } else {
+        // Сообщение пришло в другой чат
+        if (message.senderId !== currentUser.id) {
+            console.log('📨 Received message in background chat, sending delivered status');
+            socket.emit('message:delivered', {
+                messageId: message.id,
+                chatId: message.chatId
+            });
+        }
     }
     
+    // Обновляем список чатов
     const chat = chats.find(c => c.id === message.chatId);
     if (chat) {
         chat.lastMessage = message;
@@ -998,149 +1435,107 @@ function handleNewMessage(message) {
         }
         renderChats();
     }
-    
-    if (message.type === 'system' && message.metadata?.action === 'start' && message.metadata?.conferenceId) {
-        const conferenceId = message.metadata.conferenceId;
-        console.log('Conference start detected:', conferenceId);
-        
-        if (message.senderId !== currentUser.id) {
-            const sender = users.find(u => u.id === message.senderId);
-            showIncomingCallModal(sender?.name || 'Пользователь', conferenceId, message.chatId);
-        }
-    }
-    
-    if (message.senderId !== currentUser.id && (!currentChat || currentChat.id !== message.chatId)) {
-        const sender = users.find(u => u.id === message.senderId);
-        showNotification(sender?.name || 'Новое сообщение', message.text);
-    }
 }
 
 function sendMessage() {
-    console.log('=== SEND MESSAGE FUNCTION CALLED ===');
-    console.trace('Call stack'); // Показывает откуда вызвана функция
-    
     const textarea = document.getElementById('messageTextarea');
-    console.log('Textarea element:', textarea);
+    const messageText = textarea ? textarea.value.trim() : '';
     
-    if (!textarea) {
-        console.error('Textarea not found!');
-        return;
-    }
-    
-    const text = textarea.value.trim();
-    
-    console.log('Textarea value:', textarea.value);
-    console.log('Trimmed text:', text);
-    console.log('Text length:', text.length);
-    
-    if (!text) {
-        console.log('Empty message, ignoring');
+    console.log('📤 Sending message:', messageText);
+
+    if (!messageText && selectedFiles.length === 0) {
+        console.log('⚠️ Empty message');
         return;
     }
 
-    console.log('currentChat:', currentChat);
-    console.log('pendingChatUser:', pendingChatUser);
-    console.log('Message text:', text);
+    if (!currentChat) {
+        console.error('❌ No chat selected');
+        showToast('Выберите чат', 'error');
+        return;
+    }
 
-    // ИСПРАВЛЕНИЕ: Если есть pendingChatUser (новый диалог), создаем чат
-    if (pendingChatUser && !currentChat) {
-        console.log('Creating new chat for pending user:', pendingChatUser.id);
-        
-        // Блокируем textarea и кнопку отправки
-        textarea.disabled = true;
-        const sendBtn = document.getElementById('sendBtn');
-        if (sendBtn) {
-            console.log('Send button found, disabling');
-            sendBtn.disabled = true;
-        } else {
-            console.warn('Send button not found!');
-        }
-        
-        const originalText = text;
-        textarea.value = 'Отправка...';
-        
-        createChatForContact(pendingChatUser)
-            .then(chat => {
-                console.log('Chat created successfully:', chat.id);
-                console.log('Sending message to new chat...');
-                
-                // Отправляем сообщение
-                socket.emit('message:send', {
-                    chatId: chat.id,
-                    text: originalText,
-                    type: 'text'
-                });
-                
-                console.log('Message emitted via socket');
-                
-                // Очищаем поля
-                textarea.value = '';
-                textarea.style.height = 'auto';
-                textarea.disabled = false;
-                if (sendBtn) sendBtn.disabled = false;
-                textarea.focus();
-                
-                pendingChatUser = null;
-                
-                console.log('Message sent successfully to new chat');
-            })
-            .catch(error => {
-                console.error('Failed to create chat:', error);
-                showToast('Ошибка создания чата', 'error');
-                
-                // Восстанавливаем текст при ошибке
-                textarea.value = originalText;
-                textarea.disabled = false;
-                if (sendBtn) sendBtn.disabled = false;
-                textarea.focus();
-            });
-        
-        return;
-    }
-    
-    // Проверяем наличие активного чата
-    if (!currentChat || !currentChat.id) {
-        console.error('No current chat to send message to');
-        console.log('currentChat state:', currentChat);
-        console.log('pendingChatUser state:', pendingChatUser);
-        showToast('Ошибка: выберите чат или пользователь', 'error');
-        return;
-    }
-    
-    console.log('Sending message to existing chat:', currentChat.id);
-    
-    socket.emit('message:send', {
+    const messageData = {
         chatId: currentChat.id,
-        text,
-        type: 'text'
-    });
+        text: messageText,
+        senderId: currentUser.id,
+        senderName: currentUser.name,
+        tempId: tempMessageId, // НОВОЕ: Передаем временный ID
+        files: selectedFiles.map(file => ({
+            name: file.name,
+            size: file.size,
+            url: file.url,
+            type: file.type
+        }))
+    };
+
+    console.log('Sending message data:', messageData);
+
+    // НОВОЕ: Создаем временное сообщение в UI с начальным статусом
+    const tempMessageId = `temp_${Date.now()}`;
+    const messagesList = document.getElementById('messagesList');
     
-    console.log('Message emitted to existing chat');
+    const filesHtml = selectedFiles.length > 0 ? renderMessageFiles(selectedFiles) : '';
+    const hasText = messageText && messageText.trim().length > 0;
     
-    textarea.value = '';
-    textarea.style.height = 'auto';
+    // Временное сообщение с одной галочкой (отправлено)
+    const tempMessageHtml = `
+        <div class="message sent" data-message-id="${tempMessageId}">
+            <div class="message-content">
+                ${filesHtml}
+                ${hasText ? `<div class="message-bubble">${messageText}</div>` : ''}
+                <div class="message-time-status">
+                    <span class="message-time" data-timestamp="${new Date().toISOString()}">${formatTime(new Date())}</span>
+                    <span class="message-status sent">✓</span>
+                </div>
+            </div>
+        </div>
+    `;
     
-    if (currentChat && currentChat.id) {
-        socket.emit('typing:stop', currentChat.id);
+    messagesList.insertAdjacentHTML('beforeend', tempMessageHtml);
+    
+    const container = document.getElementById('messagesContainer');
+    container.scrollTop = container.scrollHeight;
+
+    // Emit to server
+    socket.emit('message:send', messageData);
+
+    // Clear input
+    if (textarea) {
+        textarea.value = '';
+        textarea.style.height = 'auto';
+    }
+    
+    // Clear files
+    selectedFiles = [];
+    const filePreview = document.getElementById('filePreview');
+    if (filePreview) {
+        filePreview.style.display = 'none';
     }
 }
 
 // ==================== Data Loading ====================
 async function loadUsers() {
     try {
+        console.log('📥 Loading users...');
         users = await apiCall('/api/users');
+        console.log('✅ Loaded', users.length, 'users');
         renderContacts();
+        
+        // НОВОЕ: Перерисовываем чаты после загрузки пользователей
+        renderChats();
     } catch (error) {
-        console.error('Error loading users:', error);
+        console.error('❌ Error loading users:', error);
     }
 }
 
 async function loadChats() {
     try {
+        console.log('📥 Loading chats...');
         chats = await apiCall('/api/chats');
+        console.log('✅ Loaded', chats.length, 'chats');
         renderChats();
     } catch (error) {
-        console.error('Error loading chats:', error);
+        console.error('❌ Error loading chats:', error);
     }
 }
 
@@ -1256,8 +1651,114 @@ function stopRingtone() {
 
 // ==================== UI Helpers ====================
 function updateOnlineStatus() {
-    renderChats();
+    console.log('🔄 Updating online status, online users:', onlineUsers.size);
+    
+    // 1. Обновляем в списке контактов
     renderContacts();
+    
+    // 2. Обновляем в списке чатов
+    renderChats();
+    
+    // 3. Обновляем в открытом чате (заголовок)
+    const chatStatus = document.getElementById('chatStatus');
+    if (chatStatus) {
+        let userId = null;
+        let isOnline = false;
+        
+        // Если открыт существующий чат
+        if (currentChat && currentChat.type === 'private') {
+            userId = currentChat.participants.find(id => id !== currentUser.id);
+            isOnline = userId ? onlineUsers.has(userId) : false;
+        }
+        // Если окно создания нового чата
+        else if (pendingChatUser && pendingChatUser.id) {
+            userId = pendingChatUser.id;
+            isOnline = onlineUsers.has(userId);
+        }
+        
+        if (userId) {
+            chatStatus.textContent = isOnline ? 'В сети' : 'Не в сети';
+            chatStatus.className = isOnline ? 'online' : '';
+            console.log('✅ Updated chat header status in updateOnlineStatus:', userId, '→', isOnline);
+        }
+    }
+    
+    // 4. Обновляем в панели информации о чате (если открыта)
+    const chatInfoPanel = document.getElementById('chatInfoPanel');
+    if (chatInfoPanel && chatInfoPanel.classList.contains('open')) {
+        updateChatInfoOnlineStatus();
+    }
+    
+    // 5. Обновляем в модальных окнах создания чата (если открыты)
+    updateNewChatModalOnlineStatus();
+}
+
+
+function updateChatInfoOnlineStatus() {
+    if (!currentChat) return;
+    
+    const chatInfoStatus = document.getElementById('chatInfoStatus');
+    const chatMembersList = document.getElementById('chatMembersList');
+    
+    if (currentChat.type === 'private') {
+        const otherUserId = currentChat.participants.find(id => id !== currentUser.id);
+        const isOnline = onlineUsers.has(otherUserId);
+        
+        if (chatInfoStatus) {
+            chatInfoStatus.textContent = isOnline ? 'в сети' : 'не в сети';
+            chatInfoStatus.className = isOnline ? 'online' : '';
+        }
+    } else if (currentChat.type === 'group' || currentChat.type === 'task') {
+        // Обновляем статусы участников в списке
+        if (chatMembersList) {
+            const participants = Array.isArray(currentChat.participants) ? currentChat.participants : [];
+            const members = participants
+                .map(userId => users.find(u => u.id === userId))
+                .filter(u => u);
+            
+            chatMembersList.innerHTML = members.map(member => {
+                const isOnline = onlineUsers.has(member.id);
+                const isSelf = member.id === currentUser.id;
+                
+                let memberAvatarContent;
+                if (member.avatar) {
+                    memberAvatarContent = `<img src="${member.avatar}" alt="${member.name}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+                } else {
+                    memberAvatarContent = getUserInitials(member.name);
+                }
+                
+                const avatarStyle = member.avatar ? 'background: transparent;' : `background: ${generateGradient(member.name)};`;
+                
+                return `
+                    <div class="member-item">
+                        <div class="member-avatar" style="${avatarStyle}">
+                            ${memberAvatarContent}
+                        </div>
+                        <div class="member-info">
+                            <div class="member-name">${member.name}${isSelf ? ' (Вы)' : ''}</div>
+                            <div class="member-status ${isOnline ? 'online' : ''}">
+                                ${isOnline ? 'в сети' : 'не в сети'}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    }
+}
+
+
+function updateNewChatModalOnlineStatus() {
+    // Обновляем статусы в модальном окне создания чата
+    const usersList = document.getElementById('usersList');
+    if (usersList && usersList.children.length > 0) {
+        renderUsersList();
+    }
+    
+    const groupUsersList = document.getElementById('groupUsersList');
+    if (groupUsersList && groupUsersList.children.length > 0) {
+        renderUsersList();
+    }
 }
 
 // ==================== Render Users List for New Chat Modal ====================
@@ -1457,6 +1958,9 @@ function openChatInfo(chat) {
         return;
     }
     
+    console.log('Opening chat info for:', chat);
+    console.log('Chat participants:', chat.participants);
+    
     const chatInfoAvatar = document.getElementById('chatInfoAvatar');
     const chatInfoName = document.getElementById('chatInfoName');
     const chatInfoStatus = document.getElementById('chatInfoStatus');
@@ -1465,10 +1969,66 @@ function openChatInfo(chat) {
     
     const participants = Array.isArray(chat.participants) ? chat.participants : [];
     
-    if (chat.type === 'group') {
-        chatInfoAvatar.style.background = generateGradient(chat.name || 'Group');
+    console.log('Processing participants:', participants);
+    
+    if (chat.type === 'task') {
+        // ЧАТ ЗАДАЧИ
+        chatInfoAvatar.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+        chatInfoAvatar.innerHTML = '<span class="material-icons">task_alt</span>';
+        chatInfoName.textContent = chat.name || 'Чат задачи';
+        chatInfoStatus.textContent = `${participants.length} ${getParticipantWord(participants.length)}`;
+        
+        chatMembersSection.style.display = 'block';
+        
+        // Получаем всех участников
+        const members = participants
+            .map(userId => {
+                const user = users.find(u => u.id === userId);
+                console.log('Looking for user:', userId, 'Found:', user);
+                return user;
+            })
+            .filter(u => u); // Убираем undefined
+        
+        console.log('Members found:', members.length);
+        
+        if (members.length === 0) {
+            chatMembersList.innerHTML = '<p style="padding: 20px; text-align: center; color: var(--text-secondary);">Участники не найдены</p>';
+            return;
+        }
+        
+        chatMembersList.innerHTML = members.map(member => {
+            const isOnline = onlineUsers.has(member.id);
+            const isSelf = member.id === currentUser.id;
+            
+            let memberAvatarContent;
+            if (member.avatar) {
+                memberAvatarContent = `<img src="${member.avatar}" alt="${member.name}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+            } else {
+                memberAvatarContent = getUserInitials(member.name);
+            }
+            
+            const avatarStyle = member.avatar ? 'background: transparent;' : `background: ${generateGradient(member.name)};`;
+            
+            return `
+                <div class="member-item">
+                    <div class="member-avatar" style="${avatarStyle}">
+                        ${memberAvatarContent}
+                    </div>
+                    <div class="member-info">
+                        <div class="member-name">${member.name}${isSelf ? ' (Вы)' : ''}</div>
+                        <div class="member-status ${isOnline ? 'online' : ''}">
+                            ${isOnline ? 'в сети' : 'не в сети'}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+    } else if (chat.type === 'group') {
+        // ГРУППОВОЙ ЧАТ
+        chatInfoAvatar.style.background = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
         chatInfoAvatar.innerHTML = '<span class="material-icons">group</span>';
-        chatInfoName.textContent = chat.name || 'Групповой чат';
+        chatInfoName.textContent = chat.name || 'Группа';
         chatInfoStatus.textContent = `${participants.length} ${getParticipantWord(participants.length)}`;
         
         chatMembersSection.style.display = 'block';
@@ -1481,7 +2041,6 @@ function openChatInfo(chat) {
             const isOnline = onlineUsers.has(member.id);
             const isSelf = member.id === currentUser.id;
             
-            // ИСПРАВЛЕНО: Показываем аватар участника
             let memberAvatarContent;
             if (member.avatar) {
                 memberAvatarContent = `<img src="${member.avatar}" alt="${member.name}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
@@ -1507,12 +2066,12 @@ function openChatInfo(chat) {
         }).join('');
         
     } else {
+        // ЛИЧНЫЙ ЧАТ
         const otherParticipant = users.find(u => 
             participants.includes(u.id) && u.id !== currentUser.id
         );
         
         if (otherParticipant) {
-            // ИСПРАВЛЕНО: Показываем аватар пользователя
             if (otherParticipant.avatar) {
                 chatInfoAvatar.style.background = 'transparent';
                 chatInfoAvatar.innerHTML = `<img src="${otherParticipant.avatar}" alt="${otherParticipant.name}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
@@ -1735,6 +2294,54 @@ textarea.addEventListener('keydown', (e) => {
     });
 }
 
+function setupTasksTabHandlers() {
+    // Переключение между чатами, задачами и админкой
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tab = btn.dataset.tab;
+            
+            // Убираем активный класс со всех вкладок
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            // Скрываем все области
+            document.getElementById('chatArea').style.display = 'none';
+            document.getElementById('tasksArea').style.display = 'none';
+            document.getElementById('adminArea').style.display = 'none';
+            document.getElementById('welcomeScreen').style.display = 'none';
+            
+            // Скрываем все tab-content в sidebar
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            if (tab === 'tasks') {
+                document.getElementById('tasksArea').style.display = 'flex';
+                document.getElementById('tasksTab').classList.add('active');
+            } else if (tab === 'admin') {
+                console.log('Opening admin panel...');
+                document.getElementById('adminArea').style.display = 'flex';
+                
+                // Загружаем данные админки
+                if (typeof loadAdminData === 'function') {
+                    loadAdminData();
+                } else {
+                    console.error('loadAdminData function not found');
+                }
+            } else if (tab === 'chats') {
+                document.getElementById('chatArea').style.display = 'flex';
+                document.getElementById('chatsTab').classList.add('active');
+                if (!currentChat) {
+                    document.getElementById('welcomeScreen').style.display = 'flex';
+                }
+            } else if (tab === 'contacts') {
+                document.getElementById('chatArea').style.display = 'flex';
+                document.getElementById('contactsTab').classList.add('active');
+            }
+        });
+    });
+}
+
 // ==================== Initialization ====================
 function initApp() {
     document.getElementById('authScreen').style.display = 'none';
@@ -1742,7 +2349,7 @@ function initApp() {
     
     document.getElementById('currentUserName').textContent = currentUser.name;
     
-    // ИСПРАВЛЕНО: Показываем аватар текущего пользователя
+    // Аватар текущего пользователя
     const avatar = document.getElementById('currentUserAvatar');
     if (currentUser.avatar) {
         avatar.style.background = 'transparent';
@@ -1751,11 +2358,33 @@ function initApp() {
         avatar.style.background = generateGradient(currentUser.name);
         avatar.innerHTML = getUserInitials(currentUser.name);
     }
+    console.log(currentUser);
+    // Показать кнопку админки если пользователь администратор
+    if (currentUser.isAdmin) {
+        const adminTab = document.getElementById('adminTab');
+        if (adminTab) {
+            adminTab.style.display = 'flex';
+        }
+    }
     
     initSocket();
     setupEventListeners();
+    setupTasksTabHandlers(); 
     
+    // ВАЖНО: Загружаем задачи и отделы после инициализации socket
     setTimeout(() => {
+        if (typeof loadTasks === 'function') {
+            loadTasks();
+        }
+        if (typeof loadDepartments === 'function') {
+            loadDepartments();
+        }
+        
+        // Инициализация socket listeners для задач
+        if (typeof setupTasksSocketListeners === 'function') {
+            setupTasksSocketListeners();
+        }
+        
         if (typeof initModals === 'function') {
             initModals();
         }
@@ -1774,10 +2403,105 @@ function initApp() {
         if (typeof setupAutoScroll === 'function') {
             setupAutoScroll();
         }
-    }, 200);
+    }, 500); // Увеличил задержку чтобы socket успел подключиться
     
     setTimeout(requestNotificationPermission, 2000);
 }
+
+
+
+// ==================== SOCKET LISTENERS ====================
+
+// Будут добавлены после подключения socket в app.js
+function setupTasksSocketListeners() {
+    if (typeof socket === 'undefined' || !socket) {
+        console.warn('Socket not available for tasks module');
+        return;
+    }
+    
+    socket.on('task:created', (task) => {
+        console.log('📨 Received task:created event:', task);
+        
+        try {
+            // Проверяем что задача еще не добавлена
+            const exists = tasks.find(t => t.id === task.id);
+            if (!exists) {
+                tasks.push(task);
+                console.log('✅ Task added to local array');
+            } else {
+                console.log('⚠️ Task already exists, skipping');
+            }
+            
+            renderTasks();
+            
+            // Показываем уведомление только если задачу создал не текущий пользователь
+            if (task.creatorId !== currentUser.id) {
+                showToast('Новая задача создана: ' + task.title, 'info');
+            }
+        } catch (error) {
+            console.error('❌ Error handling task:created:', error);
+        }
+    });
+    
+    socket.on('task:updated', (updatedTask) => {
+        console.log('📨 Received task:updated event:', updatedTask);
+        
+        try {
+            const index = tasks.findIndex(t => t.id === updatedTask.id);
+            if (index !== -1) {
+                tasks[index] = updatedTask;
+                renderTasks();
+                console.log('✅ Task updated in local array');
+            } else {
+                console.warn('⚠️ Updated task not found in local array');
+            }
+        } catch (error) {
+            console.error('❌ Error handling task:updated:', error);
+        }
+    });
+    
+    socket.on('task:deleted', (taskId) => {
+        console.log('📨 Received task:deleted event:', taskId);
+        
+        try {
+            const oldLength = tasks.length;
+            tasks = tasks.filter(t => t.id !== taskId);
+            
+            if (tasks.length < oldLength) {
+                renderTasks();
+                console.log('✅ Task removed from local array');
+            } else {
+                console.warn('⚠️ Deleted task not found in local array');
+            }
+        } catch (error) {
+            console.error('❌ Error handling task:deleted:', error);
+        }
+    });
+    
+    socket.on('task:comment', (data) => {
+        console.log('📨 Received task:comment event:', data);
+        
+        try {
+            const task = tasks.find(t => t.id === data.taskId);
+            if (task) {
+                task.commentsCount = (task.commentsCount || 0) + 1;
+                if (data.userId !== currentUser.id) {
+                    task.hasUnread = true;
+                }
+                renderTasks();
+                console.log('✅ Task comments updated');
+            }
+        } catch (error) {
+            console.error('❌ Error handling task:comment:', error);
+        }
+    });
+    
+    console.log('✅ Tasks socket listeners setup');
+}
+
+
+
+
 
 // ==================== App Start ====================
 document.addEventListener('DOMContentLoaded', () => {
@@ -1797,6 +2521,8 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
         setupEventListeners();
     }
+     initSidebarToggle();
+     addTooltipsToSidebar();
 });
 
 

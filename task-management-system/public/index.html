@@ -11,7 +11,7 @@
 <body>
     <!-- Login Screen -->
     <div id="authScreen" class="auth-screen">
-        <div class="auth-container">
+        <div class="auth-container" id="authContainer">
             <div class="auth-card">
                 <div class="auth-header">
                     <div class="logo">
@@ -66,6 +66,9 @@
     <div id="mainApp" class="main-app" style="display: none;">
         <!-- Sidebar -->
         <aside class="sidebar">
+            <button class="sidebar-toggle-btn" id="sidebarToggleBtn" title="Свернуть панель">
+        <span class="material-icons">chevron_left</span>
+    </button>
             <div class="sidebar-header">
                 <div class="user-profile" id="openProfileBtn" style="cursor: pointer;">
                     <div class="user-avatar" id="currentUserAvatar">
@@ -82,15 +85,24 @@
             </div>
 
             <div class="sidebar-tabs">
-                <button class="tab-btn active" data-tab="chats">
-                    <span class="material-icons">chat</span>
-                    <span>Чаты</span>
-                </button>
-                <button class="tab-btn" data-tab="contacts">
-                    <span class="material-icons">contacts</span>
-                    <span>Контакты</span>
-                </button>
-            </div>
+    <button class="tab-btn active" data-tab="chats">
+        <span class="material-icons">chat</span>
+        <span>Чаты</span>
+    </button>
+    <button class="tab-btn" data-tab="tasks">
+        <span class="material-icons">task_alt</span>
+        <span>Задачи</span>
+    </button>
+    <button class="tab-btn" data-tab="contacts">
+        <span class="material-icons">contacts</span>
+        <span>Контакты</span>
+    </button>
+    <!-- Admin tab - visible only for admins -->
+    <button class="tab-btn" data-tab="admin" id="adminTab" style="display: none;">
+        <span class="material-icons">admin_panel_settings</span>
+        <span>Админ</span>
+    </button>
+</div>
 
             <div class="sidebar-search">
                 <span class="material-icons">search</span>
@@ -104,11 +116,37 @@
                 <div id="contactsTab" class="tab-content">
                     <div id="contactsList" class="contacts-list"></div>
                 </div>
+                <div id="tasksTab" class="tab-content">
+    <div class="tasks-view-header">
+        <div class="view-toggle">
+            <button class="view-toggle-btn active" data-view="board">
+                <span class="material-icons">view_kanban</span>
+                Доска
+            </button>
+            <button class="view-toggle-btn" data-view="list">
+                <span class="material-icons">view_list</span>
+                Список
+            </button>
+        </div>
+        <button class="icon-btn" id="createTaskBtnSidebar">
+            <span class="material-icons">add</span>
+        </button>
+    </div>
+    
+    <div class="tasks-filters-bar">
+        <button class="filter-btn active" data-filter="all">Все</button>
+        <button class="filter-btn" data-filter="my">Мои</button>
+        <button class="filter-btn" data-filter="created">Созданные</button>
+        <button class="filter-btn" data-filter="watching">Наблюдаю</button>
+    </div>
+    
+    <div id="tasksViewContainer"></div>
+</div>
             </div>
         </aside>
 
         <!-- Chat Area -->
-        <main class="chat-area">
+        <div id="chatArea" class="chat-area">
             <div id="welcomeScreen" class="welcome-screen">
                 <div class="welcome-content">
                     <span class="material-icons">forum</span>
@@ -263,7 +301,166 @@
                     </div>
                 </div>
             </div>
-        </main>
+        </div>
+
+
+
+        <!-- Tasks Area -->
+<div id="tasksArea" class="tasks-container" style="display: none;">
+    <div class="tasks-header">
+        <div class="tasks-header-left">
+            <h2>Задачи</h2>
+            <div class="view-toggle">
+                <button class="view-toggle-btn active" data-view="board">
+                    <span class="material-icons">view_kanban</span>
+                    Доска
+                </button>
+                <button class="view-toggle-btn" data-view="list">
+                    <span class="material-icons">view_list</span>
+                    Список
+                </button>
+            </div>
+        </div>
+        
+        <div class="tasks-header-right">
+            <div class="tasks-filters">
+                <button class="filter-btn active" data-filter="all">Все</button>
+                <button class="filter-btn" data-filter="my">Мои задачи</button>
+                <button class="filter-btn" data-filter="created">Созданные мной</button>
+                <button class="filter-btn" data-filter="watching">Наблюдаю</button>
+            </div>
+            <button class="create-task-btn" id="createTaskBtn">
+                <span class="material-icons">add</span>
+                Новая задача
+            </button>
+        </div>
+    </div>
+    
+    <div id="kanbanBoard" class="kanban-board"></div>
+    <div id="tasksList" class="tasks-list" style="display: none;"></div>
+</div>
+
+<!-- Admin Area -->
+<div id="adminArea" class="admin-container" style="display: none;">
+    <aside class="admin-sidebar">
+        <div class="admin-sidebar-header">
+            <h2>
+                <span class="material-icons">admin_panel_settings</span>
+                Администрирование
+            </h2>
+        </div>
+        
+        <nav class="admin-nav">
+            <div class="admin-nav-item active" data-view="dashboard">
+                <span class="material-icons">dashboard</span>
+                <span>Панель управления</span>
+            </div>
+            <div class="admin-nav-item" data-view="users">
+                <span class="material-icons">people</span>
+                <span>Пользователи</span>
+            </div>
+            <div class="admin-nav-item" data-view="departments">
+                <span class="material-icons">business</span>
+                <span>Отделы</span>
+            </div>
+            <div class="admin-nav-item" data-view="tasks">
+                <span class="material-icons">task_alt</span>
+                <span>Задачи</span>
+            </div>
+        </nav>
+    </aside>
+    
+    <main class="admin-main">
+        <div class="admin-content" id="adminContent">
+            <!-- Content will be rendered here -->
+        </div>
+    </main>
+</div>
+
+<!-- Admin User Modal -->
+<div id="adminUserModal" class="modal">
+    <div class="modal-content admin-modal-content">
+        <div class="modal-header">
+            <h2 id="adminUserModalTitle">Добавить пользователя</h2>
+            <button class="icon-btn" id="closeAdminUserModalBtn">
+                <span class="material-icons">close</span>
+            </button>
+        </div>
+        
+        <div class="modal-body">
+            <form id="adminUserForm">
+                <input type="hidden" id="adminUserId">
+                
+                <div class="admin-form-group">
+                    <label for="adminUserName">Полное имя *</label>
+                    <input type="text" id="adminUserName" required>
+                </div>
+                
+                <div class="admin-form-group">
+                    <label for="adminUserEmail">Email *</label>
+                    <input type="email" id="adminUserEmail" required>
+                </div>
+                
+                <div class="admin-form-group">
+                    <label for="adminUserUsername">Имя пользователя *</label>
+                    <input type="text" id="adminUserUsername" required>
+                </div>
+                
+                <div class="admin-form-group">
+                    <label for="adminUserPassword">Пароль</label>
+                    <input type="password" id="adminUserPassword">
+                    <small style="color: var(--text-secondary); font-size: 12px;">Оставьте пустым, чтобы не менять</small>
+                </div>
+                
+                <div class="admin-form-group">
+                    <label for="adminUserRole">Роль</label>
+                    <select id="adminUserRole">
+                        <option value="user">Пользователь</option>
+                        <option value="admin">Администратор</option>
+                    </select>
+                </div>
+            </form>
+        </div>
+        
+        <div class="modal-footer">
+            <button class="btn-secondary" id="cancelAdminUserBtn">Отмена</button>
+            <button class="btn-primary" id="saveAdminUserBtn">Сохранить</button>
+        </div>
+    </div>
+</div>
+
+<!-- Admin Department Modal -->
+<div id="adminDepartmentModal" class="modal">
+    <div class="modal-content admin-modal-content">
+        <div class="modal-header">
+            <h2 id="adminDepartmentModalTitle">Добавить отдел</h2>
+            <button class="icon-btn" id="closeAdminDepartmentModalBtn">
+                <span class="material-icons">close</span>
+            </button>
+        </div>
+        
+        <div class="modal-body">
+            <form id="adminDepartmentForm">
+                <input type="hidden" id="adminDepartmentId">
+                
+                <div class="admin-form-group">
+                    <label for="adminDepartmentName">Название отдела *</label>
+                    <input type="text" id="adminDepartmentName" required>
+                </div>
+                
+                <div class="admin-form-group">
+                    <label for="adminDepartmentDescription">Описание</label>
+                    <textarea id="adminDepartmentDescription"></textarea>
+                </div>
+            </form>
+        </div>
+        
+        <div class="modal-footer">
+            <button class="btn-secondary" id="cancelAdminDepartmentBtn">Отмена</button>
+            <button class="btn-primary" id="saveAdminDepartmentBtn">Сохранить</button>
+        </div>
+    </div>
+</div>
 
         <!-- Video Conference Panel (Fullscreen) -->
         <div id="conferencePanel" class="conference-panel" style="display: none;">
@@ -576,13 +773,92 @@
     </div>
 </div>
 
+
+<!-- Task Create/Edit Modal -->
+<div id="taskModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="taskModalTitle">Новая задача</h2>
+            <button class="icon-btn" id="closeTaskModalBtn">
+                <span class="material-icons">close</span>
+            </button>
+        </div>
+        
+        <div class="modal-body">
+            <form id="taskForm">
+                <input type="hidden" id="taskId">
+                
+                <div class="task-form-group">
+                    <label for="taskTitle">Название задачи *</label>
+                    <input type="text" id="taskTitle" placeholder="Введите название задачи" required>
+                </div>
+                
+                <div class="task-form-group">
+                    <label for="taskDescription">Описание</label>
+                    <textarea id="taskDescription" placeholder="Опишите задачу подробнее"></textarea>
+                </div>
+                
+                <div class="task-form-group">
+                    <label for="taskDepartment">Отдел *</label>
+                    <select id="taskDepartment" required>
+                        <option value="">Выберите отдел</option>
+                    </select>
+                </div>
+                
+                <div class="task-form-group">
+                    <label for="taskAssignee">Исполнитель</label>
+                    <select id="taskAssignee">
+                        <option value="">Не назначено</option>
+                    </select>
+                </div>
+                
+                <div class="task-form-group">
+                    <label for="taskPriority">Приоритет</label>
+                    <select id="taskPriority">
+                        <option value="low">Низкий</option>
+                        <option value="normal" selected>Обычный</option>
+                        <option value="high">Высокий</option>
+                        <option value="urgent">Срочный</option>
+                    </select>
+                </div>
+                
+                <div class="task-form-group">
+                    <label for="taskDueDate">Срок выполнения</label>
+                    <input type="date" id="taskDueDate">
+                </div>
+                
+                <div class="task-form-group">
+                    <label>Наблюдатели</label>
+                    <div id="taskWatchersContainer"></div>
+                </div>
+            </form>
+        </div>
+        
+        <div class="modal-footer">
+            <button class="btn-secondary" id="cancelTaskBtn">Отмена</button>
+            <button class="btn-primary" id="saveTaskBtn">Сохранить</button>
+        </div>
+    </div>
+</div>
+
+<!-- Task Details Modal -->
+<div id="taskDetailsModal" class="modal">
+    <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-body">
+            <div id="taskDetailsContent"></div>
+        </div>
+    </div>
+</div>
+
     <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
     <script src="/js/theme.js"></script>
-    <script src="/js/app.js"></script>
-    <script src="/js/attachments-emoji.js"></script>
-    <script src="/js/webrtc-simple.js"></script>
-    <script src="/js/virtual-background-simple.js"></script>
-    <script src="/js/profile.js"></script>
-    <script src="/js/ui-components.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/attachments-emoji.js"></script>
+<script src="/js/webrtc-simple.js"></script>
+<script src="/js/virtual-background-simple.js"></script>
+<script src="/js/profile.js"></script>
+<script src="/js/ui-components.js"></script>
+<script src="/js/tasks.js"></script>
+<script src="/js/admin.js"></script>
 </body>
 </html>
