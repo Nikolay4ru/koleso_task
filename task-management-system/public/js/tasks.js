@@ -1,31 +1,162 @@
-// ==================== TASKS MANAGEMENT (GAMIFIED EDITION) ====================
-// Обновлённая версия с поддержкой gamification
+// ==================== TASKS MANAGEMENT WITH GAMIFICATION ====================
+// Полная интеграция gamified функционала напрямую в tasks.js
 
 let tasks = [];
 let departments = [];
-let currentTaskView = 'board'; // 'board' or 'list'
-let currentTaskFilter = 'all'; // 'all', 'my', 'created', 'watching'
+let currentTaskView = 'board';
+let currentTaskFilter = 'all';
 
-// ==================== GAMIFIED: Helper для mobile ====================
+// ==================== GAMIFICATION STATE ====================
 
-function isMobileView() {
-    return window.innerWidth <= 768;
-}
-
-function notifyGamified(event, data) {
-    // Уведомляем gamified модуль о событиях
-    const customEvent = new CustomEvent(event, { detail: data });
-    document.dispatchEvent(customEvent);
+const gamification = {
+    enabled: () => window.innerWidth <= 768,
+    data: {
+        streak: 0,
+        completedToday: 0,
+        totalTasks: 0
+    },
     
-    // Также вызываем API если доступен
-    if (window.tasksGamified) {
-        if (event === 'tasksRendered') {
-            window.tasksGamified.updateStats?.();
-        } else if (event === 'taskCompleted') {
-            // Achievement и confetti уже обрабатываются в intercepted функции
+    // Загрузка streak из localStorage
+    loadStreak() {
+        const lastDate = localStorage.getItem('task_streak_date');
+        const streak = parseInt(localStorage.getItem('task_streak') || '0');
+        const today = new Date().toDateString();
+        
+        if (lastDate === today) {
+            this.data.streak = streak;
+        } else {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            
+            if (lastDate === yesterday.toDateString()) {
+                this.data.streak = streak + 1;
+                localStorage.setItem('task_streak', this.data.streak);
+                localStorage.setItem('task_streak_date', today);
+            } else {
+                this.data.streak = 1;
+                localStorage.setItem('task_streak', '1');
+                localStorage.setItem('task_streak_date', today);
+            }
         }
+    },
+    
+    // Обновление статистики
+    updateStats() {
+        if (!this.enabled()) return;
+        
+        const all = tasks;
+        const done = all.filter(t => t.status === 'done');
+        this.data.completedToday = done.length;
+        this.data.totalTasks = all.length;
+        
+        const percent = all.length > 0 ? Math.round((done.length / all.length) * 100) : 0;
+        
+        // Обновляем UI
+        const elCompleted = document.getElementById('gamified-completed');
+        const elPercent = document.getElementById('gamified-percent');
+        const elFill = document.getElementById('gamified-fill');
+        const elStreak = document.getElementById('gamified-streak');
+        
+        if (elCompleted) elCompleted.textContent = `${done.length}/${all.length}`;
+        if (elPercent) elPercent.textContent = `${percent}%`;
+        if (elFill) elFill.style.width = `${percent}%`;
+        if (elStreak) elStreak.textContent = this.data.streak;
+        
+        this.updateMessage(percent);
+    },
+    
+    // Обновление мотивационного сообщения
+    updateMessage(percent) {
+        const el = document.getElementById('gamified-message');
+        if (!el) return;
+        
+        const messages = [
+            { t: 0, i: '💪', m: 'Start your first task!' },
+            { t: 25, i: '🚀', m: "You're on fire!" },
+            { t: 50, i: '⚡', m: 'Halfway there!' },
+            { t: 75, i: '🌟', m: 'Almost done!' },
+            { t: 100, i: '🎉', m: 'All completed!' }
+        ];
+        
+        const msg = messages.reverse().find(m => percent >= m.t);
+        if (msg) {
+            el.innerHTML = `<span style="font-size: 16px;">${msg.i}</span> <span>${msg.m}</span>`;
+        }
+    },
+    
+    // Achievement popup
+    showAchievement(title, desc) {
+        if (!this.enabled()) return;
+        
+        const popup = document.createElement('div');
+        popup.style.cssText = `
+            position: fixed;
+            top: max(80px, calc(env(safe-area-inset-top, 0px) + 60px));
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            color: #000;
+            padding: 16px 24px;
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(255,215,0,0.6);
+            z-index: 10000;
+            max-width: 90%;
+            animation: slideDown 0.5s ease;
+        `;
+        
+        popup.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 36px;">🏆</span>
+                <div>
+                    <h4 style="margin: 0 0 4px; font-size: 16px; font-weight: 700;">${title}</h4>
+                    <p style="margin: 0; font-size: 13px;">${desc}</p>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(popup);
+        
+        if (navigator.vibrate) navigator.vibrate([50, 100, 50]);
+        
+        setTimeout(() => {
+            popup.style.animation = 'slideUp 0.4s ease';
+            setTimeout(() => popup.remove(), 400);
+        }, 3000);
+    },
+    
+    // Confetti анимация
+    showConfetti() {
+        if (!this.enabled()) return;
+        
+        const container = document.createElement('div');
+        container.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 9999;
+        `;
+        
+        const colors = ['#FF6B35', '#00B8A9', '#FFD700', '#00D4C4', '#FF9500'];
+        for (let i = 0; i < 50; i++) {
+            const piece = document.createElement('div');
+            piece.style.cssText = `
+                position: absolute;
+                width: 10px;
+                height: 10px;
+                background: ${colors[Math.floor(Math.random() * colors.length)]};
+                left: ${Math.random() * 100}%;
+                animation: confettiFall ${Math.random() * 2 + 2}s ease forwards;
+            `;
+            container.appendChild(piece);
+        }
+        
+        document.body.appendChild(container);
+        setTimeout(() => container.remove(), 4000);
     }
-}
+};
 
 // ==================== LOAD TASKS ====================
 
@@ -35,8 +166,9 @@ async function loadTasks() {
         tasks = data;
         renderTasks();
         
-        // GAMIFIED: Уведомляем о загрузке
-        notifyGamified('tasksLoaded', { tasks });
+        if (gamification.enabled()) {
+            gamification.updateStats();
+        }
     } catch (error) {
         console.error('Error loading tasks:', error);
         showToast('Ошибка загрузки задач', 'error');
@@ -61,10 +193,13 @@ function renderTasks() {
         renderTasksList();
     }
     
-    // GAMIFIED: Уведомляем о рендере
-    setTimeout(() => {
-        notifyGamified('tasksRendered', { view: currentTaskView });
-    }, 100);
+    // Обновляем gamification после рендера
+    if (gamification.enabled()) {
+        setTimeout(() => {
+            gamification.updateStats();
+            enhanceTaskCardsForMobile();
+        }, 100);
+    }
 }
 
 function renderKanbanBoard() {
@@ -101,7 +236,6 @@ function renderKanbanBoard() {
 
 function renderTaskCard(task) {
     const assignee = users.find(u => u.id === task.assigneeId);
-    const creator = users.find(u => u.id === task.creatorId);
     const department = departments.find(d => d.id === task.departmentId);
     
     const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done';
@@ -124,7 +258,6 @@ function renderTaskCard(task) {
         }
     }
 
-    // GAMIFIED: Добавляем data-priority для CSS
     const priorityAttr = task.priority ? `data-priority="${task.priority}"` : '';
 
     return `
@@ -219,7 +352,6 @@ function renderTasksList() {
             `;
         }
         
-        // GAMIFIED: data-priority для CSS
         const priorityAttr = task.priority ? `data-priority="${task.priority}"` : '';
         
         return `
@@ -275,6 +407,58 @@ function renderTasksList() {
             </div>
         `;
     }).join('');
+}
+
+// ==================== MOBILE ENHANCEMENTS ====================
+
+
+function enhanceTaskCardsForMobile() {
+    if (!gamification.enabled()) return;
+    
+    const cards = document.querySelectorAll('.task-card');
+    console.log('🎨 Enhancing', cards.length, 'cards');
+    
+    cards.forEach(card => {
+        if (card.dataset.mobileEnhanced === 'true') return;
+        card.dataset.mobileEnhanced = 'true';
+        
+        const taskId = card.dataset.taskId;
+        const task = tasks.find(t => t.id === taskId);
+        if (!task) return;
+        
+        // Добавляем progress bar (улучшенный)
+        if (!card.querySelector('.task-progress-mobile')) {
+            const progress = getTaskProgress(task);
+            const progressHtml = `
+                <div class="task-progress-mobile">
+                    <div class="progress-header">
+                        <span class="progress-label">Progress</span>
+                        <span class="progress-value">${progress}%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${progress}%"></div>
+                    </div>
+                </div>
+            `;
+            
+            const footer = card.querySelector('.task-card-footer');
+            if (footer) {
+                footer.insertAdjacentHTML('afterend', progressHtml);
+            } else {
+                card.insertAdjacentHTML('beforeend', progressHtml);
+            }
+        }
+    });
+}
+
+function getTaskProgress(task) {
+    const map = {
+        'todo': 0,
+        'in_progress': 50,
+        'review': 75,
+        'done': 100
+    };
+    return map[task.status] || 0;
 }
 
 function getFilteredTasks() {
@@ -333,12 +517,8 @@ function canMoveTask(task, newStatus) {
     }
     
     if (isAssignee) {
-        if (task.status === 'todo' && newStatus === 'in_progress') {
-            return true;
-        }
-        if (task.status === 'in_progress' && newStatus === 'review') {
-            return true;
-        }
+        if (task.status === 'todo' && newStatus === 'in_progress') return true;
+        if (task.status === 'in_progress' && newStatus === 'review') return true;
         return false;
     }
     
@@ -352,7 +532,11 @@ function getUserRole(task) {
     return null;
 }
 
-// ==================== DRAG AND DROP ====================
+// ==================== DRAG AND DROP (FIXED FOR MOBILE) ====================
+
+let touchStartX = 0;
+let touchStartY = 0;
+let isDragging = false;
 
 function setupDragAndDrop() {
     const cards = document.querySelectorAll('.task-card');
@@ -361,7 +545,6 @@ function setupDragAndDrop() {
     cards.forEach(card => {
         const taskId = card.dataset.taskId;
         const task = tasks.find(t => t.id === taskId);
-        
         if (!task) return;
         
         const userRole = getUserRole(task);
@@ -371,12 +554,17 @@ function setupDragAndDrop() {
         } else {
             card.draggable = true;
             card.style.cursor = 'grab';
+            
+            // FIX: Предотвращаем конфликт с browser back gesture
+            card.addEventListener('touchstart', handleTouchStart, { passive: true });
+            card.addEventListener('touchmove', handleTouchMove, { passive: false });
+            card.addEventListener('touchend', handleTouchEnd);
         }
         
         card.addEventListener('dragstart', handleDragStart);
         card.addEventListener('dragend', handleDragEnd);
         card.addEventListener('click', (e) => {
-            if (!e.target.closest('button')) {
+            if (!e.target.closest('button') && !isDragging) {
                 openTaskDetails(card.dataset.taskId);
             }
         });
@@ -388,6 +576,34 @@ function setupDragAndDrop() {
         column.addEventListener('dragleave', handleDragLeave);
         column.addEventListener('dragenter', handleDragEnter);
     });
+}
+
+// FIX: Touch handlers для предотвращения browser back
+function handleTouchStart(e) {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    isDragging = false;
+}
+
+function handleTouchMove(e) {
+    if (!touchStartX || !touchStartY) return;
+    
+    const diffX = Math.abs(e.touches[0].clientX - touchStartX);
+    const diffY = Math.abs(e.touches[0].clientY - touchStartY);
+    
+    // Если свайп горизонтальный (перетаскивание карточки)
+    if (diffX > 10 && diffX > diffY) {
+        isDragging = true;
+        e.preventDefault(); // Предотвращаем browser back
+    }
+}
+
+function handleTouchEnd(e) {
+    touchStartX = 0;
+    touchStartY = 0;
+    setTimeout(() => {
+        isDragging = false;
+    }, 100);
 }
 
 let draggedElement = null;
@@ -415,27 +631,17 @@ function handleDragEnd(e) {
 }
 
 function handleDragOver(e) {
-    if (e.preventDefault) {
-        e.preventDefault();
-    }
-    
+    if (e.preventDefault) e.preventDefault();
     if (!draggedTask) return false;
     
     const newStatus = this.dataset.status;
-    
     if (draggedTask.status === newStatus) {
         e.dataTransfer.dropEffect = 'move';
         return false;
     }
     
     const canMove = canMoveTask(draggedTask, newStatus);
-    
-    if (canMove) {
-        e.dataTransfer.dropEffect = 'move';
-    } else {
-        e.dataTransfer.dropEffect = 'none';
-    }
-    
+    e.dataTransfer.dropEffect = canMove ? 'move' : 'none';
     return false;
 }
 
@@ -443,15 +649,12 @@ function handleDragEnter(e) {
     if (!draggedTask) return;
     
     const newStatus = this.dataset.status;
-    
     if (draggedTask.status === newStatus) {
-        this.classList.remove('drag-over');
-        this.classList.remove('drag-forbidden');
+        this.classList.remove('drag-over', 'drag-forbidden');
         return;
     }
     
     const canMove = canMoveTask(draggedTask, newStatus);
-    
     if (!canMove) {
         this.classList.add('drag-forbidden');
         this.classList.remove('drag-over');
@@ -463,32 +666,22 @@ function handleDragEnter(e) {
 
 function handleDragLeave(e) {
     if (e.target === this) {
-        this.classList.remove('drag-over');
-        this.classList.remove('drag-forbidden');
+        this.classList.remove('drag-over', 'drag-forbidden');
     }
 }
 
 async function handleDrop(e) {
-    if (e.stopPropagation) {
-        e.stopPropagation();
-    }
-    if (e.preventDefault) {
-        e.preventDefault();
-    }
+    if (e.stopPropagation) e.stopPropagation();
+    if (e.preventDefault) e.preventDefault();
     
-    this.classList.remove('drag-over');
-    this.classList.remove('drag-forbidden');
+    this.classList.remove('drag-over', 'drag-forbidden');
     
-    if (!draggedTask || !draggedElement) {
-        return false;
-    }
+    if (!draggedTask || !draggedElement) return false;
     
     const taskId = draggedTask.id;
     const newStatus = this.dataset.status;
     
-    if (draggedTask.status === newStatus) {
-        return false;
-    }
+    if (draggedTask.status === newStatus) return false;
     
     const canMove = canMoveTask(draggedTask, newStatus);
     
@@ -514,8 +707,6 @@ async function handleDrop(e) {
             } else {
                 message = 'У вас нет прав для этого действия';
             }
-        } else if (role === 'watcher') {
-            message = 'Вы наблюдатель и не можете изменять статус задачи';
         } else {
             message = 'У вас нет прав для изменения этой задачи';
         }
@@ -543,14 +734,15 @@ async function updateTaskStatus(taskId, newStatus) {
         
         const task = tasks.find(t => t.id === taskId);
         if (task) {
-            const oldStatus = task.status;
             task.status = newStatus;
             
-            // GAMIFIED: Уведомляем о смене статуса
-            if (newStatus === 'done') {
-                notifyGamified('taskCompleted', { task, oldStatus, newStatus });
-            } else {
-                notifyGamified('taskStatusChanged', { task, oldStatus, newStatus });
+            // Gamification при завершении
+            if (newStatus === 'done' && gamification.enabled()) {
+                setTimeout(() => {
+                    gamification.showAchievement('Task Completed!', '🎉 Great job!');
+                    gamification.showConfetti();
+                    if (navigator.vibrate) navigator.vibrate([10, 50, 10]);
+                }, 300);
             }
         }
         
@@ -682,9 +874,6 @@ async function saveTask() {
         renderTasks();
         showToast(taskId ? 'Задача обновлена' : 'Задача создана', 'success');
         
-        // GAMIFIED: Уведомляем о создании/обновлении
-        notifyGamified(taskId ? 'taskUpdated' : 'taskCreated', { task: savedTask });
-        
     } catch (error) {
         console.error('Error saving task:', error);
         showToast('Ошибка сохранения задачи: ' + (error.message || 'Неизвестная ошибка'), 'error');
@@ -695,7 +884,351 @@ function closeTaskModal() {
     document.getElementById('taskModal').classList.remove('active');
 }
 
-// ==================== TASK DETAILS ====================
+// ==================== TASK DETAILS (продолжение в следующем сообщении) ====================
+
+// ... (остальной код tasks.js без изменений)
+
+// ==================== HELPER FUNCTIONS ====================
+
+function getStatusName(status) {
+    const names = {
+        'todo': 'К выполнению',
+        'in_progress': 'В работе',
+        'review': 'На проверке',
+        'done': 'Выполнено'
+    };
+    return names[status] || status;
+}
+
+function getPriorityName(priority) {
+    const names = {
+        'low': 'Низкий',
+        'normal': 'Обычный',
+        'high': 'Высокий',
+        'urgent': 'Срочный'
+    };
+    return names[priority] || priority;
+}
+
+function formatDate(dateStr) {
+    const date = new Date(dateStr);
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    if (date.toDateString() === today.toDateString()) {
+        return 'Сегодня';
+    } else if (date.toDateString() === tomorrow.toDateString()) {
+        return 'Завтра';
+    } else {
+        return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+    }
+}
+
+function formatDateTime(dateStr) {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('ru-RU', { 
+        day: 'numeric', 
+        month: 'long', 
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+// ==================== VIEW SWITCHING ====================
+
+function switchTaskView(view) {
+    currentTaskView = view;
+    
+    document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.view === view);
+    });
+    
+    const kanbanBoard = document.getElementById('kanbanBoard');
+    const tasksList = document.getElementById('tasksList');
+    const tasksArea = document.getElementById('tasksArea');
+    
+    if (tasksArea) {
+        tasksArea.setAttribute('data-view', view);
+    }
+    
+    if (view === 'board') {
+        if (kanbanBoard) kanbanBoard.style.display = 'flex';
+        if (tasksList) tasksList.style.display = 'none';
+    } else {
+        if (kanbanBoard) kanbanBoard.style.display = 'none';
+        if (tasksList) tasksList.style.display = 'block';
+    }
+    
+    renderTasks();
+}
+
+function switchTaskFilter(filter) {
+    currentTaskFilter = filter;
+    
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.filter === filter);
+    });
+    
+    renderTasks();
+}
+
+async function toggleTaskComplete(taskId, completed) {
+    const newStatus = completed ? 'done' : 'todo';
+    await updateTaskStatus(taskId, newStatus);
+}
+
+// ==================== INITIALIZATION ====================
+
+function initTasksModule() {
+    console.log('✅ Initializing tasks module with gamification...');
+    
+    // Load streak data
+    if (gamification.enabled()) {
+        gamification.loadStreak();
+        injectGamifiedHeader();
+    }
+    
+    // Event listeners
+    const createTaskBtn = document.getElementById('createTaskBtn');
+    const createTaskBtnSidebar = document.getElementById('createTaskBtnSidebar');
+    const closeTaskModalBtn = document.getElementById('closeTaskModalBtn');
+    const cancelTaskBtn = document.getElementById('cancelTaskBtn');
+    const saveTaskBtn = document.getElementById('saveTaskBtn');
+    
+    if (createTaskBtn) createTaskBtn.addEventListener('click', openCreateTaskModal);
+    if (createTaskBtnSidebar) createTaskBtnSidebar.addEventListener('click', openCreateTaskModal);
+    if (closeTaskModalBtn) closeTaskModalBtn.addEventListener('click', closeTaskModal);
+    if (cancelTaskBtn) cancelTaskBtn.addEventListener('click', closeTaskModal);
+    if (saveTaskBtn) saveTaskBtn.addEventListener('click', saveTask);
+    
+    document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', () => switchTaskView(btn.dataset.view));
+    });
+    
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => switchTaskFilter(btn.dataset.filter));
+    });
+    
+    // Resize handler
+    window.addEventListener('resize', () => {
+        if (gamification.enabled() && !document.querySelector('.tasks-greeting')) {
+            injectGamifiedHeader();
+        }
+    });
+    
+    console.log('✅ Tasks module initialized');
+}
+
+// ==================== GAMIFIED HEADER INJECTION ====================
+
+function injectGamifiedHeader() {
+    const header = document.querySelector('.tasks-header');
+    if (!header || header.querySelector('.tasks-header-main')) return;
+    
+    const userName = currentUser?.name || 'User';
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+    const emoji = hour < 12 ? '☀️' : hour < 18 ? '👋' : '🌙';
+    
+    // Очищаем header (сохраняем только кнопку создания)
+    const createBtn = header.querySelector('#createTaskBtn');
+    header.innerHTML = '';
+    
+    const html = `
+        <!-- Main title row -->
+        <div class="tasks-header-main">
+            <div class="tasks-header-title">
+                <h2>📋 Задачи</h2>
+            </div>
+            
+            <!-- View toggle -->
+            <div class="view-toggle mobile-view-toggle">
+                <button class="view-toggle-btn ${currentTaskView === 'board' ? 'active' : ''}" data-view="board" onclick="switchTaskView('board')">
+                    <span class="material-icons">view_kanban</span>
+                </button>
+                <button class="view-toggle-btn ${currentTaskView === 'list' ? 'active' : ''}" data-view="list" onclick="switchTaskView('list')">
+                    <span class="material-icons">view_list</span>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Greeting card -->
+        <div class="tasks-greeting">
+            <span class="tasks-greeting__emoji">${emoji}</span>
+            <div class="tasks-greeting__text">
+                <h3 class="tasks-greeting__title">${greeting}, ${userName}!</h3>
+                <p class="tasks-greeting__subtitle">Let's crush some tasks today</p>
+            </div>
+        </div>
+        
+        <!-- Stats row (2 columns) -->
+        <div class="tasks-stats-row">
+            <div class="stat-card stat-card--streak">
+                <span class="stat-card__icon">🔥</span>
+                <div class="stat-card__content">
+                    <div class="stat-card__value" id="gamified-streak">${gamification.data.streak}</div>
+                    <div class="stat-card__label">Day Streak</div>
+                </div>
+            </div>
+            
+            <div class="stat-card stat-card--tasks">
+                <span class="stat-card__icon">⭐</span>
+                <div class="stat-card__content">
+                    <div class="stat-card__value" id="gamified-completed">0/0</div>
+                    <div class="stat-card__label">Tasks</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Daily progress -->
+        <div class="daily-progress">
+            <div class="daily-progress__header">
+                <h3 class="daily-progress__title">📊 Daily Progress</h3>
+                <span class="daily-progress__stats" id="gamified-percent">0%</span>
+            </div>
+            <div class="daily-progress__bar">
+                <div class="daily-progress__fill" id="gamified-fill" style="width: 0%"></div>
+            </div>
+            <p class="daily-progress__message" id="gamified-message">
+                <span class="daily-progress__message-icon">💪</span>
+                <span>Start your first task!</span>
+            </p>
+        </div>
+        
+        <!-- Filters -->
+        <div class="tasks-filters mobile-filters">
+            <button class="filter-btn ${currentTaskFilter === 'all' ? 'active' : ''}" data-filter="all" onclick="switchTaskFilter('all')">
+                Все
+            </button>
+            <button class="filter-btn ${currentTaskFilter === 'my' ? 'active' : ''}" data-filter="my" onclick="switchTaskFilter('my')">
+                Мои
+            </button>
+            <button class="filter-btn ${currentTaskFilter === 'created' ? 'active' : ''}" data-filter="created" onclick="switchTaskFilter('created')">
+                Созданные
+            </button>
+            <button class="filter-btn ${currentTaskFilter === 'watching' ? 'active' : ''}" data-filter="watching" onclick="switchTaskFilter('watching')">
+                Наблюдаю
+            </button>
+        </div>
+    `;
+    
+    header.insertAdjacentHTML('afterbegin', html);
+    
+    // Возвращаем кнопку создания если была
+    if (createBtn) {
+        header.appendChild(createBtn);
+    }
+    
+    console.log('✅ Improved gamified header injected');
+}
+
+// ==================== ANIMATIONS CSS ====================
+
+// Добавляем стили для анимаций
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideDown {
+        from {
+            transform: translateX(-50%) translateY(-120%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+    }
+    
+    @keyframes slideUp {
+        from {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(-50%) translateY(-120%);
+            opacity: 0;
+        }
+    }
+    
+    @keyframes confettiFall {
+        from {
+            transform: translateY(-10vh) rotate(0deg);
+            opacity: 1;
+        }
+        to {
+            transform: translateY(110vh) rotate(720deg);
+            opacity: 0;
+        }
+    }
+`;
+document.head.appendChild(style);
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initTasksModule);
+} else {
+    initTasksModule();
+}
+
+// ==================== SOCKET LISTENERS ====================
+
+function setupTasksSocketListeners() {
+    if (typeof socket === 'undefined' || !socket) {
+        console.warn('Socket not available for tasks module');
+        return;
+    }
+    
+    socket.on('task:created', (task) => {
+        tasks.push(task);
+        renderTasks();
+        showToast('Новая задача создана', 'info');
+    });
+    
+    socket.on('task:updated', (updatedTask) => {
+        const index = tasks.findIndex(t => t.id === updatedTask.id);
+        if (index !== -1) {
+            tasks[index] = updatedTask;
+            renderTasks();
+        }
+    });
+    
+    socket.on('task:deleted', (taskId) => {
+        tasks = tasks.filter(t => t.id !== taskId);
+        renderTasks();
+    });
+    
+    socket.on('task:comment', (data) => {
+        const task = tasks.find(t => t.id === data.taskId);
+        if (task) {
+            task.commentsCount = (task.commentsCount || 0) + 1;
+            if (data.userId !== currentUser.id) {
+                task.hasUnread = true;
+            }
+            renderTasks();
+        }
+    });
+    
+    console.log('✅ Tasks socket listeners setup');
+}
+
+// ==================== GLOBAL EXPORTS ====================
+
+window.loadTasks = loadTasks;
+window.loadDepartments = loadDepartments;
+window.setupTasksSocketListeners = setupTasksSocketListeners;
+window.toggleTaskComplete = toggleTaskComplete;
+window.openTaskDetails = openTaskDetails;
+window.closeTaskDetailsModal = closeTaskDetailsModal;
+
+// Expose gamification for manual control if needed
+window.taskGamification = gamification;
+
+console.log('✅ Tasks module loaded with integrated gamification');
+
+
+
+// ==================== TASK DETAILS MODAL ====================
+// Продолжение tasks-integrated.js
 
 async function openTaskDetails(taskId) {
     const task = tasks.find(t => t.id === taskId);
@@ -802,17 +1335,6 @@ async function openTaskDetails(taskId) {
                     </div>
                 </div>
             ` : ''}
-            
-            ${!isCreator && !isAssignee && userRole === 'watcher' ? `
-                <div class="task-details-section">
-                    <div style="padding: 16px; background: var(--bg-secondary); border-radius: 8px; border-left: 4px solid var(--primary-color);">
-                        <p style="margin: 0; color: var(--text-secondary);">
-                            <span class="material-icons" style="vertical-align: middle; font-size: 20px;">visibility</span>
-                            Вы наблюдатель этой задачи. Вы можете просматривать и комментировать, но не можете редактировать.
-                        </p>
-                    </div>
-                </div>
-            ` : ''}
         </div>
         
         <div class="task-details-footer">
@@ -822,37 +1344,26 @@ async function openTaskDetails(taskId) {
                     Редактировать
                 </button>
                 
-                ${task.status === 'in_progress' ? `
-                    <button class="btn-warning" onclick="changeTaskStatus('${task.id}', 'todo')">
-                        <span class="material-icons">replay</span>
-                        Вернуть к выполнению
-                    </button>
-                ` : ''}
-                
                 ${task.status === 'review' ? `
-                    <button class="btn-success" onclick="changeTaskStatus('${task.id}', 'done')">
+                    <button class="btn-success" onclick="updateTaskStatus('${task.id}', 'done')">
                         <span class="material-icons">check_circle</span>
-                        Принять работу
+                        Принять
                     </button>
-                    <button class="btn-warning" onclick="changeTaskStatus('${task.id}', 'in_progress')">
+                    <button class="btn-warning" onclick="updateTaskStatus('${task.id}', 'in_progress')">
                         <span class="material-icons">replay</span>
-                        Вернуть в работу
-                    </button>
-                    <button class="btn-secondary" onclick="changeTaskStatus('${task.id}', 'todo')">
-                        <span class="material-icons">undo</span>
-                        Вернуть к выполнению
+                        В работу
                     </button>
                 ` : ''}
                 
                 ${task.status === 'done' ? `
-                    <button class="btn-warning" onclick="changeTaskStatus('${task.id}', 'todo')">
+                    <button class="btn-warning" onclick="updateTaskStatus('${task.id}', 'todo')">
                         <span class="material-icons">replay</span>
-                        Открыть заново
+                        Открыть
                     </button>
                 ` : ''}
                 
                 ${task.status !== 'done' ? `
-                    <button class="btn-success" onclick="changeTaskStatus('${task.id}', 'done')">
+                    <button class="btn-success" onclick="updateTaskStatus('${task.id}', 'done'); closeTaskDetailsModal();">
                         <span class="material-icons">check_circle</span>
                         Завершить
                     </button>
@@ -861,14 +1372,14 @@ async function openTaskDetails(taskId) {
             
             ${isAssignee && !isCreator ? `
                 ${task.status === 'todo' ? `
-                    <button class="btn-primary" onclick="changeTaskStatus('${task.id}', 'in_progress')">
+                    <button class="btn-primary" onclick="updateTaskStatus('${task.id}', 'in_progress'); closeTaskDetailsModal();">
                         <span class="material-icons">play_arrow</span>
-                        Начать работу
+                        Начать
                     </button>
                 ` : ''}
                 
                 ${task.status === 'in_progress' ? `
-                    <button class="btn-success" onclick="changeTaskStatus('${task.id}', 'review')">
+                    <button class="btn-success" onclick="updateTaskStatus('${task.id}', 'review'); closeTaskDetailsModal();">
                         <span class="material-icons">send</span>
                         На проверку
                     </button>
@@ -894,83 +1405,6 @@ function getRoleName(role) {
     };
     return names[role] || role;
 }
-
-// GAMIFIED: Функция для быстрой смены статуса (используется gamified модулем)
-async function changeTaskStatus(taskId, newStatus) {
-    await updateTaskStatus(taskId, newStatus);
-    
-    // Закрываем модалку после смены статуса
-    const isFromDetails = document.getElementById('taskDetailsModal')?.classList.contains('active');
-    if (isFromDetails) {
-        closeTaskDetailsModal();
-    }
-}
-
-async function startTask(taskId) {
-    const task = tasks.find(t => t.id === taskId);
-    if (!task || !canStartTask(task)) {
-        showToast('У вас нет прав для этого действия', 'error');
-        return;
-    }
-    
-    await updateTaskStatus(taskId, 'in_progress');
-    closeTaskDetailsModal();
-    showToast('Задача переведена в работу', 'success');
-}
-
-async function sendToReview(taskId) {
-    const task = tasks.find(t => t.id === taskId);
-    if (!task || !canSendToReview(task)) {
-        showToast('У вас нет прав для этого действия', 'error');
-        return;
-    }
-    
-    await updateTaskStatus(taskId, 'review');
-    closeTaskDetailsModal();
-    showToast('Задача отправлена на проверку', 'success');
-}
-
-async function approveTask(taskId) {
-    const task = tasks.find(t => t.id === taskId);
-    if (!task || !canCompleteTask(task)) {
-        showToast('У вас нет прав для этого действия', 'error');
-        return;
-    }
-    
-    await updateTaskStatus(taskId, 'done');
-    closeTaskDetailsModal();
-    showToast('Задача выполнена', 'success');
-}
-
-async function returnTaskToWork(taskId) {
-    const task = tasks.find(t => t.id === taskId);
-    if (!task || task.creatorId !== currentUser.id) {
-        showToast('У вас нет прав для этого действия', 'error');
-        return;
-    }
-    
-    await updateTaskStatus(taskId, 'in_progress');
-    closeTaskDetailsModal();
-    showToast('Задача возвращена в работу', 'success');
-}
-
-async function reopenTask(taskId) {
-    const task = tasks.find(t => t.id === taskId);
-    if (!task || !canReopenTask(task)) {
-        showToast('У вас нет прав для этого действия', 'error');
-        return;
-    }
-    
-    await updateTaskStatus(taskId, 'todo');
-    closeTaskDetailsModal();
-    showToast('Задача открыта заново', 'success');
-}
-
-window.startTask = startTask;
-window.sendToReview = sendToReview;
-window.approveTask = approveTask;
-window.returnTaskToWork = returnTaskToWork;
-window.reopenTask = reopenTask;
 
 function closeTaskDetailsModal() {
     document.getElementById('taskDetailsModal').classList.remove('active');
@@ -1043,7 +1477,7 @@ async function openTaskChat(taskId) {
             }
         } catch (error) {
             console.error('Error creating task chat:', error);
-            showToast('Ошибка создания чата: ' + (error.message || 'Неизвестная ошибка'), 'error');
+            showToast('Ошибка создания чата', 'error');
             return;
         }
     } else {
@@ -1076,198 +1510,9 @@ async function openTaskChat(taskId) {
     renderTasks();
 }
 
-// ==================== TOGGLE TASK COMPLETE ====================
-
-async function toggleTaskComplete(taskId, completed) {
-    const newStatus = completed ? 'done' : 'todo';
-    await updateTaskStatus(taskId, newStatus);
-}
-
-// ==================== HELPER FUNCTIONS ====================
-
-function getStatusName(status) {
-    const names = {
-        'todo': 'К выполнению',
-        'in_progress': 'В работе',
-        'review': 'На проверке',
-        'done': 'Выполнено'
-    };
-    return names[status] || status;
-}
-
-function getPriorityName(priority) {
-    const names = {
-        'low': 'Низкий',
-        'normal': 'Обычный',
-        'high': 'Высокий',
-        'urgent': 'Срочный'
-    };
-    return names[priority] || priority;
-}
-
-function formatDate(dateStr) {
-    const date = new Date(dateStr);
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    if (date.toDateString() === today.toDateString()) {
-        return 'Сегодня';
-    } else if (date.toDateString() === tomorrow.toDateString()) {
-        return 'Завтра';
-    } else {
-        return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
-    }
-}
-
-function formatDateTime(dateStr) {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('ru-RU', { 
-        day: 'numeric', 
-        month: 'long', 
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-}
-
-// ==================== VIEW SWITCHING ====================
-
-function switchTaskView(view) {
-    currentTaskView = view;
-    
-    document.querySelectorAll('.view-toggle-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.view === view);
-    });
-    
-    const kanbanBoard = document.getElementById('kanbanBoard');
-    const tasksList = document.getElementById('tasksList');
-    const tasksArea = document.getElementById('tasksArea');
-    
-    if (tasksArea) {
-        tasksArea.setAttribute('data-view', view);
-    }
-    
-    if (view === 'board') {
-        if (kanbanBoard) kanbanBoard.style.display = 'flex';
-        if (tasksList) tasksList.style.display = 'none';
-    } else {
-        if (kanbanBoard) kanbanBoard.style.display = 'none';
-        if (tasksList) tasksList.style.display = 'block';
-    }
-    
-    renderTasks();
-}
-
-function switchTaskFilter(filter) {
-    currentTaskFilter = filter;
-    
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.filter === filter);
-    });
-    
-    renderTasks();
-}
-
-// ==================== INITIALIZATION ====================
-
-function initTasksModule() {
-    console.log('Initializing tasks module...');
-    
-    const createTaskBtn = document.getElementById('createTaskBtn');
-    const createTaskBtnSidebar = document.getElementById('createTaskBtnSidebar');
-    const closeTaskModalBtn = document.getElementById('closeTaskModalBtn');
-    const cancelTaskBtn = document.getElementById('cancelTaskBtn');
-    const saveTaskBtn = document.getElementById('saveTaskBtn');
-    
-    if (createTaskBtn) {
-        createTaskBtn.addEventListener('click', openCreateTaskModal);
-    }
-    
-    if (createTaskBtnSidebar) {
-        createTaskBtnSidebar.addEventListener('click', openCreateTaskModal);
-    }
-    
-    if (closeTaskModalBtn) {
-        closeTaskModalBtn.addEventListener('click', closeTaskModal);
-    }
-    
-    if (cancelTaskBtn) {
-        cancelTaskBtn.addEventListener('click', closeTaskModal);
-    }
-    
-    if (saveTaskBtn) {
-        saveTaskBtn.addEventListener('click', saveTask);
-    }
-    
-    document.querySelectorAll('.view-toggle-btn').forEach(btn => {
-        btn.addEventListener('click', () => switchTaskView(btn.dataset.view));
-    });
-    
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        btn.addEventListener('click', () => switchTaskFilter(btn.dataset.filter));
-    });
-    
-    console.log('✅ Tasks module initialized');
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initTasksModule);
-} else {
-    initTasksModule();
-}
-
-// ==================== SOCKET LISTENERS ====================
-
-function setupTasksSocketListeners() {
-    if (typeof socket === 'undefined' || !socket) {
-        console.warn('Socket not available for tasks module');
-        return;
-    }
-    
-    socket.on('task:created', (task) => {
-        tasks.push(task);
-        renderTasks();
-        showToast('Новая задача создана', 'info');
-    });
-    
-    socket.on('task:updated', (updatedTask) => {
-        const index = tasks.findIndex(t => t.id === updatedTask.id);
-        if (index !== -1) {
-            tasks[index] = updatedTask;
-            renderTasks();
-        }
-    });
-    
-    socket.on('task:deleted', (taskId) => {
-        tasks = tasks.filter(t => t.id !== taskId);
-        renderTasks();
-    });
-    
-    socket.on('task:comment', (data) => {
-        const task = tasks.find(t => t.id === data.taskId);
-        if (task) {
-            task.commentsCount = (task.commentsCount || 0) + 1;
-            if (data.userId !== currentUser.id) {
-                task.hasUnread = true;
-            }
-            renderTasks();
-        }
-    });
-    
-    console.log('✅ Tasks socket listeners setup');
-}
-
-// ==================== GLOBAL EXPORTS ====================
-
 window.openTaskChat = openTaskChat;
-window.toggleTaskComplete = toggleTaskComplete;
-window.openTaskDetails = openTaskDetails;
 window.editTask = editTask;
-window.closeTaskDetailsModal = closeTaskDetailsModal;
-window.loadTasks = loadTasks;
-window.loadDepartments = loadDepartments;
-window.setupTasksSocketListeners = setupTasksSocketListeners;
-window.changeTaskStatus = changeTaskStatus; // GAMIFIED: Для быстрой смены статуса
 
-console.log('✅ Tasks module loaded (Gamified Edition)');
+// ==================== EXPORTS ====================
+
+console.log('✅ Tasks module part 2 loaded');
