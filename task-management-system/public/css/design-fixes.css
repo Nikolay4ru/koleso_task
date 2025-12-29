@@ -1,0 +1,2613 @@
+/* ==================== ДОПОЛНИТЕЛЬНЫЕ ИСПРАВЛЕНИЯ К РЕДИЗАЙНУ ==================== */
+
+/* Фикс для department badge в списке задач */
+.task-list-footer-left .task-department {
+    display: inline-block;
+    padding: 4px var(--spacing-2);
+    background: var(--primary-alpha-10);
+    color: var(--primary);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+}
+
+/* Убираем старые стили для task-due-date и task-assignee-chip если они есть */
+.task-list-meta .task-due-date {
+    /* Старый стиль - удалить */
+    display: none !important;
+}
+
+.task-list-meta .task-assignee-chip {
+    /* Должен использовать новый стиль */
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    padding: 4px var(--spacing-3);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+}
+
+/* ==================== iOS SAFE AREA SUPPORT ==================== */
+
+/* Поддержка Dynamic Island, notch и других вырезов на iOS */
+
+/* Viewport meta для safe area */
+/* Добавьте в HTML: <meta name="viewport" content="viewport-fit=cover"> */
+
+/* Основные переменные для safe area */
+:root {
+    --sat: env(safe-area-inset-top);
+    --sar: env(safe-area-inset-right);
+    --sab: env(safe-area-inset-bottom);
+    --sal: env(safe-area-inset-left);
+}
+
+/* Sidebar Header - учитываем верхний отступ */
+.sidebar-header {
+    padding-top: calc(var(--spacing-4) + var(--sat));
+}
+
+/* Chat Header - учитываем верхний отступ и Dynamic Island */
+.chat-header {
+    padding-top: calc(var(--spacing-3) + var(--sat));
+    padding-left: calc(var(--spacing-4) + var(--sal));
+    padding-right: calc(var(--spacing-4) + var(--sar));
+}
+
+/* Tasks Header */
+.tasks-header {
+    padding-top: calc(var(--spacing-4) + var(--sat));
+    padding-left: calc(var(--spacing-6) + var(--sal));
+    padding-right: calc(var(--spacing-6) + var(--sar));
+}
+
+/* Admin Header */
+.admin-sidebar-header {
+    padding-top: calc(var(--spacing-6) + var(--sat));
+}
+
+/* Message Input - учитываем нижний отступ (home indicator) */
+.message-input {
+    padding-bottom: calc(var(--spacing-3) + var(--sab));
+    padding-left: calc(var(--spacing-4) + var(--sal));
+    padding-right: calc(var(--spacing-4) + var(--sar));
+}
+
+/* Conference Controls - нижняя панель видеозвонка */
+.conference-controls {
+    padding-bottom: calc(var(--spacing-6) + var(--sab));
+    padding-left: calc(var(--spacing-4) + var(--sal));
+    padding-right: calc(var(--spacing-4) + var(--sar));
+}
+
+/* Modals - safe area для fullscreen модалок */
+.modal {
+    padding-top: var(--sat);
+    padding-bottom: var(--sab);
+    padding-left: var(--sal);
+    padding-right: var(--sar);
+}
+
+.modal-content {
+    max-height: calc(90vh - var(--sat) - var(--sab));
+}
+
+/* Auth Screen */
+.auth-screen {
+    padding-top: var(--sat);
+    padding-bottom: var(--sab);
+}
+
+/* Chat Info Panel */
+.chat-info-panel {
+    padding-top: var(--sat);
+}
+
+.chat-info-panel.open {
+    padding-right: var(--sar);
+}
+
+/* Toast Container - учитываем верхний отступ */
+.toast-container {
+    top: calc(var(--spacing-4) + var(--sat));
+    right: calc(var(--spacing-4) + var(--sar));
+}
+
+/* Notification Banner */
+.notification-banner {
+    top: calc(0px + var(--sat));
+    padding-left: calc(var(--spacing-4) + var(--sal));
+    padding-right: calc(var(--spacing-4) + var(--sar));
+}
+
+/* Welcome Screen */
+.welcome-screen {
+    padding-top: var(--sat);
+    padding-bottom: var(--sab);
+}
+
+/* Profile Modal - для iOS */
+@media (max-width: 768px) {
+    .profile-modal-content {
+        margin-top: var(--sat);
+        margin-bottom: var(--sab);
+        max-height: calc(100vh - var(--sat) - var(--sab));
+    }
+    
+    .profile-modal-body {
+        max-height: calc(100vh - 64px - var(--sat) - var(--sab));
+    }
+}
+
+/* Task Modal - для iOS */
+@media (max-width: 768px) {
+    #taskModal .modal-content {
+        margin-top: var(--sat);
+        margin-bottom: var(--sab);
+    }
+}
+
+/* Main App Container */
+.main-app {
+    padding-top: var(--sat);
+}
+
+/* Sidebar на мобильных */
+@media (max-width: 768px) {
+    .sidebar {
+        padding-top: var(--sat);
+        padding-bottom: var(--sab);
+    }
+    
+    .sidebar.collapsed {
+        padding-left: var(--sal);
+    }
+}
+
+/* Messages Container - прокрутка с учетом safe area */
+.messages-container {
+    padding-top: var(--spacing-4);
+    padding-bottom: var(--spacing-4);
+}
+
+@media (max-width: 768px) {
+    .messages-container {
+        /* Компенсируем высоту header с safe area */
+        height: calc(100vh - 64px - var(--sat) - 80px - var(--sab));
+    }
+}
+
+/* Emoji Picker - позиционирование с safe area */
+.emoji-picker {
+    bottom: calc(80px + var(--sab));
+    right: calc(var(--spacing-4) + var(--sar));
+}
+
+/* Attach Menu */
+.attach-menu {
+    bottom: calc(80px + var(--sab));
+    left: calc(var(--spacing-4) + var(--sal));
+}
+
+/* Conference Grid - для iPhone в landscape */
+@media (max-width: 896px) and (orientation: landscape) {
+    .conference-grid {
+        padding-left: calc(var(--spacing-4) + var(--sal));
+        padding-right: calc(var(--spacing-4) + var(--sar));
+    }
+    
+    .conference-header {
+        padding-left: calc(var(--spacing-4) + var(--sal));
+        padding-right: calc(var(--spacing-4) + var(--sar));
+        padding-top: calc(var(--spacing-3) + var(--sat));
+    }
+}
+
+/* Специфичные фиксы для iPhone с Dynamic Island */
+@supports (padding-top: env(safe-area-inset-top)) {
+    /* iPhone 14 Pro и новее */
+    @media (max-width: 430px) {
+        .chat-header {
+            min-height: calc(64px + var(--sat));
+        }
+        
+        .sidebar-header {
+            min-height: calc(80px + var(--sat));
+        }
+    }
+}
+
+/* Landscape mode для iPhone с вырезом */
+@media (orientation: landscape) and (max-height: 430px) {
+    .chat-header,
+    .sidebar-header,
+    .tasks-header {
+        padding-top: calc(var(--spacing-2) + var(--sat));
+    }
+    
+    .message-input,
+    .conference-controls {
+     
+        /* padding-bottom: calc(var(--spacing-2) + var(--sab));*/
+    }
+}
+
+/* ==================== MOBILE BACK BUTTON ==================== */
+
+/* Скрываем на desktop - важно с !important чтобы перебить другие стили */
+.mobile-back-btn {
+    display: none !important;
+}
+
+/* Показываем только на мобильных */
+@media (max-width: 768px) {
+    .mobile-back-btn {
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border: none;
+        background: transparent;
+        color: var(--text-primary);
+        cursor: pointer;
+        border-radius: var(--radius-full);
+        transition: background var(--transition-base);
+        margin-right: var(--spacing-2);
+        padding: 0;
+        flex-shrink: 0;
+    }
+    
+    .mobile-back-btn:hover {
+        background: var(--bg-hover);
+    }
+    
+    .mobile-back-btn:active {
+        background: var(--bg-active);
+    }
+    
+    .mobile-back-btn .material-icons {
+        font-size: 24px;
+    }
+}
+
+/* Фикс для view toggle buttons */
+.view-toggle {
+    display: flex;
+    gap: var(--spacing-2);
+    background: var(--bg-hover);
+    padding: 4px;
+    border-radius: var(--radius-md);
+}
+
+.view-toggle-btn {
+    padding: var(--spacing-2) var(--spacing-3);
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-base);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+}
+
+.view-toggle-btn .material-icons {
+    font-size: 20px;
+}
+
+.view-toggle-btn.active {
+    background: var(--white);
+    color: var(--primary);
+    box-shadow: var(--shadow-xs);
+}
+
+.view-toggle-btn:hover:not(.active) {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+/* Dark theme для view toggle */
+[data-theme="dark"] .view-toggle-btn.active {
+    background: var(--bg-panel);
+    box-shadow: var(--shadow-sm);
+}
+
+/* Фикс для filter buttons */
+.tasks-filters {
+    display: flex;
+    gap: var(--spacing-2);
+}
+
+.filter-btn {
+    padding: var(--spacing-2) var(--spacing-4);
+    border: 1px solid var(--border-light);
+    background: var(--white);
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: var(--radius-md);
+    transition: all var(--transition-base);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+}
+
+.filter-btn.active {
+    background: var(--primary);
+    color: var(--white);
+    border-color: var(--primary);
+}
+
+.filter-btn:hover:not(.active) {
+    background: var(--bg-hover);
+    border-color: var(--primary-alpha-30);
+}
+
+[data-theme="dark"] .filter-btn {
+    background: var(--bg-panel);
+}
+
+[data-theme="dark"] .filter-btn:hover:not(.active) {
+    background: var(--bg-hover);
+}
+
+/* Фикс для task card в kanban */
+.task-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-4);
+    margin-bottom: var(--spacing-3);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    position: relative;
+    overflow: hidden;
+}
+
+.task-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+    border-color: var(--primary);
+}
+
+/* Индикатор приоритета в kanban */
+.task-priority-indicator {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+}
+
+.task-priority-indicator.high {
+    background: var(--accent-orange);
+}
+
+.task-priority-indicator.urgent {
+    background: var(--accent-red);
+}
+
+/* Фикс для task avatar в kanban */
+.task-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    color: var(--white);
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.task-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Фикс для task assignee name */
+.task-assignee-name {
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    font-weight: var(--font-weight-medium);
+}
+
+.task-no-assignee {
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+    font-style: italic;
+}
+
+/* Фикс для task due date в kanban */
+.task-card-meta .task-due-date {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    padding: 4px var(--spacing-2);
+    background: var(--bg-hover);
+    border-radius: var(--radius-sm);
+}
+
+.task-card-meta .task-due-date .material-icons {
+    font-size: 16px;
+}
+
+.task-card-meta .task-due-date.urgent {
+    background: rgba(255, 59, 48, 0.1);
+    color: var(--accent-red);
+    font-weight: var(--font-weight-semibold);
+}
+
+.task-card-meta .task-due-date.soon {
+    background: rgba(255, 149, 0, 0.1);
+    color: var(--accent-orange);
+    font-weight: var(--font-weight-medium);
+}
+
+.task-card-meta .task-due-date.overdue {
+    background: rgba(255, 59, 48, 0.1);
+    color: var(--accent-red);
+    font-weight: var(--font-weight-bold);
+}
+
+/* Фикс для task department badge */
+.task-department {
+    display: inline-block;
+    padding: 4px var(--spacing-2);
+    background: var(--primary-alpha-10);
+    color: var(--primary);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+}
+
+/* Фикс для task watchers и comments */
+.task-watchers,
+.task-comments {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.task-watchers .material-icons,
+.task-comments .material-icons {
+    font-size: 16px;
+}
+
+/* Фикс для badge в списке задач */
+.task-list-actions .badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: var(--accent-red);
+    color: var(--white);
+    font-size: var(--font-size-xs);
+    padding: 2px 5px;
+    border-radius: var(--radius-full);
+    font-weight: var(--font-weight-semibold);
+    min-width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+/* Убираем position relative у icon-btn если его нет */
+.task-list-actions .icon-btn {
+    position: relative;
+}
+
+/* ==================== CHAT INFO PANEL INTEGRATION ==================== */
+
+/* Кнопка для открытия chat info */
+.chat-info-toggle {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-full);
+    cursor: pointer;
+    transition: background var(--transition-base);
+}
+
+.chat-info-toggle:hover {
+    background: var(--bg-hover);
+}
+
+.chat-info-toggle .material-icons {
+    font-size: 24px;
+    color: var(--text-primary);
+}
+
+/* Backdrop для chat info panel */
+.chat-info-backdrop {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+    backdrop-filter: blur(4px);
+}
+
+.chat-info-backdrop.active {
+    display: block;
+}
+
+/* Фикс z-index для chat info panel */
+.chat-info-panel {
+    z-index: 1000;
+}
+
+/* ==================== MOBILE FIXES ==================== */
+
+/* ==================== MOBILE TASKS VIEW - COMPLETE FIX ==================== */
+
+/* ========== DESKTOP STYLES (> 768px) ========== */
+
+@media (min-width: 769px) {
+    .tasks-header {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--spacing-6);
+        background: var(--bg-panel);
+        border-bottom: 1px solid var(--divider);
+    }
+    
+    .tasks-header-left {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-4);
+    }
+    
+    .tasks-header-left h2 {
+        margin: 0;
+        font-size: var(--font-size-2xl);
+        font-weight: var(--font-weight-semibold);
+    }
+    
+    /* View toggle на desktop рядом с заголовком */
+    .tasks-header > .view-toggle {
+        display: flex;
+        background: var(--bg-hover);
+        padding: 2px;
+        border-radius: var(--radius-lg);
+        gap: 4px;
+    }
+    
+    .view-toggle-btn {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-2);
+        padding: var(--spacing-2) var(--spacing-3);
+        border: none;
+        background: transparent;
+        color: var(--text-secondary);
+        border-radius: var(--radius-md);
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-medium);
+        cursor: pointer;
+        transition: all var(--transition-base);
+    }
+    
+    .view-toggle-btn .material-icons {
+        font-size: 18px;
+    }
+    
+    .view-toggle-btn:hover {
+        background: rgba(0, 0, 0, 0.05);
+    }
+    
+    .view-toggle-btn.active {
+        background: var(--white);
+        color: var(--primary);
+        box-shadow: var(--shadow-sm);
+    }
+    
+    .tasks-header-right {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-3);
+    }
+    
+    .tasks-filters {
+        display: flex;
+        gap: var(--spacing-2);
+    }
+    
+    .filter-btn {
+        padding: var(--spacing-2) var(--spacing-3);
+        border: 1px solid var(--border-light);
+        background: var(--bg-panel);
+        color: var(--text-primary);
+        border-radius: var(--radius-md);
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-medium);
+        cursor: pointer;
+        transition: all var(--transition-base);
+        white-space: nowrap;
+    }
+    
+    .filter-btn:hover {
+        background: var(--bg-hover);
+        border-color: var(--primary);
+    }
+    
+    .filter-btn.active {
+        background: var(--primary);
+        color: var(--white);
+        border-color: var(--primary);
+    }
+    
+    .create-task-btn {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-2);
+        padding: var(--spacing-2) var(--spacing-4);
+        background: var(--primary);
+        color: var(--white);
+        border: none;
+        border-radius: var(--radius-lg);
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-semibold);
+        cursor: pointer;
+        box-shadow: var(--shadow-sm);
+        transition: all var(--transition-base);
+    }
+    
+    .create-task-btn:hover {
+        background: var(--secondary);
+        box-shadow: var(--shadow-md);
+    }
+    
+    .create-task-btn .material-icons {
+        font-size: 18px;
+    }
+}
+
+/* ========== MOBILE STYLES (≤ 768px) ========== */
+
+/* Убираем все предыдущие mobile view toggle правила и начинаем заново */
+
+@media (max-width: 768px) {
+    /* ========== TASKS HEADER ========== */
+    
+    .tasks-header {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-3);
+        padding: calc(var(--spacing-4) + var(--sat)) var(--spacing-4) var(--spacing-3);
+        background: var(--bg-panel);
+        border-bottom: 1px solid var(--divider);
+    }
+    
+    /* ========== TITLE ONLY ========== */
+    
+    .tasks-header-left {
+        width: 100%;
+        display: flex;
+        flex-direction: row; /* Title на одной строке */
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--spacing-3);
+    }
+    
+    .tasks-header-left h2 {
+        font-size: var(--font-size-xl);
+        margin: 0;
+        flex-shrink: 0;
+    }
+    
+    /* ========== VIEW TOGGLE - ОТДЕЛЬНАЯ СТРОКА ========== */
+    
+    /* Скрываем в sidebar */
+    #tasksTab .tasks-view-header .view-toggle {
+        display: none !important;
+    }
+    
+    /* View toggle как отдельный элемент в tasks-header */
+    .tasks-header > .view-toggle {
+        display: flex !important;
+        order: 2;
+        width: 100%;
+        background: var(--bg-hover);
+        padding: 2px;
+        border-radius: var(--radius-lg);
+        gap: 4px;
+    }
+    
+    .view-toggle-btn {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--spacing-2);
+        padding: var(--spacing-2) var(--spacing-3);
+        border: none;
+        background: transparent;
+        color: var(--text-secondary);
+        border-radius: var(--radius-md);
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-medium);
+        cursor: pointer;
+        transition: all var(--transition-base);
+        min-height: 30px; /* Touch target */
+        white-space: nowrap;
+    }
+    
+    .view-toggle-btn .material-icons {
+        font-size: 18px;
+    }
+    
+    .view-toggle-btn span:last-child {
+        /* Текст кнопки */
+        display: inline;
+    }
+    
+    .view-toggle-btn.active {
+        background: var(--white);
+        color: var(--primary);
+        box-shadow: var(--shadow-sm);
+    }
+    
+    /* ========== FILTERS ========== */
+    
+    .tasks-header-right {
+        order: 3;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-3);
+    }
+    
+    .tasks-filters {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--spacing-2);
+        width: 100%;
+    }
+    
+    .tasks-filters .filter-btn {
+        padding: var(--spacing-2) var(--spacing-3);
+        border: 1px solid var(--border-light);
+        background: var(--bg-panel);
+        color: var(--text-primary);
+        border-radius: var(--radius-md);
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-medium);
+        cursor: pointer;
+        transition: all var(--transition-base);
+        min-height: 40px; /* Touch target */
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .tasks-filters .filter-btn:active {
+        transform: scale(0.98);
+    }
+    
+    .tasks-filters .filter-btn.active {
+        background: var(--primary);
+        color: var(--white);
+        border-color: var(--primary);
+        box-shadow: var(--shadow-sm);
+    }
+    
+    /* ========== CREATE BUTTON ========== */
+    
+    .create-task-btn {
+        width: 100%;
+        padding: var(--spacing-3) var(--spacing-4);
+        background: var(--primary);
+        color: var(--white);
+        border: none;
+        border-radius: var(--radius-lg);
+        font-size: var(--font-size-base);
+        font-weight: var(--font-weight-semibold);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--spacing-2);
+        min-height: 44px; /* Prominent touch target */
+        box-shadow: var(--shadow-sm);
+        transition: all var(--transition-base);
+    }
+    
+    .create-task-btn:active {
+        transform: scale(0.98);
+    }
+    
+    .create-task-btn .material-icons {
+        font-size: 20px;
+    }
+    
+    /* ========== КОМПАКТНАЯ ВЕРСИЯ (иконки только) ========== */
+    
+    /* Если экран очень маленький - показываем только иконки */
+    @media (max-width: 380px) {
+        .view-toggle-btn span:last-child {
+            display: none; /* Скрываем текст */
+        }
+        
+        .view-toggle-btn .material-icons {
+            font-size: 20px;
+            margin: 0;
+        }
+        
+        .view-toggle-btn {
+            padding: var(--spacing-2);
+        }
+    }
+    
+    /* ========== KANBAN BOARD ========== */
+    
+    .kanban-board {
+        display: flex;
+        gap: var(--spacing-3);
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scroll-snap-type: x mandatory;
+        padding: var(--spacing-4);
+        padding-bottom: calc(var(--spacing-4) + var(--sab));
+    }
+    
+    .kanban-column {
+        scroll-snap-align: start;
+        min-width: 280px;
+        max-width: 280px;
+        flex-shrink: 0;
+    }
+    
+    .kanban-column:first-child {
+        margin-left: 0;
+    }
+    
+    .kanban-column:last-child {
+        margin-right: var(--spacing-4);
+    }
+    
+    .kanban-column-header {
+        padding: var(--spacing-3);
+        margin-bottom: var(--spacing-3);
+    }
+    
+    .task-card {
+        margin-bottom: var(--spacing-3);
+        cursor: pointer;
+        touch-action: manipulation;
+    }
+    
+    /* ========== TASKS LIST ========== */
+    
+    .tasks-list {
+        padding: var(--spacing-4);
+        padding-bottom: calc(var(--spacing-4) + var(--sab));
+    }
+    
+    .task-list-item {
+        margin-bottom: var(--spacing-3);
+        cursor: pointer;
+        touch-action: manipulation;
+    }
+    
+    /* Touch feedback */
+    .task-card:active,
+    .task-list-item:active {
+        transform: scale(0.98);
+        opacity: 0.9;
+    }
+    
+    /* ========== VIEW SWITCHING ========== */
+    
+    /* По умолчанию показываем канбан */
+    #kanbanBoard {
+        display: flex;
+    }
+    
+    #tasksList {
+        display: none;
+    }
+    
+    /* Когда активен list view */
+    #tasksArea[data-view="list"] #kanbanBoard,
+    .tasks-container[data-view="list"] #kanbanBoard {
+        display: none !important;
+    }
+    
+    #tasksArea[data-view="list"] #tasksList,
+    .tasks-container[data-view="list"] #tasksList {
+        display: block !important;
+    }
+}
+
+/* ========== ОЧЕНЬ МАЛЕНЬКИЕ ЭКРАНЫ ========== */
+
+@media (max-width: 360px) {
+    .tasks-filters .filter-btn {
+        font-size: 12px;
+        padding: var(--spacing-2);
+    }
+}
+
+/* ========== TABLET (768px - 1024px) ========== */
+
+@media (min-width: 769px) and (max-width: 1024px) {
+    .tasks-header {
+        flex-wrap: wrap;
+    }
+    
+    .tasks-filters {
+        flex-wrap: wrap;
+    }
+    
+    .kanban-column {
+        min-width: 300px;
+        max-width: 300px;
+    }
+}
+
+/* ==================== TASK DETAILS MODAL STYLES ==================== */
+
+#taskDetailsModal .modal-content {
+    max-width: 800px;
+    width: 100%;
+}
+
+.task-details-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-6);
+    padding: var(--spacing-6);
+}
+
+/* ========== HEADER ========== */
+
+.task-details-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--spacing-4);
+    padding-bottom: var(--spacing-4);
+    border-bottom: 1px solid var(--divider);
+}
+
+.task-details-title-section {
+    flex: 1;
+    min-width: 0;
+}
+
+.task-details-title {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-3);
+    word-wrap: break-word;
+}
+
+.task-details-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-2);
+    align-items: center;
+}
+
+.task-details-actions {
+    display: flex;
+    gap: var(--spacing-2);
+    flex-shrink: 0;
+}
+
+.task-details-actions .icon-btn {
+    width: 40px;
+    height: 40px;
+}
+
+/* ========== STATUS BADGE ========== */
+
+.task-detail-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-2) var(--spacing-3);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+}
+
+.task-detail-status-badge.todo {
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+}
+
+.task-detail-status-badge.in_progress {
+    background: rgba(0, 136, 204, 0.1);
+    color: #0088cc;
+}
+
+.task-detail-status-badge.review {
+    background: rgba(255, 156, 0, 0.1);
+    color: var(--accent-orange);
+}
+
+.task-detail-status-badge.done {
+    background: var(--primary-alpha-10);
+    color: var(--primary);
+}
+
+/* ========== PRIORITY BADGE ========== */
+
+.task-detail-priority-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-2) var(--spacing-3);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+}
+
+.task-detail-priority-badge.high {
+    background: rgba(255, 149, 0, 0.1);
+    color: var(--accent-orange);
+}
+
+.task-detail-priority-badge.urgent {
+    background: rgba(255, 59, 48, 0.1);
+    color: var(--accent-red);
+}
+
+.task-detail-priority-badge .material-icons {
+    font-size: 16px;
+}
+
+/* ========== DUE DATE ========== */
+
+.task-detail-due-date {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-2) var(--spacing-3);
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+}
+
+.task-detail-due-date.urgent {
+    background: rgba(255, 59, 48, 0.1);
+    color: var(--accent-red);
+}
+
+.task-detail-due-date.soon {
+    background: rgba(255, 149, 0, 0.1);
+    color: var(--accent-orange);
+}
+
+.task-detail-due-date .material-icons {
+    font-size: 16px;
+}
+
+/* ========== DESCRIPTION ========== */
+
+.task-details-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-3);
+}
+
+.task-details-section-title {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.task-details-description {
+    padding: var(--spacing-4);
+    background: var(--bg-hover);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-base);
+    color: var(--text-primary);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.task-details-description:empty::before {
+    content: 'Описание отсутствует';
+    color: var(--text-tertiary);
+    font-style: italic;
+}
+
+/* ========== INFO GRID ========== */
+
+.task-details-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--spacing-4);
+}
+
+.task-detail-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-2);
+    padding: var(--spacing-4);
+    background: var(--bg-hover);
+    border-radius: var(--radius-lg);
+}
+
+.task-detail-info-label {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.task-detail-info-value {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+}
+
+.task-detail-info-value .material-icons {
+    font-size: 20px;
+    color: var(--text-secondary);
+}
+
+/* ========== ASSIGNEE / CREATOR ========== */
+
+.task-detail-user {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+}
+
+.task-detail-user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--white);
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.task-detail-user-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.task-detail-user-name {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-primary);
+}
+
+/* ========== WATCHERS ========== */
+
+.task-details-watchers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-2);
+}
+
+.task-detail-watcher {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-2) var(--spacing-3);
+    background: var(--primary-alpha-10);
+    color: var(--primary);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+}
+
+.task-detail-watcher-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: var(--font-weight-semibold);
+    color: var(--white);
+    overflow: hidden;
+}
+
+.task-detail-watcher-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* ========== COMMENTS SECTION ========== */
+
+.task-details-comments {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-3);
+}
+
+.task-detail-comment {
+    display: flex;
+    gap: var(--spacing-3);
+    padding: var(--spacing-4);
+    background: var(--bg-hover);
+    border-radius: var(--radius-lg);
+}
+
+.task-detail-comment-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    flex-shrink: 0;
+}
+
+.task-detail-comment-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.task-detail-comment-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    margin-bottom: var(--spacing-2);
+}
+
+.task-detail-comment-author {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+}
+
+.task-detail-comment-time {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+}
+
+.task-detail-comment-text {
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    line-height: 1.5;
+}
+
+/* ========== CLOSE BUTTON ========== */
+
+.task-details-close-btn {
+    position: absolute;
+    top: var(--spacing-4);
+    right: var(--spacing-4);
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    background: var(--bg-hover);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-base);
+}
+
+.task-details-close-btn:hover {
+    background: var(--bg-active);
+}
+
+.task-details-close-btn .material-icons {
+    font-size: 24px;
+    color: var(--text-secondary);
+}
+
+/* ========== MOBILE RESPONSIVE ========== */
+
+@media (max-width: 768px) {
+    #taskDetailsModal .modal-content {
+        max-width: 100%;
+        margin: 0;
+        border-radius: 0;
+        max-height: 100vh;
+    }
+    
+    .task-details-container {
+        padding: var(--spacing-4);
+        padding-top: calc(var(--spacing-4) + var(--sat));
+        padding-bottom: calc(var(--spacing-4) + var(--sab));
+    }
+    
+    .task-details-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .task-details-title {
+        font-size: var(--font-size-xl);
+    }
+    
+    .task-details-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+    
+    .task-details-info-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .task-details-meta {
+        width: 100%;
+    }
+}
+
+/* ========== DARK THEME ========== */
+
+[data-theme="dark"] .task-details-description,
+[data-theme="dark"] .task-detail-info-item,
+[data-theme="dark"] .task-detail-comment {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .task-details-close-btn {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .task-details-close-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+/* ==================== TASK MODAL STYLES ==================== */
+
+/* Task Modal Container */
+.modal-content {
+    position: relative;
+}
+
+/* Task Form Groups */
+.task-form-group {
+    margin-bottom: var(--spacing-5);
+}
+
+.task-form-group:last-child {
+    margin-bottom: 0;
+}
+
+.task-form-group label {
+    display: block;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: var(--spacing-2);
+}
+
+.task-form-group input[type="text"],
+.task-form-group input[type="date"],
+.task-form-group select,
+.task-form-group textarea {
+    width: 100%;
+    padding: var(--spacing-3) var(--spacing-4);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-base);
+    color: var(--text-primary);
+    background: var(--bg-panel);
+    transition: all var(--transition-base);
+    font-family: inherit;
+}
+
+.task-form-group input:focus,
+.task-form-group select:focus,
+.task-form-group textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: var(--white);
+    box-shadow: 0 0 0 3px var(--primary-alpha-10);
+}
+
+.task-form-group input::placeholder,
+.task-form-group textarea::placeholder {
+    color: var(--text-tertiary);
+}
+
+.task-form-group textarea {
+    min-height: 100px;
+    resize: vertical;
+    font-family: inherit;
+}
+
+.task-form-group select {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236B7280' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 36px;
+}
+
+/* Task Watchers Container */
+#taskWatchersContainer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-2);
+    padding: var(--spacing-3);
+    background: var(--bg-hover);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    min-height: 60px;
+}
+
+.watcher-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-2) var(--spacing-3);
+    background: var(--primary-alpha-10);
+    color: var(--primary);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: all var(--transition-base);
+}
+
+.watcher-chip:hover {
+    background: var(--primary-alpha-20);
+    transform: scale(1.05);
+}
+
+.watcher-chip .material-icons {
+    font-size: 16px;
+}
+
+.watcher-chip-avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: var(--font-weight-semibold);
+    color: var(--white);
+    overflow: hidden;
+}
+
+.watcher-chip-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.add-watcher-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-2) var(--spacing-3);
+    background: transparent;
+    border: 1px dashed var(--border-light);
+    color: var(--text-secondary);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: all var(--transition-base);
+}
+
+.add-watcher-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.add-watcher-btn .material-icons {
+    font-size: 16px;
+}
+
+/* Priority Select Colors */
+.task-form-group select#taskPriority option[value="low"] {
+    color: var(--text-secondary);
+}
+
+.task-form-group select#taskPriority option[value="normal"] {
+    color: var(--text-primary);
+}
+
+.task-form-group select#taskPriority option[value="high"] {
+    color: var(--accent-orange);
+}
+
+.task-form-group select#taskPriority option[value="urgent"] {
+    color: var(--accent-red);
+}
+
+/* Task Details Modal */
+#taskDetailsContent {
+    padding: var(--spacing-6);
+}
+
+.task-details-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: var(--spacing-6);
+    padding-bottom: var(--spacing-4);
+    border-bottom: 1px solid var(--divider);
+}
+
+.task-details-title {
+    flex: 1;
+}
+
+.task-details-title h2 {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-2);
+}
+
+.task-details-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-2);
+    align-items: center;
+}
+
+.task-details-actions {
+    display: flex;
+    gap: var(--spacing-2);
+}
+
+.task-details-section {
+    margin-bottom: var(--spacing-6);
+}
+
+.task-details-section:last-child {
+    margin-bottom: 0;
+}
+
+.task-details-section h3 {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: var(--spacing-3);
+}
+
+.task-details-description {
+    font-size: var(--font-size-base);
+    color: var(--text-primary);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    padding: var(--spacing-4);
+    background: var(--bg-hover);
+    border-radius: var(--radius-lg);
+}
+
+.task-details-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--spacing-4);
+}
+
+.task-info-item {
+    padding: var(--spacing-3);
+    background: var(--bg-hover);
+    border-radius: var(--radius-lg);
+}
+
+.task-info-item-label {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: var(--spacing-2);
+}
+
+.task-info-item-value {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-primary);
+}
+
+/* Dark Theme for Task Modal */
+[data-theme="dark"] .task-form-group input,
+[data-theme="dark"] .task-form-group select,
+[data-theme="dark"] .task-form-group textarea {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .task-form-group input:focus,
+[data-theme="dark"] .task-form-group select:focus,
+[data-theme="dark"] .task-form-group textarea:focus {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] #taskWatchersContainer {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .task-details-description,
+[data-theme="dark"] .task-info-item {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .task-details-header {
+        flex-direction: column;
+        gap: var(--spacing-3);
+    }
+    
+    .task-details-actions {
+        width: 100%;
+    }
+    
+    .task-details-info-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    #taskDetailsContent {
+        padding: var(--spacing-4);
+    }
+}
+
+/* ==================== MOBILE VIEW TOGGLE FIX ==================== */
+
+/* На мобильных скрываем переключатель вида ТОЛЬКО в sidebar */
+@media (max-width: 768px) {
+    /* Скрываем view toggle ТОЛЬКО в sidebar tasks tab */
+    #tasksTab .tasks-view-header .view-toggle {
+        display: none !important;
+    }
+    
+    /* Кнопка создания задачи в sidebar остается */
+    #tasksTab .tasks-view-header {
+        display: flex;
+        justify-content: flex-end;
+        padding: var(--spacing-3);
+    }
+    
+    /* ВАЖНО: Переключатель в основной области задач ДОЛЖЕН быть виден */
+    .tasks-header .view-toggle {
+        display: flex !important;
+    }
+    
+    /* Показываем оба вида, управление через JavaScript */
+    #kanbanBoard,
+    #tasksList {
+        display: none;
+    }
+    
+    /* По умолчанию показываем канбан */
+    #kanbanBoard {
+        display: flex;
+    }
+    
+    /* Когда активен list view - переключаем видимость */
+    .tasks-container[data-view="list"] #kanbanBoard,
+    #tasksArea[data-view="list"] #kanbanBoard {
+        display: none !important;
+    }
+    
+    .tasks-container[data-view="list"] #tasksList,
+    #tasksArea[data-view="list"] #tasksList {
+        display: block !important;
+    }
+    
+    /* Адаптация layout для мобильных */
+    .tasks-header {
+        flex-direction: column;
+        gap: var(--spacing-3);
+        padding: var(--spacing-4);
+    }
+    
+    .tasks-header-left {
+        width: 100%;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--spacing-3);
+    }
+    
+    .tasks-header-right {
+        width: 100%;
+        flex-direction: column;
+        gap: var(--spacing-3);
+    }
+    
+    /* View toggle на всю ширину на мобильных */
+    .tasks-header .view-toggle {
+        width: 50%;
+        justify-content: center;
+    }
+    
+    .tasks-header .view-toggle-btn {
+        flex: 1;
+        justify-content: center;
+    }
+    
+    /* Фильтры на мобильных */
+    .tasks-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--spacing-2);
+        width: 100%;
+    }
+    
+    .tasks-filters .filter-btn {
+        flex: 1;
+        min-width: calc(50% - var(--spacing-1));
+    }
+    
+    /* Кнопка создания задачи */
+    .create-task-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* Улучшаем отображение канбана на мобильных */
+@media (max-width: 768px) {
+    .kanban-board {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scroll-snap-type: x mandatory;
+        padding: var(--spacing-4);
+        display: flex;
+        gap: var(--spacing-3);
+    }
+    
+    .kanban-column {
+        scroll-snap-align: start;
+        min-width: 280px;
+        max-width: 280px;
+        flex-shrink: 0;
+    }
+    
+    .kanban-column:last-child {
+        margin-right: var(--spacing-4);
+    }
+    
+    /* Tasks List на мобильных */
+    .tasks-list {
+        padding: var(--spacing-4);
+    }
+}
+
+/* ==================== PROFILE MODAL STYLES ==================== */
+
+/* Profile Modal Container */
+.profile-modal-content {
+    max-width: 600px;
+    width: 100%;
+}
+
+.profile-modal-body {
+    padding: 0;
+    overflow-y: auto;
+    max-height: 80vh;
+}
+
+/* Avatar Section */
+.profile-avatar-section {
+    text-align: center;
+    padding: var(--spacing-8) var(--spacing-6);
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    position: relative;
+}
+
+.profile-avatar-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.profile-avatar-large {
+    width: 120px;
+    height: 120px;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.2);
+    color: var(--white);
+    font-size: 48px;
+    font-weight: var(--font-weight-semibold);
+    overflow: hidden;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    position: relative;
+}
+
+.profile-avatar-large img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.profile-avatar-large .material-icons {
+    font-size: 64px;
+}
+
+.change-avatar-btn {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    background: var(--white);
+    color: var(--primary);
+    border: 3px solid var(--white);
+    box-shadow: var(--shadow-md);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-base);
+}
+
+.change-avatar-btn:hover {
+    background: var(--primary);
+    color: var(--white);
+    transform: scale(1.1);
+}
+
+.change-avatar-btn:active {
+    transform: scale(0.95);
+}
+
+.change-avatar-btn .material-icons {
+    font-size: 20px;
+}
+
+/* Profile Info Section */
+.profile-info-section {
+    padding: var(--spacing-6);
+    background: var(--bg-panel);
+}
+
+.profile-info-section + .profile-info-section {
+    border-top: 8px solid var(--divider);
+}
+
+.profile-field {
+    margin-bottom: var(--spacing-5);
+}
+
+.profile-field:last-child {
+    margin-bottom: 0;
+}
+
+.profile-field > label {
+    display: block;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: var(--spacing-2);
+}
+
+.profile-field-content {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    background: var(--bg-hover);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-3) var(--spacing-4);
+    transition: all var(--transition-base);
+}
+
+.profile-field-content:focus-within {
+    border-color: var(--primary);
+    background: var(--white);
+    box-shadow: 0 0 0 3px var(--primary-alpha-10);
+}
+
+.profile-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-size: var(--font-size-base);
+    color: var(--text-primary);
+    outline: none;
+    padding: 0;
+}
+
+.profile-input:disabled {
+    color: var(--text-tertiary);
+    cursor: not-allowed;
+}
+
+.profile-input:read-only:not(:disabled) {
+    cursor: text;
+}
+
+.profile-field-content .icon-btn {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+}
+
+.field-hint {
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+    margin-top: var(--spacing-2);
+    font-style: italic;
+}
+
+/* Profile Actions */
+.profile-actions {
+    padding: var(--spacing-4) var(--spacing-6);
+    background: var(--bg-panel);
+    border-top: 1px solid var(--divider);
+    display: flex;
+    gap: var(--spacing-3);
+    justify-content: flex-end;
+}
+
+/* Profile Danger Zone */
+.profile-danger-zone {
+    padding: var(--spacing-6);
+    background: var(--bg-panel);
+    border-top: 8px solid var(--divider);
+}
+
+.btn-danger {
+    width: 100%;
+    padding: var(--spacing-3) var(--spacing-4);
+    background: transparent;
+    color: var(--accent-red);
+    border: 2px solid var(--accent-red);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-2);
+    transition: all var(--transition-base);
+}
+
+.btn-danger:hover {
+    background: var(--accent-red);
+    color: var(--white);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 59, 48, 0.3);
+}
+
+.btn-danger:active {
+    transform: translateY(0);
+}
+
+.btn-danger .material-icons {
+    font-size: 20px;
+}
+
+/* Profile Settings Item */
+.profile-settings-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+    padding: var(--spacing-4);
+    background: var(--bg-hover);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all var(--transition-base);
+}
+
+.profile-settings-item:hover {
+    background: var(--white);
+    border-color: var(--primary);
+    transform: translateX(4px);
+}
+
+.profile-settings-item:active {
+    transform: translateX(2px);
+}
+
+.profile-settings-item .material-icons:first-child {
+    color: var(--primary);
+    font-size: 24px;
+}
+
+.profile-settings-item > span:nth-child(2) {
+    flex: 1;
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-primary);
+}
+
+.profile-settings-item .material-icons:last-child {
+    color: var(--text-tertiary);
+    font-size: 20px;
+}
+
+/* Theme Settings */
+.theme-settings {
+    padding: var(--spacing-5);
+}
+
+.theme-option {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-4);
+    padding: var(--spacing-4);
+    background: var(--bg-panel);
+    border: 2px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--spacing-3);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    position: relative;
+}
+
+.theme-option:last-child {
+    margin-bottom: 0;
+}
+
+.theme-option:hover {
+    background: var(--bg-hover);
+    border-color: var(--primary-alpha-30);
+    transform: translateX(4px);
+}
+
+.theme-option.active {
+    background: var(--primary-alpha-10);
+    border-color: var(--primary);
+}
+
+.theme-option.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: var(--primary);
+    border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+}
+
+.theme-option-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-hover);
+    flex-shrink: 0;
+}
+
+.theme-option.active .theme-option-icon {
+    background: var(--primary);
+    color: var(--white);
+}
+
+.theme-option-icon .material-icons {
+    font-size: 28px;
+    color: var(--text-secondary);
+}
+
+.theme-option.active .theme-option-icon .material-icons {
+    color: var(--white);
+}
+
+.theme-option-info {
+    flex: 1;
+}
+
+.theme-option-info h4 {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.theme-option-info p {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.theme-option-check {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-full);
+    border: 2px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all var(--transition-base);
+}
+
+.theme-option.active .theme-option-check {
+    background: var(--primary);
+    border-color: var(--primary);
+}
+
+.theme-option-check .material-icons {
+    font-size: 16px;
+    color: var(--white);
+    opacity: 0;
+    transition: opacity var(--transition-base);
+}
+
+.theme-option.active .theme-option-check .material-icons {
+    opacity: 1;
+}
+
+/* Dark Theme Adjustments */
+[data-theme="dark"] .profile-avatar-section {
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+}
+
+[data-theme="dark"] .profile-field-content {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .profile-field-content:focus-within {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--primary);
+}
+
+[data-theme="dark"] .profile-settings-item {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .profile-settings-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .theme-option {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .theme-option:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .theme-option.active {
+    background: var(--primary-alpha-20);
+}
+
+[data-theme="dark"] .theme-option-icon {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .profile-modal-content {
+        max-width: 100%;
+        margin: 0;
+        border-radius: 0;
+    }
+    
+    .profile-modal-body {
+        max-height: calc(100vh - 64px);
+    }
+    
+    .profile-avatar-section {
+        padding: var(--spacing-6) var(--spacing-4);
+    }
+    
+    .profile-avatar-large {
+        width: 100px;
+        height: 100px;
+        font-size: 40px;
+    }
+    
+    .profile-avatar-large .material-icons {
+        font-size: 56px;
+    }
+    
+    .change-avatar-btn {
+        width: 36px;
+        height: 36px;
+    }
+    
+    .profile-info-section {
+        padding: var(--spacing-4);
+    }
+    
+    .profile-danger-zone {
+        padding: var(--spacing-4);
+    }
+    
+    .theme-settings {
+        padding: var(--spacing-4);
+    }
+    
+    .theme-option {
+        padding: var(--spacing-3);
+    }
+    
+    .theme-option-icon {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .theme-option-icon .material-icons {
+        font-size: 24px;
+    }
+}
+
+/* Animation for avatar change */
+@keyframes avatarPulse {
+    0%, 100% {
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    }
+    50% {
+        box-shadow: 0 8px 32px rgba(0, 184, 169, 0.4);
+    }
+}
+
+.profile-avatar-large.uploading {
+    animation: avatarPulse 1.5s ease-in-out infinite;
+}
+
+/* ==================== MOBILE FIXES ==================== */
+
+@media (max-width: 768px) {
+    /* Фикс для task list на мобильных */
+    .task-list-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .task-list-checkbox {
+        align-self: flex-start;
+    }
+    
+    .task-list-footer {
+        width: 100%;
+    }
+    
+    /* Фикс для view toggle на мобильных */
+    .view-toggle {
+        display: none; /* Скрыть на мобильных, всегда показывать канбан */
+    }
+    
+    /* Chat info panel на всю ширину */
+    .chat-info-panel {
+        width: 100%;
+        right: -100%;
+    }
+    
+    .chat-info-panel.open {
+        right: 0;
+    }
+}
+
+/* ==================== TOAST IMPROVEMENTS ==================== */
+
+.toast {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+    padding: var(--spacing-4);
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xl);
+    border-left: 4px solid;
+    min-width: 300px;
+    animation: toastSlideIn 0.3s ease-out;
+}
+
+.toast.success {
+    border-left-color: var(--accent-green);
+}
+
+.toast.success .material-icons {
+    color: var(--accent-green);
+}
+
+.toast.error {
+    border-left-color: var(--accent-red);
+}
+
+.toast.error .material-icons {
+    color: var(--accent-red);
+}
+
+.toast.info {
+    border-left-color: var(--primary);
+}
+
+.toast.info .material-icons {
+    color: var(--primary);
+}
+
+.toast.warning {
+    border-left-color: var(--accent-orange);
+}
+
+.toast.warning .material-icons {
+    color: var(--accent-orange);
+}
+
+[data-theme="dark"] .toast {
+    background: var(--bg-panel);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+}
+
+/* ==================== MODAL IMPROVEMENTS ==================== */
+
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-5);
+}
+
+.modal.active {
+    display: flex;
+}
+
+.modal-content {
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl);
+    max-width: 600px;
+    width: 100%;
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: modalSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme="dark"] .modal-content {
+    background: var(--bg-sidebar);
+}
+
+.modal-header {
+    padding: var(--spacing-5) var(--spacing-6);
+    border-bottom: 1px solid var(--divider);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.modal-header h2 {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+}
+
+.modal-body {
+    padding: var(--spacing-6);
+    overflow-y: auto;
+    flex: 1;
+}
+
+.modal-footer {
+    padding: var(--spacing-4) var(--spacing-6);
+    border-top: 1px solid var(--divider);
+    display: flex;
+    gap: var(--spacing-3);
+    justify-content: flex-end;
+}
+
+/* ==================== SCROLLBAR STYLING ==================== */
+
+/* Для webkit браузеров */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-light);
+    border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-tertiary);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* ==================== ANIMATIONS ==================== */
+
+@keyframes toastSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes toastSlideOut {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* ==================== KANBAN BOARD FIXES ==================== */
+
+.kanban-board {
+    display: flex;
+    gap: var(--spacing-5);
+    padding: var(--spacing-5) var(--spacing-6);
+    overflow-x: auto;
+    flex: 1;
+}
+
+.kanban-column {
+    min-width: 320px;
+    max-width: 320px;
+    background: var(--bg-hover);
+    border-radius: var(--radius-lg);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.kanban-column-header {
+    padding: var(--spacing-4);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 3px solid;
+}
+
+.kanban-column-header h3 {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+}
+
+.task-count {
+    background: var(--bg-panel);
+    color: var(--text-secondary);
+    padding: 4px var(--spacing-2);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    min-width: 24px;
+    text-align: center;
+}
+
+.kanban-column-content {
+    padding: var(--spacing-3);
+    flex: 1;
+    overflow-y: auto;
+}
+
+/* Drag and drop feedback */
+.task-card.dragging {
+    opacity: 0.5;
+}
+
+.kanban-column-content.drag-over {
+    background: var(--primary-alpha-10);
+}
+/* ==================== Z-INDEX AND LAYOUT FIX FOR MOBILE TASKS ==================== */
+
+/* CRITICAL FIX: Prevents view toggle from overlapping filters */
+
+@media (max-width: 768px) {
+    /* Ensure proper stacking context */
+    .tasks-header {
+        position: relative;
+        z-index: 10;
+    }
+    
+    /* Title row */
+    .tasks-header-left {
+        order: 1 !important;
+        position: relative;
+        z-index: 3;
+    }
+    
+    /* View toggle row - separate, below title */
+    .tasks-header > .view-toggle {
+        order: 2 !important;
+        position: absolute;
+        z-index: 2;
+        margin-bottom: 0;
+        margin-top: -5px;
+    }
+    
+    /* Filters row - below toggle */
+    .tasks-header-right {
+        order: 3 !important;
+        position: relative;
+        z-index: 1;
+    }
+    
+    /* Ensure kanban/list are below header */
+    .kanban-board,
+    .tasks-list {
+        position: relative;
+        z-index: 0;
+    }
+    
+    /* Add clear backgrounds to prevent transparency issues */
+    .view-toggle {
+        background: var(--bg-hover) !important;
+    }
+    
+    .tasks-filters {
+        background: transparent;
+    }
+    
+    .filter-btn {
+        background: var(--bg-panel) !important;
+    }
+}

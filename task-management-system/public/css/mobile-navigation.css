@@ -1,0 +1,564 @@
+/* ==================== MOBILE NAVIGATION (TELEGRAM-STYLE) ==================== */
+
+/* Mobile-specific variables */
+:root {
+    --mobile-header-height: 56px;
+    --mobile-breakpoint: 768px;
+}
+
+/* ==================== MOBILE LAYOUT SYSTEM ==================== */
+
+@media (max-width: 768px) {
+    /* Main app becomes a single-screen container */
+    .main-app {
+        position: relative;
+        overflow: hidden;
+    }
+    
+    /* Sidebar, Chat Area, and other main sections become full-screen panels */
+    .sidebar,
+    .chat-area,
+    .tasks-container,
+    .admin-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100vh;
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 1;
+    }
+    
+    /* Default state: Show sidebar (chats list) */
+    .sidebar {
+        transform: translateX(0);
+        z-index: 2;
+    }
+    
+    .chat-area,
+    .tasks-container,
+    .admin-container {
+        transform: translateX(100%);
+        z-index: 3;
+    }
+    
+    /* When chat is active: Hide sidebar, show chat */
+    .main-app.chat-active .sidebar {
+        transform: translateX(-100%);
+    }
+    
+    .main-app.chat-active .chat-area {
+        transform: translateX(0);
+    }
+    
+    /* When tasks are active */
+    .main-app.tasks-active .sidebar {
+        transform: translateX(-100%);
+    }
+    
+    .main-app.tasks-active .tasks-container {
+        transform: translateX(0);
+    }
+    
+    /* When admin is active */
+    .main-app.admin-active .sidebar {
+        transform: translateX(-100%);
+    }
+    
+    .main-app.admin-active .admin-container {
+        transform: translateX(0);
+    }
+    
+    /* ==================== MOBILE BACK BUTTON ==================== */
+    
+    /* Back button in chat header (hidden on desktop) */
+
+        
+  
+        
+        /* Modify chat header to include back button */
+        .chat-header {
+            padding-left: var(--spacing-2);
+        }
+        
+        .tasks-header,
+        .admin-header {
+            position: relative;
+        }
+        
+        .tasks-header::before,
+        .admin-header::before {
+            content: 'arrow_back';
+            font-family: 'Material Icons';
+            position: absolute;
+            left: var(--spacing-4);
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 24px;
+            color: var(--text-primary);
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius-full);
+            transition: background var(--transition-base);
+        }
+        
+        .tasks-header::before:active,
+        .admin-header::before:active {
+            background: var(--bg-hover);
+        }
+    }
+    
+    /* ==================== MOBILE SIDEBAR ADJUSTMENTS ==================== */
+    
+    @media (max-width: 768px) {
+        .sidebar {
+            width: 100%;
+            border-right: none;
+        }
+        
+        /* Remove toggle button on mobile */
+        .sidebar-toggle-btn {
+            display: none;
+        }
+        
+        /* Adjust header height */
+        .sidebar-header {
+            height: var(--mobile-header-height);
+        }
+        
+        /* Chat items - increase touch target */
+        .chat-item,
+        .contact-item {
+            padding: var(--spacing-4);
+            min-height: 72px;
+        }
+        
+        .chat-avatar,
+        .contact-avatar {
+            width: 48px;
+            height: 48px;
+        }
+        
+        /* Sidebar search */
+        .sidebar-search {
+            padding: var(--spacing-3);
+        }
+        
+        .sidebar-search input {
+            font-size: 16px; /* Prevents zoom on iOS */
+        }
+    }
+    
+    /* ==================== MOBILE CHAT ADJUSTMENTS ==================== */
+    
+    @media (max-width: 768px) {
+        .chat-header {
+            height: var(--mobile-header-height);
+            padding: var(--spacing-2) var(--spacing-4);
+        }
+        
+        /* Welcome screen should not show on mobile - go straight to chat */
+        .welcome-screen {
+            display: none !important;
+        }
+        
+        /* Messages */
+        .messages-container {
+            padding: var(--spacing-3) var(--spacing-4);
+        }
+        
+        .message {
+            max-width: 80%;
+        }
+        
+        .message-bubble {
+            max-width: 100%;
+            font-size: var(--font-size-base);
+        }
+        
+        /* Message input */
+        .message-input {
+            padding: var(--spacing-2) var(--spacing-3);
+        }
+        
+        .input-wrapper {
+            min-height: 40px;
+        }
+        
+        .input-wrapper textarea {
+            font-size: 16px; /* Prevents zoom on iOS */
+        }
+        
+        .btn-send {
+            width: 40px;
+            height: 40px;
+        }
+        
+        .icon-btn {
+            width: 36px;
+            height: 36px;
+        }
+        
+        /* File preview on mobile */
+        .attach-menu {
+            bottom: 60px;
+            left: var(--spacing-3);
+            right: var(--spacing-3);
+            max-width: none;
+        }
+        
+        .emoji-picker {
+            bottom: 60px;
+            left: var(--spacing-3);
+            right: var(--spacing-3);
+            width: auto;
+            max-width: none;
+        }
+    }
+    
+    /* ==================== MOBILE TASKS ADJUSTMENTS ==================== */
+    
+    @media (max-width: 768px) {
+        .tasks-header {
+            height: var(--mobile-header-height);
+            padding: var(--spacing-3) var(--spacing-4);
+            flex-wrap: nowrap;
+            padding-left: 56px; /* Space for back button */
+        }
+        
+        .tasks-header h2 {
+            font-size: var(--font-size-lg);
+        }
+        
+        .tasks-header-left {
+            gap: var(--spacing-2);
+        }
+        
+        .view-toggle {
+            display: none; /* Hide view toggle on mobile, default to kanban */
+        }
+        
+        .tasks-filters {
+            display: none; /* Show in dropdown instead */
+        }
+        
+        .create-task-btn {
+            position: fixed;
+            bottom: var(--spacing-5);
+            right: var(--spacing-5);
+            z-index: 100;
+            border-radius: var(--radius-full);
+            width: 56px;
+            height: 56px;
+            padding: 15px;
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .create-task-btn span:not(.material-icons) {
+            display: none;
+        }
+        
+        /* Kanban board - horizontal scroll */
+        .kanban-board {
+            padding: var(--spacing-3);
+            gap: var(--spacing-3);
+        }
+        
+        .kanban-column {
+            min-width: 280px;
+            max-width: 280px;
+        }
+    }
+    
+    /* ==================== MOBILE ADMIN ADJUSTMENTS ==================== */
+    
+    @media (max-width: 768px) {
+        .admin-container {
+            flex-direction: column;
+        }
+        
+        .admin-sidebar {
+            display: none; /* Hide on mobile, use tabs instead */
+        }
+        
+        .admin-header {
+            height: var(--mobile-header-height);
+            padding: var(--spacing-3) var(--spacing-4);
+            padding-left: 56px; /* Space for back button */
+        }
+        
+        .admin-content {
+            padding: var(--spacing-4);
+        }
+        
+        /* Admin stats grid */
+        .admin-stats-grid {
+            grid-template-columns: 1fr;
+            gap: var(--spacing-4);
+        }
+    }
+    
+    /* ==================== MOBILE MODALS ==================== */
+    
+    @media (max-width: 768px) {
+        .modal-content {
+            width: 95%;
+            max-width: none;
+            margin: var(--spacing-4);
+            max-height: calc(100vh - var(--spacing-8));
+        }
+        
+        .modal-header {
+            padding: var(--spacing-4);
+        }
+        
+        .modal-body {
+            padding: var(--spacing-4);
+        }
+        
+        .modal-footer {
+            padding: var(--spacing-3) var(--spacing-4);
+            flex-direction: column-reverse;
+        }
+        
+        .modal-footer button {
+            width: 100%;
+        }
+    }
+    
+    /* ==================== MOBILE CHAT INFO PANEL ==================== */
+    
+    @media (max-width: 768px) {
+        .chat-info-panel {
+            width: 100%;
+            right: -100%;
+        }
+        
+        .chat-info-panel.open {
+            right: 0;
+        }
+    }
+    
+    /* ==================== MOBILE SAFE AREA (iPhone notch) ==================== */
+    
+    @supports (padding-top: env(safe-area-inset-top)) {
+        @media (max-width: 768px) {
+            .sidebar-header,
+            .chat-header,
+            .tasks-header,
+            .admin-header {
+                padding-top: max(var(--spacing-3), env(safe-area-inset-top));
+                height: calc(var(--mobile-header-height) + env(safe-area-inset-top));
+            }
+            
+            .message-input {
+                padding-bottom: max(var(--spacing-3), env(safe-area-inset-bottom));
+            }
+        }
+    }
+    
+    /* ==================== MOBILE TOUCH OPTIMIZATIONS ==================== */
+    
+    @media (max-width: 768px) {
+        /* Larger touch targets */
+        .tab-btn {
+            padding: var(--spacing-4);
+            min-height: 48px;
+        }
+        
+        .icon-btn {
+            min-width: 44px;
+            min-height: 44px;
+        }
+        
+        /* Remove hover effects on touch devices */
+        @media (hover: none) {
+            .chat-item:hover,
+            .contact-item:hover,
+            .icon-btn:hover,
+            .btn-primary:hover,
+            .message:hover .message-bubble {
+                background: inherit;
+                box-shadow: inherit;
+                transform: none;
+            }
+            
+            /* Use active states instead */
+            .chat-item:active,
+            .contact-item:active {
+                background: var(--bg-active);
+            }
+            
+            .icon-btn:active {
+                background: var(--bg-hover);
+            }
+        }
+        
+        /* Prevent text selection on UI elements */
+        .chat-item,
+        .contact-item,
+        .tab-btn,
+        .icon-btn,
+        .btn-primary,
+        .btn-secondary {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        /* Smooth scrolling */
+        .messages-container,
+        .sidebar-content,
+        .kanban-board {
+            -webkit-overflow-scrolling: touch;
+        }
+    }
+    
+    /* ==================== MOBILE LANDSCAPE OPTIMIZATIONS ==================== */
+    
+    @media (max-width: 768px) and (orientation: landscape) {
+        .sidebar-header,
+        .chat-header,
+        .tasks-header {
+            height: 48px;
+            padding: var(--spacing-2) var(--spacing-3);
+        }
+        
+        .mobile-back-btn {
+            width: 36px;
+            height: 36px;
+        }
+        
+        .messages-container {
+            padding: var(--spacing-2) var(--spacing-4);
+        }
+    }
+}
+
+/* ==================== MOBILE PULL-TO-REFRESH (OPTIONAL) ==================== */
+
+@media (max-width: 768px) {
+    .sidebar-content,
+    .messages-container {
+        overscroll-behavior-y: contain;
+    }
+}
+
+/* ==================== MOBILE STATUS BAR (iOS) ==================== */
+
+@media (max-width: 768px) {
+    /* Meta theme-color будет меняться через JS */
+    body {
+        /* Prevent bounce scroll */
+        overscroll-behavior-y: none;
+    }
+    
+    .main-app {
+        /* Ensure full viewport height on mobile */
+        min-height: 100vh;
+        min-height: -webkit-fill-available;
+    }
+}
+
+/* ==================== MOBILE GESTURES HINTS ==================== */
+
+@media (max-width: 768px) {
+    /* Visual feedback for swipe gestures */
+    .chat-item,
+    .contact-item {
+        position: relative;
+        overflow: hidden;
+    }
+    
+    /* Ripple effect on tap */
+    .chat-item::after,
+    .contact-item::after,
+    .tab-btn::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 0;
+        height: 0;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.1);
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+    }
+    
+    .chat-item:active::after,
+    .contact-item:active::after,
+    .tab-btn:active::after {
+        width: 200%;
+        height: 200%;
+        transition: width 0.4s, height 0.4s;
+    }
+}
+
+/* ==================== MOBILE LOADING STATES ==================== */
+
+@media (max-width: 768px) {
+    /* Pull to refresh indicator */
+    .refresh-indicator {
+        position: absolute;
+        top: -60px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 40px;
+        height: 40px;
+        transition: top 0.3s;
+    }
+    
+    .refresh-indicator.active {
+        top: 10px;
+    }
+}
+
+/* ==================== MOBILE BOTTOM NAVIGATION (OPTIONAL) ==================== */
+
+@media (max-width: 768px) {
+    /* If you want to add bottom navigation like Telegram */
+    .mobile-bottom-nav {
+        display: none; /* Hidden by default, can be enabled */
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 56px;
+        background: var(--bg-header);
+        border-top: 1px solid var(--border-light);
+        z-index: 1000;
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+}
+
+/* ==================== MOBILE VIDEO CONFERENCE ==================== */
+
+@media (max-width: 768px) {
+    .conference-panel {
+        /* Full screen on mobile */
+    }
+    
+    .conference-controls {
+        padding-bottom: calc(var(--spacing-5) + env(safe-area-inset-bottom));
+    }
+    
+    .control-btn {
+        width: 48px;
+        height: 48px;
+    }
+    
+    .conference-sidebar {
+        width: 100%;
+        right: -100%;
+    }
+    
+    .conference-sidebar.open {
+        right: 0;
+    }
+}
+

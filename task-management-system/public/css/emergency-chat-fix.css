@@ -1,0 +1,134 @@
+/* ==================== MOBILE CHAT FIX - PRODUCTION ==================== */
+
+:root {
+    /* Safe Area с fallback */
+    --sat: env(safe-area-inset-top, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px);
+    --sar: env(safe-area-inset-right, 0px);
+}
+
+@media (max-width: 768px) {
+    
+    /* ========== BASE LAYOUT ========== */
+    
+    html, body {
+        height: 100%;
+        overflow: hidden;
+        position: fixed;
+        width: 100%;
+    }
+    
+    #chatContainer {
+        /* КРИТИЧНО: dvh для адаптации */
+        height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    
+    /* ========== CHAT HEADER ========== */
+    
+    .chat-header {
+        flex-shrink: 0;
+        padding-top: calc(12px + var(--sat));
+        padding-bottom: 12px;
+        padding-left: calc(12px + var(--sal));
+        padding-right: calc(12px + var(--sar));
+        background: var(--bg-panel);
+        z-index: 100;
+    }
+    
+    /* ========== MESSAGES AREA ========== */
+    
+    .messages-container {
+        /* Занимает всё доступное пространство */
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-y: contain;
+        
+        /* Padding для input внизу */
+        padding-bottom: calc(60px + var(--sab));
+    }
+    
+    /* Когда клавиатура открыта */
+    body.keyboard-open .messages-container {
+        /* Уменьшаем padding */
+        padding-bottom: 12px;
+    }
+    
+    /* ========== MESSAGE INPUT ========== */
+    
+    .message-input {
+        /* Липкий к низу viewport */
+        position: sticky;
+        bottom: 0;
+        
+        flex-shrink: 0;
+        
+        background: var(--bg-panel);
+        border-top: 1px solid var(--divider);
+        
+        /* Внутренний padding */
+        padding: 8px;
+        padding-bottom: calc(8px + var(--sab));
+        
+        /* Flexbox для кнопок */
+        display: flex;
+        gap: 8px;
+        align-items: flex-end;
+        
+        /* Z-index выше messages */
+        z-index: 10;
+    }
+    
+    /* iOS: Когда клавиатура открыта */
+    @supports (-webkit-touch-callout: none) {
+        body.keyboard-open .message-input {
+            /* iOS поднимает sticky автоматически */
+            position: sticky;
+            bottom: 0;
+        }
+    }
+    
+    /* ========== INPUT ELEMENTS ========== */
+    
+    .input-wrapper {
+        flex: 1;
+        min-width: 0; /* КРИТИЧНО для flexbox */
+    }
+    
+    .input-wrapper textarea {
+        width: 100%;
+        min-height: 40px;
+        max-height: 120px;
+        resize: none;
+        
+        /* Prevent zoom на iOS */
+        font-size: 16px;
+        
+        border-radius: 20px;
+        padding: 10px 16px;
+        border: 1px solid var(--border-light);
+    }
+    
+    .message-input button {
+        width: 40px;
+        height: 40px;
+        flex-shrink: 0;
+        border-radius: 50%;
+        padding: 8px;
+    }
+    
+    /* ========== СКРЫВАЕМ СКРОЛЛБАР ========== */
+    
+    .messages-container::-webkit-scrollbar {
+        display: none;
+    }
+    
+    .messages-container {
+        scrollbar-width: none;
+    }
+}

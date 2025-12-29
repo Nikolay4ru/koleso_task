@@ -1,3 +1,4 @@
+// ==================== app.js ====================
 // ==================== Global Variables ====================
 let socket = null;
 let currentUser = null;
@@ -840,6 +841,13 @@ function showEmptyChatWindow(user) {
     currentChat = null;
     window.currentChat = null;
     
+    // КРИТИЧЕСКИ ВАЖНО: Показываем chatArea
+    const chatArea = document.getElementById('chatArea');
+    if (chatArea) {
+        chatArea.style.display = 'flex';
+        console.log('✅ chatArea displayed for empty chat');
+    }
+    
     document.getElementById('welcomeScreen').style.display = 'none';
     document.getElementById('chatContainer').style.display = 'flex';
 
@@ -1001,6 +1009,13 @@ async function openChat(chat) {
     }
     
     currentChat = chat;
+    
+    // КРИТИЧЕСКИ ВАЖНО: Показываем chatArea
+    const chatArea = document.getElementById('chatArea');
+    if (chatArea) {
+        chatArea.style.display = 'flex';
+        console.log('✅ chatArea displayed');
+    }
     
     // Hide welcome screen and show chat container
     const welcomeScreen = document.getElementById('welcomeScreen');
@@ -2299,28 +2314,46 @@ function setupTasksTabHandlers() {
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const tab = btn.dataset.tab;
+            const isMobile = window.innerWidth <= 768;
+            
+            console.log('📱 Tab clicked:', tab, 'isMobile:', isMobile);
             
             // Убираем активный класс со всех вкладок
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             
-            // Скрываем все области
+            // Скрываем все области (для desktop и mobile)
             document.getElementById('chatArea').style.display = 'none';
             document.getElementById('tasksArea').style.display = 'none';
             document.getElementById('adminArea').style.display = 'none';
             document.getElementById('welcomeScreen').style.display = 'none';
             
-            // Скрываем все tab-content в sidebar
+            // КРИТИЧЕСКИ ВАЖНО: Очищаем все tab-content
             document.querySelectorAll('.tab-content').forEach(content => {
                 content.classList.remove('active');
+                content.style.display = 'none'; // Явно скрываем
             });
             
             if (tab === 'tasks') {
-                document.getElementById('tasksArea').style.display = 'flex';
-                document.getElementById('tasksTab').classList.add('active');
+                document.getElementById('tasksArea').style.display = isMobile ? 'block' : 'flex';
+                const tasksTabContent = document.getElementById('tasksTab');
+                if (tasksTabContent) {
+                    tasksTabContent.classList.add('active');
+                    tasksTabContent.style.display = 'block'; // Явно показываем
+                }
+                
+                // На мобильных используем mobileNavigation если доступен
+                if (isMobile && window.mobileNavigation) {
+                    window.mobileNavigation.navigateTo('tasks');
+                }
             } else if (tab === 'admin') {
                 console.log('Opening admin panel...');
-                document.getElementById('adminArea').style.display = 'flex';
+                document.getElementById('adminArea').style.display = isMobile ? 'block' : 'flex';
+                
+                // На мобильных используем mobileNavigation
+                if (isMobile && window.mobileNavigation) {
+                    window.mobileNavigation.navigateTo('admin');
+                }
                 
                 // Загружаем данные админки
                 if (typeof loadAdminData === 'function') {
@@ -2329,14 +2362,46 @@ function setupTasksTabHandlers() {
                     console.error('loadAdminData function not found');
                 }
             } else if (tab === 'chats') {
-                document.getElementById('chatArea').style.display = 'flex';
-                document.getElementById('chatsTab').classList.add('active');
-                if (!currentChat) {
-                    document.getElementById('welcomeScreen').style.display = 'flex';
+                // Активируем tab-content для чатов
+                const chatsTabContent = document.getElementById('chatsTab');
+                if (chatsTabContent) {
+                    chatsTabContent.classList.add('active');
+                    chatsTabContent.style.display = 'block'; // Явно показываем
+                }
+                
+                // На desktop показываем chatArea
+                if (!isMobile) {
+                    document.getElementById('chatArea').style.display = 'flex';
+                    if (!currentChat) {
+                        document.getElementById('welcomeScreen').style.display = 'flex';
+                    }
+                } else {
+                    // На мобильных НЕ показываем chatArea автоматически
+                    // Только sidebar с чатами
+                    if (window.mobileNavigation) {
+                        window.mobileNavigation.navigateTo('sidebar');
+                    }
                 }
             } else if (tab === 'contacts') {
-                document.getElementById('chatArea').style.display = 'flex';
-                document.getElementById('contactsTab').classList.add('active');
+                // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Активируем контакты явно
+                const contactsTabContent = document.getElementById('contactsTab');
+                if (contactsTabContent) {
+                    contactsTabContent.classList.add('active');
+                    contactsTabContent.style.display = 'block'; // Явно показываем
+                    console.log('✅ Contacts tab activated, display:', contactsTabContent.style.display);
+                }
+                
+                // На desktop показываем chatArea
+                if (!isMobile) {
+                    document.getElementById('chatArea').style.display = 'flex';
+                } else {
+                    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ для мобильных
+                    // НЕ показываем chatArea, только sidebar с контактами
+                    if (window.mobileNavigation) {
+                        window.mobileNavigation.navigateTo('sidebar');
+                    }
+                    console.log('✅ Mobile contacts - navigated to sidebar');
+                }
             }
         });
     });

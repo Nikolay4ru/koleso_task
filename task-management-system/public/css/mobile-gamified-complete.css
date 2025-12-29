@@ -1,0 +1,377 @@
+/* ==================== MOBILE GAMIFIED - COMPLETE ==================== */
+/* Интеграция Card-Focused Gamified дизайна */
+
+:root {
+    --streak-fire: #FF6B35;
+    --streak-glow: rgba(255, 107, 53, 0.3);
+    --achievement-gold: #FFD700;
+    --progress-gradient: linear-gradient(90deg, #00B8A9 0%, #00D4C4 50%, #34C759 100%);
+    --card-shadow-gamified: 0 4px 16px rgba(0, 0, 0, 0.3);
+    --glow-critical: 0 0 20px rgba(255, 59, 48, 0.4);
+}
+
+@media (max-width: 768px) {
+    /* Header Override */
+    .tasks-header {
+        background: var(--bg-secondary) !important;
+        padding: max(20px, calc(env(safe-area-inset-top, 0px) + 12px)) 16px 16px !important;
+        display: flex;
+        flex-direction: column;
+        box-shadow: var(--card-shadow-gamified) !important;
+    }
+    
+    .tasks-header h2:first-child,
+    .tasks-header .view-toggle:not(.in-stats),
+    .tasks-header .tasks-filters,
+    .tasks-header .create-task-btn {
+        display: none !important;
+    }
+    
+    /* Greeting */
+    .tasks-greeting {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+    
+    .tasks-greeting__emoji {
+        font-size: 32px;
+        animation: wave 2s ease-in-out infinite;
+    }
+    
+    @keyframes wave {
+        0%, 100% { transform: rotate(0deg); }
+        10% { transform: rotate(14deg); }
+        20% { transform: rotate(-8deg); }
+        30% { transform: rotate(14deg); }
+        40% { transform: rotate(-4deg); }
+        50% { transform: rotate(10deg); }
+        60%, 100% { transform: rotate(0deg); }
+    }
+    
+    .tasks-greeting__text {
+        flex: 1;
+    }
+    
+    .tasks-greeting__title {
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin: 0 0 4px 0;
+    }
+    
+    .tasks-greeting__subtitle {
+        font-size: 14px;
+        color: var(--text-secondary);
+        margin: 0;
+    }
+    
+    /* Stats Badges */
+    .tasks-stats {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+    
+    .tasks-stats::-webkit-scrollbar {
+        display: none;
+    }
+    
+    .stat-badge {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--bg-tertiary);
+        padding: 8px 16px;
+        border-radius: 24px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    
+    .stat-badge--streak {
+        background: linear-gradient(135deg, #FF6B35 0%, #FF8C5A 100%);
+        color: white;
+        animation: pulse-glow 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulse-glow {
+        0%, 100% { box-shadow: 0 4px 12px var(--streak-glow); }
+        50% { box-shadow: 0 4px 16px rgba(255, 107, 53, 0.5); }
+    }
+    
+    .stat-badge__icon {
+        font-size: 20px;
+    }
+    
+    .stat-badge__value {
+        font-size: 16px;
+        font-weight: 700;
+    }
+    
+    .stat-badge__label {
+        font-size: 12px;
+        opacity: 0.9;
+    }
+    
+    /* Daily Progress */
+    .daily-progress {
+        background: var(--bg-tertiary);
+        border-radius: 16px;
+        padding: 16px;
+        margin-bottom: 16px;
+    }
+    
+    .daily-progress__header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 12px;
+    }
+    
+    .daily-progress__title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin: 0;
+    }
+    
+    .daily-progress__stats {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+    
+    .daily-progress__bar {
+        height: 12px;
+        background: var(--bg-primary);
+        border-radius: 24px;
+        overflow: hidden;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+    
+    .daily-progress__fill {
+        height: 100%;
+        background: var(--progress-gradient);
+        border-radius: 24px;
+        transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .daily-progress__fill::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+        animation: shimmer 2s infinite;
+    }
+    
+    @keyframes shimmer {
+        0% { left: -100%; }
+        100% { left: 100%; }
+    }
+    
+    .daily-progress__message {
+        margin-top: 8px;
+        font-size: 13px;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    
+    /* Task Cards Enhanced */
+    .task-card {
+        min-height: 180px !important;
+        border-radius: 20px !important;
+        padding: 20px !important;
+        box-shadow: var(--card-shadow-gamified) !important;
+        margin-bottom: 20px;
+    }
+    
+    .task-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 6px;
+        height: 100%;
+        border-radius: 20px 0 0 20px;
+        background: linear-gradient(180deg, #00B8A9, #00D4C4);
+    }
+    
+    .task-card[data-priority="urgent"]::before,
+    .task-card[data-priority="critical"]::before {
+        background: linear-gradient(180deg, #FF3B30, #FF6B6B);
+    }
+    
+    .task-card[data-priority="high"]::before {
+        background: linear-gradient(180deg, #FF9500, #FFB84D);
+    }
+    
+    .task-card h3 {
+        font-size: 20px !important;
+        font-weight: 700 !important;
+        margin-bottom: 12px !important;
+    }
+    
+    .task-progress-section {
+        margin-top: 16px;
+    }
+    
+    .task-progress-header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 8px;
+    }
+    
+    .task-progress-label {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-secondary);
+    }
+    
+    .task-progress-value {
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+    
+    .task-progress-bar {
+        height: 10px !important;
+        background: var(--bg-primary) !important;
+        border-radius: 24px !important;
+        overflow: hidden;
+    }
+    
+    .task-progress-fill {
+        height: 100% !important;
+        background: var(--progress-gradient) !important;
+        border-radius: 24px !important;
+        transition: width 0.6s ease !important;
+    }
+    
+    .task-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid var(--divider);
+    }
+    
+    .task-action-btn {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 12px;
+        background: var(--bg-tertiary);
+        border: none;
+        border-radius: 12px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+        min-height: 44px;
+    }
+    
+    .task-action-btn--primary {
+        background: var(--accent-primary);
+        color: white;
+    }
+    
+    .task-action-btn--success {
+        background: var(--accent-success);
+        color: white;
+    }
+    
+    /* Achievement Popup */
+    .achievement-popup {
+        position: fixed;
+        top: max(80px, calc(env(safe-area-inset-top, 0px) + 60px));
+        left: 50%;
+        transform: translateX(-50%) translateY(-120%);
+        background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+        color: #000;
+        padding: 16px 24px;
+        border-radius: 20px;
+        box-shadow: 0 8px 32px rgba(255, 215, 0, 0.6);
+        z-index: 10000;
+        max-width: calc(100% - 40px);
+        animation: achievement-slide-in 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+    }
+    
+    @keyframes achievement-slide-in {
+        0% {
+            transform: translateX(-50%) translateY(-120%) scale(0.8);
+            opacity: 0;
+        }
+        100% {
+            transform: translateX(-50%) translateY(0) scale(1);
+            opacity: 1;
+        }
+    }
+    
+    .achievement-popup__content {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    
+    .achievement-popup__icon {
+        font-size: 36px;
+        animation: rotate-trophy 0.8s ease;
+    }
+    
+    @keyframes rotate-trophy {
+        0% { transform: rotate(0deg) scale(0); }
+        50% { transform: rotate(180deg) scale(1.3); }
+        100% { transform: rotate(360deg) scale(1); }
+    }
+    
+    .achievement-popup__title {
+        font-size: 16px;
+        font-weight: 700;
+        margin: 0 0 4px 0;
+    }
+    
+    .achievement-popup__description {
+        font-size: 13px;
+        margin: 0;
+    }
+    
+    /* Confetti */
+    .confetti-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 9999;
+        overflow: hidden;
+    }
+    
+    .confetti-piece {
+        position: absolute;
+        width: 10px;
+        height: 10px;
+        animation: confetti-fall 3s ease forwards;
+    }
+    
+    @keyframes confetti-fall {
+        0% {
+            transform: translateY(-10vh) rotate(0deg);
+            opacity: 1;
+        }
+        100% {
+            transform: translateY(110vh) rotate(720deg);
+            opacity: 0;
+        }
+    }
+}

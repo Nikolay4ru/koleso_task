@@ -1,9 +1,31 @@
-// ==================== TASKS MANAGEMENT ====================
+// ==================== TASKS MANAGEMENT (GAMIFIED EDITION) ====================
+// Обновлённая версия с поддержкой gamification
 
 let tasks = [];
 let departments = [];
 let currentTaskView = 'board'; // 'board' or 'list'
 let currentTaskFilter = 'all'; // 'all', 'my', 'created', 'watching'
+
+// ==================== GAMIFIED: Helper для mobile ====================
+
+function isMobileView() {
+    return window.innerWidth <= 768;
+}
+
+function notifyGamified(event, data) {
+    // Уведомляем gamified модуль о событиях
+    const customEvent = new CustomEvent(event, { detail: data });
+    document.dispatchEvent(customEvent);
+    
+    // Также вызываем API если доступен
+    if (window.tasksGamified) {
+        if (event === 'tasksRendered') {
+            window.tasksGamified.updateStats?.();
+        } else if (event === 'taskCompleted') {
+            // Achievement и confetti уже обрабатываются в intercepted функции
+        }
+    }
+}
 
 // ==================== LOAD TASKS ====================
 
@@ -12,6 +34,9 @@ async function loadTasks() {
         const data = await apiCall('/api/tasks');
         tasks = data;
         renderTasks();
+        
+        // GAMIFIED: Уведомляем о загрузке
+        notifyGamified('tasksLoaded', { tasks });
     } catch (error) {
         console.error('Error loading tasks:', error);
         showToast('Ошибка загрузки задач', 'error');
@@ -22,7 +47,6 @@ async function loadDepartments() {
     try {
         const data = await apiCall('/api/departments');
         departments = data;
-        // renderDepartmentsList вызывается только при открытии модала
     } catch (error) {
         console.error('Error loading departments:', error);
     }
@@ -36,6 +60,11 @@ function renderTasks() {
     } else {
         renderTasksList();
     }
+    
+    // GAMIFIED: Уведомляем о рендере
+    setTimeout(() => {
+        notifyGamified('tasksRendered', { view: currentTaskView });
+    }, 100);
 }
 
 function renderKanbanBoard() {
@@ -67,7 +96,6 @@ function renderKanbanBoard() {
         `;
     }).join('');
 
-    // Add drag and drop
     setupDragAndDrop();
 }
 
@@ -96,8 +124,11 @@ function renderTaskCard(task) {
         }
     }
 
+    // GAMIFIED: Добавляем data-priority для CSS
+    const priorityAttr = task.priority ? `data-priority="${task.priority}"` : '';
+
     return `
-        <div class="task-card" data-task-id="${task.id}" draggable="true">
+        <div class="task-card" data-task-id="${task.id}" ${priorityAttr} draggable="true">
             ${task.priority === 'high' ? '<div class="task-priority-indicator high"></div>' : ''}
             ${task.priority === 'urgent' ? '<div class="task-priority-indicator urgent"></div>' : ''}
             
@@ -164,39 +195,82 @@ function renderTasksList() {
 
     listContainer.innerHTML = filteredTasks.map(task => {
         const assignee = users.find(u => u.id === task.assigneeId);
-        const creator = users.find(u => u.id === task.creatorId);
         const department = departments.find(d => d.id === task.departmentId);
         
         const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done';
+        const daysLeft = task.dueDate ? Math.ceil((new Date(task.dueDate) - new Date()) / (1000 * 60 * 60 * 24)) : null;
+        
+        let dueDateClass = '';
+        if (task.dueDate) {
+            if (isOverdue) {
+                dueDateClass = 'urgent';
+            } else if (daysLeft !== null && daysLeft <= 3) {
+                dueDateClass = 'soon';
+            }
+        }
+        
+        let priorityBadge = '';
+        if (task.priority === 'high' || task.priority === 'urgent') {
+            priorityBadge = `
+                <span class="task-priority-chip ${task.priority}">
+                    <span class="material-icons">flag</span>
+                    ${task.priority === 'high' ? 'Высокий' : 'Срочно'}
+                </span>
+            `;
+        }
+        
+        // GAMIFIED: data-priority для CSS
+        const priorityAttr = task.priority ? `data-priority="${task.priority}"` : '';
         
         return `
-            <div class="task-list-item ${task.status === 'done' ? 'completed' : ''}" data-task-id="${task.id}">
-                <div class="task-list-checkbox">
-                    <input type="checkbox" ${task.status === 'done' ? 'checked' : ''} onchange="toggleTaskComplete('${task.id}', this.checked)">
+            <div class="task-list-item ${task.status === 'done' ? 'completed' : ''}" 
+                 data-task-id="${task.id}" 
+                 ${priorityAttr}
+                 onclick="event.target.closest('.task-list-checkbox, .task-list-actions') || openTaskDetails('${task.id}')">
+                <div class="task-list-checkbox" onclick="event.stopPropagation()">
+                    <input type="checkbox" id="task-checkbox-${task.id}" ${task.status === 'done' ? 'checked' : ''} onchange="toggleTaskComplete('${task.id}', this.checked)">
                 </div>
                 
                 <div class="task-list-content">
                     <div class="task-list-header">
-                        <h4 class="task-title">${task.title}</h4>
+                        <h3 class="task-title">${task.title}</h3>
                         ${task.hasUnread ? '<span class="task-unread-dot"></span>' : ''}
                     </div>
                     
+                    ${task.description ? `<p class="task-description">${task.description.substring(0, 120)}${task.description.length > 120 ? '...' : ''}</p>` : ''}
+                    
                     <div class="task-list-meta">
-                        ${department ? `<span class="task-department">${department.name}</span>` : ''}
-                        ${assignee ? `<span class="task-assignee-chip">${assignee.name}</span>` : ''}
-                        ${task.dueDate ? `<span class="task-due-date ${isOverdue ? 'overdue' : ''}">${formatDate(task.dueDate)}</span>` : ''}
                         <span class="task-status-badge ${task.status}">${getStatusName(task.status)}</span>
+                        ${assignee ? `
+                            <span class="task-assignee-chip">
+                                <span class="material-icons">person</span>
+                                ${assignee.name}
+                            </span>
+                        ` : ''}
+                        ${priorityBadge}
                     </div>
-                </div>
-                
-                <div class="task-list-actions">
-                    <button class="icon-btn" onclick="openTaskChat('${task.id}')">
-                        <span class="material-icons">chat</span>
-                        ${task.commentsCount > 0 ? `<span class="badge">${task.commentsCount}</span>` : ''}
-                    </button>
-                    <button class="icon-btn" onclick="openTaskDetails('${task.id}')">
-                        <span class="material-icons">more_vert</span>
-                    </button>
+                    
+                    <div class="task-list-footer">
+                        <div class="task-list-footer-left">
+                            ${task.dueDate ? `
+                                <span class="task-due-date-chip ${dueDateClass}">
+                                    <span class="material-icons">schedule</span>
+                                    ${formatDate(task.dueDate)}
+                                </span>
+                            ` : ''}
+                            ${department ? `<span class="task-department">${department.name}</span>` : ''}
+                        </div>
+                        
+                        <div class="task-list-actions" onclick="event.stopPropagation()">
+                            <button class="icon-btn" onclick="openTaskChat('${task.id}')" title="Комментарии">
+                                <span class="material-icons">comment</span>
+                                ${task.commentsCount > 0 ? `<span class="badge">${task.commentsCount}</span>` : ''}
+                            </button>
+                            <button class="icon-btn" onclick="openTaskDetails('${task.id}')" title="Наблюдатели">
+                                <span class="material-icons">visibility</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
@@ -221,37 +295,29 @@ function getFilteredTasks() {
     return filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
 
-
-
 // ==================== PERMISSIONS ====================
 
 function canEditTask(task) {
-    // Только постановщик может редактировать задачу
     return task.creatorId === currentUser.id;
 }
 
 function canDeleteTask(task) {
-    // Только постановщик может удалить задачу
     return task.creatorId === currentUser.id;
 }
 
 function canCompleteTask(task) {
-    // Только постановщик может закрыть задачу
     return task.creatorId === currentUser.id;
 }
 
 function canReopenTask(task) {
-    // Только постановщик может вернуть задачу в работу
     return task.creatorId === currentUser.id && task.status === 'done';
 }
 
 function canStartTask(task) {
-    // Исполнитель может начать задачу (todo -> in_progress)
     return task.assigneeId === currentUser.id && task.status === 'todo';
 }
 
 function canSendToReview(task) {
-    // Исполнитель может отправить на проверку (in_progress -> review)
     return task.assigneeId === currentUser.id && task.status === 'in_progress';
 }
 
@@ -259,51 +325,25 @@ function canMoveTask(task, newStatus) {
     const isCreator = task.creatorId === currentUser.id;
     const isAssignee = task.assigneeId === currentUser.id;
     
-    console.log('canMoveTask check:', {
-        isCreator,
-        isAssignee,
-        currentStatus: task.status,
-        newStatus: newStatus,
-        creatorId: task.creatorId,
-        assigneeId: task.assigneeId,
-        currentUserId: currentUser.id
-    });
-    
-    // ПОСТАНОВЩИК
     if (isCreator) {
-        // Постановщик НЕ МОЖЕТ переводить из "К выполнению" в "В работе" или "На проверке"
         if (task.status === 'todo' && (newStatus === 'in_progress' || newStatus === 'review')) {
-            console.log('❌ Creator cannot: todo -> in_progress/review');
             return false;
         }
-        
-        // Все остальные переходы разрешены
-        console.log('✅ Creator can make this move');
         return true;
     }
     
-    // ИСПОЛНИТЕЛЬ
     if (isAssignee) {
-        // Исполнитель может ТОЛЬКО: todo -> in_progress, in_progress -> review
         if (task.status === 'todo' && newStatus === 'in_progress') {
-            console.log('✅ Assignee: todo -> in_progress');
             return true;
         }
         if (task.status === 'in_progress' && newStatus === 'review') {
-            console.log('✅ Assignee: in_progress -> review');
             return true;
         }
-        
-        // ВСЕ остальные переходы ЗАПРЕЩЕНЫ
-        console.log('❌ Assignee cannot make this move');
         return false;
     }
     
-    // Наблюдатель или посторонний - нет прав
-    console.log('❌ No rights (watcher or stranger)');
     return false;
 }
-
 
 function getUserRole(task) {
     if (task.creatorId === currentUser.id) return 'creator';
@@ -324,10 +364,8 @@ function setupDragAndDrop() {
         
         if (!task) return;
         
-        // Проверяем может ли пользователь вообще перемещать эту задачу
         const userRole = getUserRole(task);
         if (userRole === 'watcher' || !userRole) {
-            // Наблюдатели и посторонние не могут перемещать
             card.draggable = false;
             card.style.cursor = 'pointer';
         } else {
@@ -385,13 +423,11 @@ function handleDragOver(e) {
     
     const newStatus = this.dataset.status;
     
-    // Если это та же колонка - разрешаем
     if (draggedTask.status === newStatus) {
         e.dataTransfer.dropEffect = 'move';
         return false;
     }
     
-    // Проверяем права
     const canMove = canMoveTask(draggedTask, newStatus);
     
     if (canMove) {
@@ -408,14 +444,12 @@ function handleDragEnter(e) {
     
     const newStatus = this.dataset.status;
     
-    // Если это та же колонка - не подсвечиваем
     if (draggedTask.status === newStatus) {
         this.classList.remove('drag-over');
         this.classList.remove('drag-forbidden');
         return;
     }
     
-    // Проверяем можно ли переместить
     const canMove = canMoveTask(draggedTask, newStatus);
     
     if (!canMove) {
@@ -428,14 +462,11 @@ function handleDragEnter(e) {
 }
 
 function handleDragLeave(e) {
-    // Проверяем что мы действительно покидаем элемент, а не его дочерний элемент
     if (e.target === this) {
         this.classList.remove('drag-over');
         this.classList.remove('drag-forbidden');
     }
 }
-
-
 
 async function handleDrop(e) {
     if (e.stopPropagation) {
@@ -449,27 +480,17 @@ async function handleDrop(e) {
     this.classList.remove('drag-forbidden');
     
     if (!draggedTask || !draggedElement) {
-        console.log('No dragged task');
         return false;
     }
     
     const taskId = draggedTask.id;
     const newStatus = this.dataset.status;
     
-    console.log('=== DROP TASK ===');
-    console.log('Task:', draggedTask.title);
-    console.log('Current status:', draggedTask.status);
-    console.log('New status:', newStatus);
-    
-    // Если статус не изменился, ничего не делаем
     if (draggedTask.status === newStatus) {
-        console.log('Same status, ignoring');
         return false;
     }
     
-    // Проверяем права на перемещение
     const canMove = canMoveTask(draggedTask, newStatus);
-    console.log('Can move:', canMove);
     
     if (!canMove) {
         const role = getUserRole(draggedTask);
@@ -499,15 +520,10 @@ async function handleDrop(e) {
             message = 'У вас нет прав для изменения этой задачи';
         }
         
-        console.log('❌ Permission denied:', message);
         showToast(message, 'warning');
-        
         return false;
     }
     
-    console.log('✅ Updating task status...');
-    
-    // Update task status
     try {
         await updateTaskStatus(taskId, newStatus);
     } catch (error) {
@@ -527,7 +543,15 @@ async function updateTaskStatus(taskId, newStatus) {
         
         const task = tasks.find(t => t.id === taskId);
         if (task) {
+            const oldStatus = task.status;
             task.status = newStatus;
+            
+            // GAMIFIED: Уведомляем о смене статуса
+            if (newStatus === 'done') {
+                notifyGamified('taskCompleted', { task, oldStatus, newStatus });
+            } else {
+                notifyGamified('taskStatusChanged', { task, oldStatus, newStatus });
+            }
         }
         
         renderTasks();
@@ -544,12 +568,10 @@ function openCreateTaskModal() {
     const modal = document.getElementById('taskModal');
     modal.classList.add('active');
     
-    // Reset form
     document.getElementById('taskForm').reset();
     document.getElementById('taskId').value = '';
     document.getElementById('taskModalTitle').textContent = 'Новая задача';
     
-    // Load departments and users
     renderDepartmentsSelect();
     renderUsersSelect();
 }
@@ -627,8 +649,6 @@ async function saveTask() {
         
         let savedTask;
         if (taskId) {
-            // Update existing task
-            console.log('Updating task:', taskId);
             savedTask = await apiCall(`/api/tasks/${taskId}`, {
                 method: 'PUT',
                 body: JSON.stringify(taskData)
@@ -639,25 +659,19 @@ async function saveTask() {
                 tasks[index] = savedTask;
             }
         } else {
-            // Create new task
-            console.log('Creating new task');
             savedTask = await apiCall('/api/tasks', {
                 method: 'POST',
                 body: JSON.stringify(taskData)
             });
             
-            console.log('✅ Task created:', savedTask);
-            
-            // Если чат был создан вместе с задачей, добавим его в массив
             if (savedTask.chatId) {
                 try {
                     const taskChat = await apiCall(`/api/chats/${savedTask.chatId}`);
                     if (taskChat && !chats.find(c => c.id === taskChat.id)) {
                         chats.push(taskChat);
-                        console.log('✅ Task chat added to chats array');
                     }
                 } catch (err) {
-                    console.warn('⚠️ Could not fetch task chat:', err.message);
+                    console.warn('Could not fetch task chat:', err.message);
                 }
             }
             
@@ -668,9 +682,11 @@ async function saveTask() {
         renderTasks();
         showToast(taskId ? 'Задача обновлена' : 'Задача создана', 'success');
         
+        // GAMIFIED: Уведомляем о создании/обновлении
+        notifyGamified(taskId ? 'taskUpdated' : 'taskCreated', { task: savedTask });
+        
     } catch (error) {
         console.error('Error saving task:', error);
-        console.error('Error details:', error.message);
         showToast('Ошибка сохранения задачи: ' + (error.message || 'Неизвестная ошибка'), 'error');
     }
 }
@@ -800,15 +816,11 @@ async function openTaskDetails(taskId) {
         </div>
         
         <div class="task-details-footer">
-            <!-- Кнопки для ПОСТАНОВЩИКА -->
             ${isCreator ? `
                 <button class="btn-secondary" onclick="editTask('${task.id}')">
                     <span class="material-icons">edit</span>
                     Редактировать
                 </button>
-                
-                <!-- Постановщик НЕ МОЖЕТ переводить из todo в in_progress/review -->
-                <!-- Это делает только исполнитель -->
                 
                 ${task.status === 'in_progress' ? `
                     <button class="btn-warning" onclick="changeTaskStatus('${task.id}', 'todo')">
@@ -847,7 +859,6 @@ async function openTaskDetails(taskId) {
                 ` : ''}
             ` : ''}
             
-            <!-- Кнопки для ИСПОЛНИТЕЛЯ (если не постановщик) -->
             ${isAssignee && !isCreator ? `
                 ${task.status === 'todo' ? `
                     <button class="btn-primary" onclick="changeTaskStatus('${task.id}', 'in_progress')">
@@ -864,7 +875,6 @@ async function openTaskDetails(taskId) {
                 ` : ''}
             ` : ''}
             
-            <!-- Чат доступен ВСЕМ участникам -->
             <button class="btn-primary" onclick="openTaskChat('${task.id}')">
                 <span class="material-icons">chat</span>
                 Чат
@@ -885,9 +895,17 @@ function getRoleName(role) {
     return names[role] || role;
 }
 
+// GAMIFIED: Функция для быстрой смены статуса (используется gamified модулем)
+async function changeTaskStatus(taskId, newStatus) {
+    await updateTaskStatus(taskId, newStatus);
+    
+    // Закрываем модалку после смены статуса
+    const isFromDetails = document.getElementById('taskDetailsModal')?.classList.contains('active');
+    if (isFromDetails) {
+        closeTaskDetailsModal();
+    }
+}
 
-
-// Действия исполнителя
 async function startTask(taskId) {
     const task = tasks.find(t => t.id === taskId);
     if (!task || !canStartTask(task)) {
@@ -912,7 +930,6 @@ async function sendToReview(taskId) {
     showToast('Задача отправлена на проверку', 'success');
 }
 
-// Действия постановщика
 async function approveTask(taskId) {
     const task = tasks.find(t => t.id === taskId);
     if (!task || !canCompleteTask(task)) {
@@ -949,7 +966,6 @@ async function reopenTask(taskId) {
     showToast('Задача открыта заново', 'success');
 }
 
-// Глобальные функции
 window.startTask = startTask;
 window.sendToReview = sendToReview;
 window.approveTask = approveTask;
@@ -969,7 +985,6 @@ async function editTask(taskId) {
     const modal = document.getElementById('taskModal');
     modal.classList.add('active');
     
-    // Fill form with task data
     document.getElementById('taskId').value = task.id;
     document.getElementById('taskTitle').value = task.title;
     document.getElementById('taskDescription').value = task.description || '';
@@ -980,16 +995,13 @@ async function editTask(taskId) {
     
     document.getElementById('taskModalTitle').textContent = 'Редактировать задачу';
     
-    // Load selects first
     renderDepartmentsSelect();
     renderUsersSelect();
     
-    // Then set values
     setTimeout(() => {
         document.getElementById('taskDepartment').value = task.departmentId;
         document.getElementById('taskAssignee').value = task.assigneeId || '';
         
-        // Set watchers
         if (task.watchers) {
             task.watchers.forEach(watcherId => {
                 const checkbox = document.querySelector(`input[name="watchers"][value="${watcherId}"]`);
@@ -1004,55 +1016,37 @@ async function editTask(taskId) {
 async function openTaskChat(taskId) {
     const task = tasks.find(t => t.id === taskId);
     if (!task) {
-        console.error('❌ Task not found:', taskId);
+        console.error('Task not found:', taskId);
         showToast('Задача не найдена', 'error');
         return;
     }
     
-    console.log('📞 Opening chat for task:', taskId, 'Task data:', task);
-    
-    // Найти чат для задачи
     let taskChat = chats.find(c => c.taskId === taskId);
     
-    // Если чат уже был создан вместе с задачей
     if (!taskChat && task.chatId) {
         taskChat = chats.find(c => c.id === task.chatId);
     }
     
     if (!taskChat) {
         try {
-            console.log('🔨 Creating new task chat for task:', taskId);
-            
-            // Создать чат для задачи
             taskChat = await apiCall('/api/task-chats', {
                 method: 'POST',
                 body: JSON.stringify({ taskId })
             });
             
-            console.log('✅ Task chat created:', taskChat);
-            
-            // Добавляем в массив чатов
             if (!chats.find(c => c.id === taskChat.id)) {
                 chats.push(taskChat);
-                console.log('✅ Chat added to chats array');
                 
-                // ВАЖНО: Обновляем список чатов в сайдбаре
                 if (typeof renderChats === 'function') {
                     renderChats();
-                    console.log('✅ Chats list updated');
                 }
             }
-            
         } catch (error) {
-            console.error('❌ Error creating task chat:', error);
-            console.error('Error details:', error.message);
+            console.error('Error creating task chat:', error);
             showToast('Ошибка создания чата: ' + (error.message || 'Неизвестная ошибка'), 'error');
             return;
         }
     } else {
-        console.log('✅ Task chat already exists:', taskChat.id);
-        
-        // Убедимся что чат есть в списке
         if (!chats.find(c => c.id === taskChat.id)) {
             chats.push(taskChat);
             if (typeof renderChats === 'function') {
@@ -1061,30 +1055,23 @@ async function openTaskChat(taskId) {
         }
     }
     
-    // Закрыть модальные окна задач
     closeTaskDetailsModal();
     closeTaskModal();
     
-    // Переключиться на вкладку чатов
     const chatsTab = document.querySelector('.tab-btn[data-tab="chats"]');
     if (chatsTab) {
-        console.log('🔄 Switching to chats tab');
         chatsTab.click();
     }
     
-    // Небольшая задержка чтобы вкладка переключилась и список обновился
     setTimeout(() => {
-        // Открыть чат
         if (typeof openChat === 'function') {
-            console.log('📱 Opening chat:', taskChat);
             openChat(taskChat);
         } else {
-            console.error('❌ openChat function not found');
+            console.error('openChat function not found');
             showToast('Ошибка открытия чата', 'error');
         }
     }, 200);
     
-    // Пометить что у задачи больше нет непрочитанных
     task.hasUnread = false;
     renderTasks();
 }
@@ -1153,8 +1140,21 @@ function switchTaskView(view) {
         btn.classList.toggle('active', btn.dataset.view === view);
     });
     
-    document.getElementById('kanbanBoard').style.display = view === 'board' ? 'flex' : 'none';
-    document.getElementById('tasksList').style.display = view === 'list' ? 'block' : 'none';
+    const kanbanBoard = document.getElementById('kanbanBoard');
+    const tasksList = document.getElementById('tasksList');
+    const tasksArea = document.getElementById('tasksArea');
+    
+    if (tasksArea) {
+        tasksArea.setAttribute('data-view', view);
+    }
+    
+    if (view === 'board') {
+        if (kanbanBoard) kanbanBoard.style.display = 'flex';
+        if (tasksList) tasksList.style.display = 'none';
+    } else {
+        if (kanbanBoard) kanbanBoard.style.display = 'none';
+        if (tasksList) tasksList.style.display = 'block';
+    }
     
     renderTasks();
 }
@@ -1174,7 +1174,6 @@ function switchTaskFilter(filter) {
 function initTasksModule() {
     console.log('Initializing tasks module...');
     
-    // Event listeners
     const createTaskBtn = document.getElementById('createTaskBtn');
     const createTaskBtnSidebar = document.getElementById('createTaskBtnSidebar');
     const closeTaskModalBtn = document.getElementById('closeTaskModalBtn');
@@ -1201,12 +1200,10 @@ function initTasksModule() {
         saveTaskBtn.addEventListener('click', saveTask);
     }
     
-    // View toggle buttons
     document.querySelectorAll('.view-toggle-btn').forEach(btn => {
         btn.addEventListener('click', () => switchTaskView(btn.dataset.view));
     });
     
-    // Filter buttons
     document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', () => switchTaskFilter(btn.dataset.filter));
     });
@@ -1214,7 +1211,6 @@ function initTasksModule() {
     console.log('✅ Tasks module initialized');
 }
 
-// Initialize when DOM is ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initTasksModule);
 } else {
@@ -1223,7 +1219,6 @@ if (document.readyState === 'loading') {
 
 // ==================== SOCKET LISTENERS ====================
 
-// Будут добавлены после подключения socket в app.js
 function setupTasksSocketListeners() {
     if (typeof socket === 'undefined' || !socket) {
         console.warn('Socket not available for tasks module');
@@ -1263,7 +1258,8 @@ function setupTasksSocketListeners() {
     console.log('✅ Tasks socket listeners setup');
 }
 
-// Make functions globally available
+// ==================== GLOBAL EXPORTS ====================
+
 window.openTaskChat = openTaskChat;
 window.toggleTaskComplete = toggleTaskComplete;
 window.openTaskDetails = openTaskDetails;
@@ -1272,5 +1268,6 @@ window.closeTaskDetailsModal = closeTaskDetailsModal;
 window.loadTasks = loadTasks;
 window.loadDepartments = loadDepartments;
 window.setupTasksSocketListeners = setupTasksSocketListeners;
+window.changeTaskStatus = changeTaskStatus; // GAMIFIED: Для быстрой смены статуса
 
-console.log('✅ Tasks module loaded');
+console.log('✅ Tasks module loaded (Gamified Edition)');
